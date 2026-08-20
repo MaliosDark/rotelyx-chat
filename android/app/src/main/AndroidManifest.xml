@@ -1,0 +1,101 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- The only permission this application asks for, and the only one it
+         needs today. Everything it does is one WebSocket to the mailbox named
+         in lib/rotelyx/rotelyx_config.dart.
+
+         It was declared only in src/debug/AndroidManifest.xml, which Flutter
+         adds for hot reload. A release build therefore had no network
+         permission at all and could not have opened a mailbox: the first
+         attempt to pair would have failed with a refused connection, on a
+         device, after install, which is the worst place to find out.
+
+         Two more will be needed and are deliberately absent until the features
+         that use them exist, because a permission list is something users read:
+
+           CAMERA         for scanning a QR code, once lib/qr/camera_native.dart
+                          is more than a stub
+           RECORD_AUDIO   for calls, together with MODIFY_AUDIO_SETTINGS
+
+         See docs/NATIVE.md. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+
+    <!-- Notifying, which is done by this application and by nothing else.
+         There is no Firebase here and no Google Play Services dependency: the
+         connection to the mailbox is held by this process, so a message is
+         already decrypted on this device before anything is posted.
+
+         POST_NOTIFICATIONS is a runtime permission from Android 13 and the
+         default is refused. An application that declares it and never asks
+         notifies nobody, silently, on every device sold since 2022.
+
+         VIBRATE has no prompt and no privacy weight. It is here because a
+         notification that only makes a sound is missed by anybody whose phone
+         is on silent, which is most people most of the time. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <uses-permission android:name="android.permission.VIBRATE"/>
+
+    <!-- Staying connected without Firebase.
+         See ConnectionService.kt, which explains the measurement that made
+         this necessary, and docs/RELEASING.md for what Google Play asks about
+         it at review.
+
+         SPECIAL_USE rather than DATA_SYNC because Android 15 caps a data sync
+         service at six hours in any twenty four, which for a messenger means it
+         stops working every evening. Special use has no cap and is reviewed by
+         a human, which is the right trade: the justification is true and short
+         enough to check. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>
+
+    <!-- Reading a meeting code off somebody's screen. Requested when the
+         scanner is opened and not before, because a camera prompt on first
+         launch is one people refuse on principle.
+
+         `required="false"` so the application still installs on a device with
+         no camera: the scanner screen has always had a typed field beside the
+         viewfinder, and it works just as well. -->
+    <uses-permission android:name="android.permission.CAMERA"/>
+    <uses-feature android:name="android.hardware.camera" android:required="false"/>
+
+    <application
+        android:label="Rotelyx Chat"
+        android:name="${applicationName}"
+        android:icon="@mipmap/ic_launcher">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:theme="@style/LaunchTheme"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+            android:hardwareAccelerated="true"
+            android:windowSoftInputMode="adjustResize">
+            <!-- Specifies an Android theme to apply to this Activity as soon as
+                 the Android process has started. This theme is visible to the user
+                 while the Flutter UI initializes. After that, this theme continues
+                 to determine the Window background behind the Flutter UI. -->
+            <meta-data
+              android:name="io.flutter.embedding.android.NormalTheme"
+              android:resource="@style/NormalTheme"
+              />
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity>
+        <service
+            android:name=".ConnectionService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="This messenger maintains its own end-to-end encrypted connection to its mailbox so that no third-party push service, including Firebase, learns when a user receives a message. There is no server-side account to wake and no push token to register. Users can turn this off, in which case messages arrive when the app is opened."/>
+        </service>
+
+        <!-- Don't delete the meta-data below.
+             This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
+        <meta-data
+            android:name="flutterEmbedding"
+            android:value="2" />
+    </application>
+</manifest>

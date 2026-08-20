@@ -1,0 +1,527 @@
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/images/rotelyx-lockup-dark.png">
+  <img src="assets/images/rotelyx-lockup-light.png" alt="Rotelyx" height="52">
+</picture>
+
+# Rotelyx Chat
+
+A Flutter chat client by **Ideoa Labs**, speaking the Rotelyx protocol.
+
+Package: `rotelyx_chat` · Bundle ID: `com.ideoalabs.rotelyx`
+
+---
+
+> **Rotelyx is unaudited and pre-release. Do not use it to protect anything.**
+> It makes no security claims until the review gates in the protocol
+> repository's `docs/THREAT-MODEL.md` section 5 are met. The pairing screen says
+> so too, on purpose: a client that looks finished is itself a security claim.
+
+---
+
+## What this is
+
+A messenger with no account, no phone number and no directory. Two people start
+a conversation by arriving at the same place rather than by looking each other
+up, because there is nowhere to look anyone up.
+
+`docs/HOW-IT-WORKS.md` explains the whole model from nothing, and is the right
+place to start if any of the above sounds strange.
+
+Messages go through `rotelyx-wasm`: MLS with a hybrid post-quantum key schedule,
+sealed into padded envelopes and left in a blind mailbox.
+
+## Where it stands
+
+| | |
+|---|---|
+| Client source | about 5600 lines under `lib/` |
+| Runtime dependencies | 4: `web`, `ffi`, `get_storage`, `qr_flutter` |
+| Targets | web, Android; iOS prepared and needs a Mac to build |
+| Tests | 51, all passing |
+| Outbound addresses | 2, both ours |
+| Third-party services | none |
+
+**Working:** pairing by QR, phrase or invitation; one-to-one and group
+conversations; encrypted local history; attachments up to 5 MB; delivery state
+from real mailbox acknowledgements; safety numbers; light and dark themes.
+
+**Not built:** calls. See [Not built yet](#not-built-yet).
+
+Pairing and messaging are verified end to end through the real client against the
+production mailbox, not through a stand-in: `tool/e2e/drive-dart.py`, 9 of 9.
+
+**And on a phone.** A Note 58 on Android 16 hosts a meeting place, a browser
+joins it, and a message crosses from one to the other and is still there when
+the conversation is opened afterwards. One side runs the WebAssembly build and
+the other the native library. `docs/NATIVE.md` records that, and the four
+defects it took a device to find.
+
+## Third-party contact: none
+
+The whole live codebase opens exactly two outbound addresses, and they are the
+same service in two environments:
+
+```
+wss://mail-rotelyx.ideoa.co/mailbox     production
+ws://127.0.0.1:3341/mailbox             local development
+```
+
+There is no analytics, no crash reporter, no advertising identifier, no font
+CDN, no link previewer fetching URLs out of incoming messages, and no push
+service. Not switched off: absent.
+
+`web/index.html` carries a Content-Security-Policy whose `connect-src` names the
+mailbox explicitly. If a dependency ever tries to phone somewhere else, the
+browser blocks it rather than the traffic leaving quietly.
+
+`test/no_foreign_infrastructure_test.dart` scans the sources for hosts outside
+the allowlist. It is not decoration: it has caught a hostname added to a URL
+parser that would never have been fetched, which is the correct level of
+paranoia for a property this easy to lose by accident.
+
+## Architecture
+
+```
+web/rotelyx/            rotelyx_wasm.js + .wasm, served from this origin
+web/rotelyx_bridge.js   loads the ES module, owns the BigInt conversions
+web/diag.js             error capture, external because the CSP blocks inline
+
+lib/rotelyx/
+  rotelyx_wasm.dart     facade over engine/, keeping the names the service uses
+  engine/api.dart       what the engine offers, in ordinary Dart
+  engine/backend.dart   one line, picking an implementation at compile time
+  engine/web.dart       the wasm module through the JS bridge
+  engine/native.dart    librotelyx_mobile through dart:ffi
+  mailbox_client.dart   deposit / subscribe / unsubscribe, over platform/socket
+  e2e.dart              the test hook, web only, behind a compile-time define
+  rotelyx_service.dart  identity, pairing handshake, message flow
+  rotelyx_store.dart    encrypted local history, the only copy that exists
+  rotelyx_config.dart   endpoints; no Default, no environment override
+  meeting_code.dart     the 29-character string a QR carries
+  attachment.dart       files as messages, 5 MB, marker-prefixed
+  push.dart             waking a device, batch registration only
+
+lib/platform/           the four things a browser does that a phone does not
+  socket*.dart          package:web WebSocket, or dart:io's
+  host*.dart            URL strategy and the boot screen, or nothing
+  file_pick*.dart       an <input type=file>, or not built yet
+
+lib/qr/                 a QR reader written here rather than imported
+  tables.dart           the standard's block and alignment tables
+  decode.dart           modules to text: format, mask, layout, Reed-Solomon
+  detect.dart           camera frame to modules: binarise, locate, sample
+  camera*.dart          getUserMedia and the frame loop, or not built yet
+
+lib/ui/
+  app.dart              the shell, four surfaces, no router
+  theme.dart            the design system
+  widgets.dart          buttons, fields, chips, notes
+  brand.dart            the logo, and the QR that carries it
+  screens/unlock.dart   whether this device keeps anything
+  screens/home.dart     two panes, collapsing below 900 px
+  screens/pair.dart     QR, phrase, or invitation
+  screens/scan.dart     the camera, with a typed fallback always present
+  screens/chat.dart     the conversation, safety number on the wall
+  screens/settings.dart
+```
+
+The handshake exists once, in `rotelyx_service.dart`. The JS bridge holds none
+of it, so the two cannot drift.
+
+There is no router. The app has four surfaces, and on the web a route carrying a
+conversation id would put that id in browser history, which is the kind of trace
+this application exists not to leave.
+
+## Pairing
+
+Rotelyx has no identity registry, so there is nothing to look anyone up in.
+Three modes, all of which solve only the problem of where to put the first
+message.
+
+- **QR code**: one side shows, the other scans. The symbol carries a
+  29-character meeting code, 120 random bits in a base32 alphabet, which both
+  sides hash to the same mailbox tag. Not guessable.
+- **Meeting phrase**: both sides type the same phrase. Same mechanism, weaker
+  input: a phrase a person invented can be guessed by somebody who knows them.
+- **Invitation code**: one side generates a block carrying its key package and a
+  random 32-byte return tag, pasted through some other application.
+
+**The QR cannot carry the invitation, and the reason is arithmetic.** An X-Wing
+public key is 1216 bytes; with the MLS key package and two layers of base64 an
+invitation runs to about 3000 characters. A QR tops out at 2953 bytes, and only
+at the weakest correction level, at 177 modules across. So the QR carries an
+address and the keys go over the mailbox, where their size costs nothing.
+
+None of the three authenticates anybody. **Compare the safety number out of
+band.** It is on the chat screen rather than behind a menu, because hidden
+behind two taps it does not get compared.
+
+Groups work by the host continuing to listen at the meeting place after the
+first person arrives, so later arrivals are admitted up to the protocol's member
+cap.
+
+## Reading QR codes
+
+Every Flutter QR scanner that supports the web fetches a JavaScript decoder from
+a content delivery network at runtime. The Content-Security-Policy refuses that,
+correctly. Rather than open a hole for one feature, `lib/qr/` decodes the symbol
+here: binarise per eight-by-eight block, locate the three corner squares by their
+1:1:3:1:1 run, fit a projective transform through the alignment square, sample
+five points per module and vote, then undo the mask, the interleave and the
+Reed-Solomon.
+
+It is tested rather than assumed:
+
+| Test | What it establishes |
+|---|---|
+| All 40 versions by all 4 correction levels, round trip | The tables and the arithmetic are right |
+| 72 rotations, 0 to 355 degrees | Orientation does not matter |
+| A 40 percent foreshortened pose | Reads when held off to one side |
+| Blur, sensor noise, a lighting gradient | Reads on a poor camera in poor light |
+| Pure noise, 52 frames | Never invents a reading |
+| A screenshot of the running application | What the app draws can actually be scanned |
+
+Measured over 400 random codes in the most severe pose, one failed: 99.75
+percent per frame, against a camera examining eight frames a second. The pinned
+codes in `test/meeting_code_test.dart` keep that assertion deterministic, and
+the tail is written down rather than rediscovered as a flake.
+
+The logo sits in the middle because the highest correction level can lose 30
+percent of the symbol and still decode. The plate is 24 percent of the width,
+under 6 percent of the area, and the same test destroys exactly that square and
+decodes anyway, so the margin is measured and not hoped for.
+
+## Local storage
+
+The mailbox keeps nothing. An envelope is removed when collected and what is
+never collected expires. There is no server-side history, no account to restore
+from, and no other device holding a copy. **If this store loses a conversation,
+the conversation is gone.**
+
+Two blobs per conversation, both sealed under a key derived from the user's
+passphrase with Argon2id at 64 MiB:
+
+- the **session**, which is MLS group state, re-sealed after every send and
+  every receive because the ratchet turns on both;
+- the **log**, which is readable message text.
+
+The second is the significant one. Everywhere else plaintext exists only in
+memory, for the moment it is on screen. A conversation kept across restarts is a
+conversation written down: encrypted, but written down, in a profile directory
+that can be copied.
+
+So keeping history is **opt in**, and turning it on asks for a passphrase rather
+than inventing one. Without a passphrase the app still works and simply forgets
+on reload, which is the stronger position and an inconvenient default.
+
+`docs/PERSISTENCE.md` records what the protocol repository had to expose for
+this to be possible.
+
+## Not built yet
+
+- **Calls.** The protocol repository now has the media layer: `rotelyx-media`
+  for frame encryption, jitter buffering and loss recovery, and `rotelyx-codec`
+  for the Telyx speech codec. Neither is reachable from this client, and the
+  browser could not carry a call regardless, since QUIC datagrams are
+  native-only. Calls belong in the native builds.
+- **Calls on a phone**, which is the point of the native build and is three
+  steps away. The protocol repository has the hard half done and tested:
+  `rotelyx-media` for frame encryption, jitter buffering and loss recovery, and
+  `rotelyx-codec` for the Telyx speech codec, 150 tests passing, and calls
+  relayed by construction rather than by setting. What is missing is a second
+  ABI entry point that does not encode JSON per frame, device capture on each
+  platform, and a listening test that nobody has run. `docs/NATIVE.md` sets all
+  three out.
+- **The camera and the file picker on a phone.** Both need a platform channel.
+  The scanner already has a typed fallback under the viewfinder, and the
+  attachment button explains itself rather than opening nothing.
+- **Push.** `docs/PUSH.md` sets out three options and does not choose. That
+  choice has to be made before either store build.
+- **Direct peer to peer in the browser.** `rotelyx-wasm` is the message layer.
+  QUIC transport is native-only, so every browser message goes through the
+  mailbox.
+- **Read receipts**, deliberately. Delivery state stops at *in their mailbox*,
+  which is what the mailbox actually reports. A read receipt would need the
+  recipient to send something back on every message: a full fan-out each, and a
+  signal to the operator of exactly when somebody is reading.
+
+## Running it
+
+### Android
+
+```bash
+tool/native/build-android.sh     # the Rust engine, release, all three ABIs
+flutter build apk                # or --split-per-abi for a phone-sized one
+```
+
+`docs/NATIVE.md` covers what the script does and why it defaults to release.
+iOS is `tool/native/build-ios.sh`, which needs a Mac, plus two steps in Xcode
+that the script prints.
+
+### Web
+
+```bash
+flutter pub get
+flutter run -d chrome
+
+flutter build web --release --no-web-resources-cdn   # note the flag
+python3 tool/e2e/spaserve.py "$PWD/build/web" 8766
+```
+
+Open two tabs, create an invitation or a meeting code in one, and use it in the
+other.
+
+### `--no-web-resources-cdn` is not optional
+
+Flutter Web is itself a third-party caller by default. Its bootstrap decides
+where to fetch the CanvasKit renderer like this:
+
+```js
+canvasKitBaseUrl ? canvasKitBaseUrl
+  : (engineRevision && !useLocalCanvasKit)
+    ? "https://www.gstatic.com/flutter-canvaskit/" + engineRevision
+    : "canvaskit"
+```
+
+The 19 MB `canvaskit/` directory ships in the build output either way. Without
+the flag it is simply **not used**, and every page load fetches the renderer
+from Google instead. The flag sets `useLocalCanvasKit: true`. The gstatic string
+still appears in the bundle afterwards, as the dead branch of that ternary.
+
+Verified against the compiled output rather than the source: `main.dart.js`
+names `mail-rotelyx.ideoa.co` and nothing else reachable.
+
+### The server must rewrite unknown paths to `index.html`
+
+A plain static server returns **404** for any path that is not a file. The app
+works until somebody reloads the page, which is the worst time to find out.
+
+```nginx
+location / {
+  try_files $uri $uri/ /index.html;
+}
+```
+
+`tool/e2e/spaserve.py` does the same for development.
+
+### Fonts have to be bundled, and this is not cosmetic
+
+Flutter's CanvasKit renderer fetches fonts from `https://fonts.gstatic.com/s/`
+on demand. There is no build flag to stop it, so `font-src 'self'` in the CSP
+blocks it instead, correctly, since that request tells Google who is reading
+what.
+
+The consequence is more severe than a substituted typeface. **CanvasKit cannot
+see platform fonts at all.** With nothing bundled and the CDN blocked, there is
+no font to fall back to, and the app renders every layout perfectly with *no
+text anywhere*. This build shipped exactly that until somebody opened it in a
+browser and looked; nothing in `flutter analyze`, `flutter test` or
+`flutter build` reports it.
+
+`assets/fonts/` therefore carries:
+
+| Font | Scripts | Licence |
+|---|---|---|
+| DejaVu Sans (regular, bold) | Latin, Cyrillic, Greek | free (Bitstream Vera derivative) |
+| Lohit Devanagari | Devanagari | OFL |
+| KacstOne | Arabic | GPL |
+
+Declared as `RotelyxSans` with `fontFamilyFallback`, applied at the theme in
+`lib/ui/theme.dart` so a `TextStyle` that forgets to name a family still
+resolves. Flutter walks the fallback list per glyph, so each script picks up its
+own face without the surrounding Latin text changing typeface.
+
+The interface is English only, so the fallbacks matter for message content
+rather than for the interface. **Hangul is not covered.** Droid Sans Fallback
+was bundled first and looked right, it covers U+AC00, but lacks U+D55C, so real
+Korean text still showed boxes while costing 3.9 MB. It was removed. Covering
+Hangul needs a subsetted Noto Sans KR; the only full-Hangul fonts on a typical
+Linux box are 19 MB CJK collections.
+
+Substituting Manrope, which the design was drawn in, is a file swap in
+`assets/fonts/` and a rename in `pubspec.yaml`. No code changes.
+
+## Keeping the wasm in step
+
+`web/rotelyx/` is a **copy** of `site/rotelyx/` from the protocol repository. It
+does not rebuild itself, and a stale copy is the worst kind of failure here: the
+old build still loads, still pairs, and then silently fails to interoperate
+because the message path moved underneath it.
+
+That already happened once. The protocol moved from per-group mailbox tags to
+per-member tags (`sealForGroup` / `openMine` / `myPollingTags`), which a client
+on the old path cannot talk to.
+
+After every `wasm-pack` build in the protocol repository:
+
+```bash
+cp ../comms-real-e2e/site/rotelyx/rotelyx_wasm.js \
+   ../comms-real-e2e/site/rotelyx/rotelyx_wasm_bg.wasm \
+   web/rotelyx/
+```
+
+The bridge in `web/rotelyx_bridge.js` and the bindings in
+`lib/rotelyx/rotelyx_wasm.dart` name every method they use, so a removed export
+surfaces as a missing-method error rather than as silence.
+
+## Testing
+
+Five levels, because each catches something the one below it cannot.
+
+**`flutter test`**, 26 tests, runs anywhere in about eight seconds.
+
+| File | What it covers |
+|---|---|
+| `qr_decode_test.dart` | The decoder, over all 160 version and level combinations |
+| `qr_detect_test.dart` | Finding a code in a frame: rotation, perspective, blur, noise |
+| `meeting_code_test.dart` | Minting, parsing, and the logo's error-correction budget |
+| `rendered_qr_test.dart` | A screenshot of the running app, read by the real decoder |
+| `no_foreign_infrastructure_test.dart` | No host outside the allowlist, no overridable endpoint |
+
+**`tool/e2e/drive-dart.py`**: pairs two headless Firefox tabs through
+`RotelyxService` itself, against the production mailbox, over the meeting-code
+path a QR scan takes. Nine checks: the hook, the code, both sides joining,
+matching safety numbers, a shared epoch, a group of two, and a message each way.
+
+```bash
+tool/dev/build-web.sh --dart-define=e2e=true -o build/e2e
+python3 tool/e2e/drive-dart.py
+```
+
+`lib/rotelyx/e2e.dart` publishes the singleton as `window.__rotelyx` when that
+define is passed, and is tree-shaken out of any build without it. Verified by
+grepping the compiled output, not by assuming.
+
+**It found the bug that mattered most.** `MailboxClient.connect()` waited for a
+`ready` frame before sending anything, on the documented reasoning that frames
+sent earlier would be dropped. `ready` is the *reply to* `subscribe`: the
+mailbox sends nothing on connection. So the client opened a socket, waited, and
+failed fifteen seconds later with "the mailbox did not respond". **Every attempt
+to pair from the Dart client had always failed**, and nothing caught it, because
+the only end to end test drove a JavaScript reimplementation that happens to
+subscribe on `onopen`.
+
+**`tool/e2e/drive.py`**: the older harness, driving `tool/e2e/pair.js` through
+`window.rotelyx`. It exercises the protocol and the wasm bridge rather than the
+Dart, which is exactly why it missed the above. Keep it: it is the control, and
+when the two disagree the disagreement is the finding. It found the epoch and
+re-subscribe bug that every static check passed, and its screenshots caught the
+no-text bug that every check including itself passed.
+
+It expects two geckodriver instances already listening on 4444 and 4445, and the
+app served on 8765.
+
+**`tool/e2e/shots.py`**: photographs individual surfaces by building them with a
+compile-time fixture, since CanvasKit draws the whole app into one canvas and
+there is nothing in the DOM to click. It supplies a synthetic camera through
+Firefox's own `media.navigator.streams.fake`, so the scanner screen can be
+verified without a device.
+
+**`integration_test/ui_test.dart`**: drives the real widgets, so
+`RotelyxService` and the `dart:js_interop` bindings are the code under test
+rather than a JavaScript mirror of them. **Needs Chrome, and has never produced
+a verdict in this environment.**
+
+```bash
+flutter drive --driver=test_driver/integration_test.dart \
+              --target=integration_test/ui_test.dart -d chrome
+```
+
+Firefox does not work, and the reason is worth recording because the failure
+looks like a hang. On the `web-server` device a debug build waits for a debugger
+to attach before running `main()`, and attaching needs the Dart Debug Extension,
+which is Chrome-only. Everything else succeeds, 372 DDC modules load,
+`window.rotelyx` reports ready, and `document.body` simply stays empty.
+
+`tool/dev/run-ui-test.sh` swaps the CSP out for the duration of a driven test
+and restores it on exit, because `connect-src` blocks the debug service's
+WebSocket on its random localhost port. `docs/CSP.md` explains why delivering
+the policy as a header in production fixes this properly, and makes production
+stronger at the same time.
+
+### Why two browser harnesses rather than one
+
+`tool/e2e/pair.js` mirrors `RotelyxService` step for step but is not that code.
+It proves the protocol and the wasm bridge work; it cannot prove the Dart does.
+The integration test closes that gap and is far slower. Keeping both means the
+fast one can run on every change.
+
+## Documentation
+
+| File | Subject |
+|---|---|
+| `docs/SCREENS.md` | The application screen by screen, photographed on a phone |
+| `docs/HOW-IT-WORKS.md` | The whole model from nothing. Start here |
+| `docs/BACKLOG.md` | What is asked for, what is built, and what was refused and why |
+| `docs/NATIVE.md` | Android and iOS: how the platform split works and how to build it |
+| `docs/CSP.md` | The policy, and the one thing it breaks |
+| `docs/PERSISTENCE.md` | What storing MLS state safely actually costs |
+| `docs/PUSH.md` | Waking a device without re-linking rotating tags |
+| `docs/RELEASING.md` | Everything both stores check, and what is not done yet |
+| `docs/JURISDICTIONS.md` | Where this can be listed, and where it cannot |
+
+## Brand assets
+
+Everything the client shows is derived from two files in the protocol
+repository, `docs/brand/rotelyx-logo-{dark,light}.png` and
+`docs/brand/rotelyx-mark.png`. Nothing is drawn by hand and nothing is edited in
+place:
+
+```bash
+python3 tool/brand/build.py
+```
+
+| Asset | Where it appears |
+|---|---|
+| `rotelyx-wordmark-{dark,light}.png` | Unlock screen, empty conversation pane |
+| `rotelyx-lockup-{dark,light}.png` | Title bars, where the vertical lockup would put the word at four pixels |
+| `rotelyx-mark.png` | The plate inside a QR code, and anywhere too small for the word |
+| `web/rotelyx-boot.png` | The boot screen, outside the Flutter bundle on purpose |
+| `web/favicon.png`, `web/icons/*` | Browser tab and installed application |
+
+`-dark` means *for dark surfaces*, so it is the light-on-dark artwork. Getting
+that backwards produces a logo that is invisible rather than wrong, which is
+harder to catch in a screenshot than it sounds.
+
+### There is no service worker, and removing one is part of the boot
+
+`web/flutter_bootstrap.js` is written out rather than generated, for one reason:
+the generated bootstrap always emits
+
+```js
+_flutter.loader.load({ serviceWorkerSettings: { serviceWorkerVersion: "..." } })
+```
+
+and `--pwa-strategy=none` does not change that. It empties
+`flutter_service_worker.js` and leaves the registration in place. Passing no
+settings at all is the only way to skip it.
+
+**Why it must not have one.** A service worker pins a build inside the browser
+and answers from it ahead of the network. That is the failure this README warns
+about under *Keeping the wasm in step*, wearing a different hat: an old build
+still loads, still pairs, and then silently fails to interoperate. It cost real
+time here, holding an old build through several rebuilds while every check on
+the serving side correctly reported that the new files were going out. It buys
+nothing in exchange, because every conversation needs the mailbox.
+
+**Removing one that already exists** is `web/boot.js`. Turning registration off
+does nothing for a browser that registered one earlier, which will keep serving
+its cached copy indefinitely, so any worker found is unregistered, its caches
+are deleted, and the page reloads exactly once, guarded by `sessionStorage` so
+it cannot loop.
+
+That path is tested rather than assumed: serve a build whose worker caches,
+visit it, deploy the current build to the same origin, reload, and confirm the
+new build is running with no worker, no caches, and no second reload.
+
+### The boot screen
+
+CanvasKit plus the WebAssembly message layer is several seconds on a cold load,
+and before `web/boot.js` existed those seconds were a blank white page on an
+application that is otherwise near-black. The splash is markup and inline CSS in
+`web/index.html`, so it paints immediately; the script that removes it is an
+external file because `script-src 'self'` refuses inline code.
+
+It comes down on `flutter-first-frame`, or on a `flutter-view` element
+appearing, or after fifteen seconds regardless. The last one matters: a splash
+that outlives a failed boot hides the error the user needs to see.

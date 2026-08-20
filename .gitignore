@@ -1,0 +1,167 @@
+# What belongs in this repository, and what does not.
+#
+# The rule throughout: source is committed, and anything a command can rebuild
+# is not. Where that rule costs somebody something, the entry says so rather
+# than leaving them to find out after a clone.
+
+# ---------------------------------------------------------------------------
+# Signing material. Never, under any circumstance.
+# ---------------------------------------------------------------------------
+#
+# The upload key is the only thing that proves an update to Google Play came
+# from you. Losing it means asking Play to reset it; publishing it means anybody
+# can publish as you. The App Store equivalents are the .p8 and .p12 files, and
+# the APNs key on the mailbox server is a .p8 too.
+android/key.properties
+*.jks
+*.keystore
+*.p8
+*.p12
+*.pem
+*.mobileprovision
+*.cer
+*.certSigningRequest
+
+# Anything that looks like a secret, wherever it lands.
+.env
+.env.*
+!.env.example
+secrets.json
+service-account*.json
+google-services.json
+GoogleService-Info.plist
+
+# ---------------------------------------------------------------------------
+# Build output
+# ---------------------------------------------------------------------------
+/build/
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+/coverage/
+*.dill
+*.lock.tmp
+
+# ---------------------------------------------------------------------------
+# The native engine, which is built from the protocol repository
+# ---------------------------------------------------------------------------
+#
+# `librotelyx_mobile` and the wasm are compiled from `comms-real-e2e`, not
+# written here. They are six and a half megabytes of binary that changes on
+# every protocol build, which is the worst possible thing to keep in git: every
+# version is stored whole, forever, and none of them is readable in a diff.
+#
+# The cost is that a fresh clone cannot build an APK until they are made. Both
+# commands are one line and both are in the repository:
+#
+#     tool/native/build-android.sh      the three Android ABIs
+#     tool/native/build-desktop.sh      this machine
+#     tool/dev/build-wasm.sh            the browser
+#
+# See docs/NATIVE.md.
+android/app/src/main/jniLibs/
+web/rotelyx/
+/macos/Frameworks/librotelyx_mobile.dylib
+/windows/native/
+
+# ---------------------------------------------------------------------------
+# Android
+# ---------------------------------------------------------------------------
+android/.gradle/
+android/captures/
+android/local.properties
+android/**/GeneratedPluginRegistrant.java
+android/app/debug/
+android/app/profile/
+android/app/release/
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+
+# ---------------------------------------------------------------------------
+# iOS
+# ---------------------------------------------------------------------------
+#
+# `Pods/` is restored by `pod install` from `Podfile.lock`, which *is*
+# committed: the lock file is what makes two machines build the same thing.
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/App.framework
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.podspec
+ios/Flutter/Generated.xcconfig
+ios/Flutter/ephemeral/
+ios/Flutter/app.flx
+ios/Flutter/app.zip
+ios/Flutter/flutter_assets/
+ios/ServiceDefinitions.json
+ios/Runner/GeneratedPluginRegistrant.*
+**/*.xcworkspace/xcuserdata/
+**/*.xcodeproj/xcuserdata/
+**/*.xcodeproj/project.xcworkspace/xcshareddata/IDEWorkspaceChecks.plist
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# ---------------------------------------------------------------------------
+# Desktop
+# ---------------------------------------------------------------------------
+linux/flutter/ephemeral/
+macos/Flutter/ephemeral/
+macos/Flutter/GeneratedPluginRegistrant.swift
+macos/Pods/
+windows/flutter/ephemeral/
+
+# ---------------------------------------------------------------------------
+# The device captures this session produced
+# ---------------------------------------------------------------------------
+#
+# `build/shots/` is already covered by /build above and is named here because
+# it is the one people look for: hundreds of full-resolution screenshots taken
+# while testing the burn animation, the notifications and the camera.
+#
+# The ones that are *documentation* live in `docs/screens/` and are committed,
+# because a document whose images are missing is not a document.
+build/shots/
+
+# ---------------------------------------------------------------------------
+# Editors and operating systems
+# ---------------------------------------------------------------------------
+.idea/
+.vscode/
+!.vscode/settings.json
+*.iml
+*.ipr
+*.iws
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*~
+
+# ---------------------------------------------------------------------------
+# Scratch
+# ---------------------------------------------------------------------------
+/tmp/
+*.log
+*.tmp
+*.orig
+*.rej
+
+# What was deliberately kept
+#
+#   pubspec.lock          two machines build the same dependency versions
+#   ios/Podfile.lock      the same, for CocoaPods
+#   assets/               fonts and brand images, which are source
+#   docs/screens/         the captures the documentation refers to
+#   android/app/build.gradle  including the signing block, which reads a file
+#                             that is ignored rather than containing a secret
+
+# Python bytecode from the tools in tool/
+__pycache__/
+*.py[cod]

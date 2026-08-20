@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- What Android draws between the tap and the engine's first frame.
+
+     It was `@android:color/white` with the image commented out, which is what
+     `flutter create` leaves. On an application whose every screen is near black
+     that is a white flash on every cold start, and it is the same defect the
+     web build had before web/index.html got a boot screen.
+
+     The colour is Tone.dBackdrop from lib/ui/theme.dart, so the launch screen,
+     the Flutter boot screen and the first real frame are all one colour and the
+     handover is invisible. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/rotelyx_backdrop" />
+
+    <item>
+        <bitmap
+            android:gravity="center"
+            android:src="@drawable/rotelyx_splash" />
+    </item>
+</layer-list>

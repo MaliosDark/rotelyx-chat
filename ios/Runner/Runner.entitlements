@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- The container the application and its notification extension share.
+	     Two processes, one encrypted conversation log, because a push arrives
+	     in the extension's process and the message it is about is in the
+	     application's. See docs/PUSH.md. -->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.com.ideoalabs.rotelyx</string>
+	</array>
+
+	<!-- The keychain the two share, which holds one item: the key that opens
+	     the conversation log. Its accessibility is set in code, not here, and
+	     it is `AfterFirstUnlock`: the extension has to work on a locked screen
+	     and cannot ask anybody for a passphrase. What that costs is written
+	     down in docs/PUSH.md rather than left for somebody to discover. -->
+	<key>keychain-access-groups</key>
+	<array>
+		<string>$(AppIdentifierPrefix)com.ideoalabs.rotelyx</string>
+	</array>
+
+	<!-- Production. A development build wants `development` here and its tokens
+	     are then valid only against Apple's sandbox. Getting the two out of
+	     step yields `BadDeviceToken` and no other clue. -->
+	<key>aps-environment</key>
+	<string>production</string>
+</dict>
+</plist>

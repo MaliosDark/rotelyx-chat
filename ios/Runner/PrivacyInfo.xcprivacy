@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Required by App Store Connect since May 2024. An upload without one is
+	     rejected before review, and one that omits a required-reason API in use
+	     is rejected with ITMS-91053.
+
+	     Everything here is "no" and that is not a formality: this application
+	     has no account, no analytics, no advertising identifier, no crash
+	     reporter and no network destination other than the mailbox its user
+	     chose. See docs/RELEASING.md. -->
+
+	<key>NSPrivacyTracking</key>
+	<false/>
+
+	<!-- Nothing is used to track, so there is nothing to list. -->
+	<key>NSPrivacyTrackingDomains</key>
+	<array/>
+
+	<!-- No data leaves this device in any form Apple's taxonomy covers.
+	     Messages are end to end encrypted and deposited into a mailbox that
+	     cannot read them, which is not "collection" by the developer under
+	     Apple's definition, because the developer never receives it. -->
+	<key>NSPrivacyCollectedDataTypes</key>
+	<array/>
+
+	<key>NSPrivacyAccessedAPITypes</key>
+	<array>
+		<!-- File timestamps. The conversation store writes and reads its own
+		     encrypted files through path_provider and get_storage, which stat
+		     them. C617.1 is the reason for a container the app itself owns. -->
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryFileTimestamp</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>C617.1</string>
+			</array>
+		</dict>
+		<!-- UserDefaults, read and written by this application only. CA92.1 is
+		     the reason for access limited to the app itself, with no app group
+		     and nothing shared with another developer's software. -->
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>CA92.1</string>
+			</array>
+		</dict>
+		<!-- Free disk space, which the storage layer checks before writing.
+		     E174.1 covers displaying it to the user or refusing to write. -->
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryDiskSpace</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>E174.1</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>

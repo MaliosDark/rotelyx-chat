@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base href="$FLUTTER_BASE_HREF">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="description" content="Rotelyx Chat by Ideoa Labs">
+  <meta name="renderer" content="canvaskit">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+
+  <!-- Rotelyx Chat, by Ideoa Labs
+
+       This page contacts no third party. There is no CDN, no font host, no
+       analytics, and no Google SDK. Every asset below is served from this
+       origin, and the only outbound connection the application opens is the
+       WebSocket to the mailbox named in lib/rotelyx/rotelyx_config.dart.
+
+       The CSP is the enforcement, not the comment. `connect-src` lists the
+       mailbox explicitly: if a dependency ever tries to phone somewhere else,
+       the browser blocks it and reports it in the console rather than the
+       traffic leaving quietly. -->
+  <meta http-equiv="Content-Security-Policy" content="
+    default-src 'self';
+    script-src 'self' 'wasm-unsafe-eval';
+    style-src 'self' 'unsafe-inline';
+    img-src 'self' data: blob:;
+    media-src 'self' data: blob:;
+    font-src 'self';
+    connect-src 'self' blob: data: wss://mail-rotelyx.ideoa.co;
+    frame-ancestors 'none';
+    base-uri 'self';
+    form-action 'none';
+  ">
+
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="Rotelyx Chat">
+  <link rel="apple-touch-icon" href="favicon.png">
+  <link rel="icon" type="image/png" href="favicon.png"/>
+
+  <title>Rotelyx Chat</title>
+  <link rel="manifest" href="manifest.json">
+
+  <script src="diag.js"></script>
+
+  <!-- No service worker. web/flutter_bootstrap.js explains why, and web/boot.js
+       removes any that an earlier build left registered in a browser.
+
+       The `{{flutter_service_worker_version}}` block that flutter create puts
+       here is gone rather than emptied: it was an inline script, `script-src
+       'self'` refused to run it, and it had been dead since the CSP was added
+       without anything reporting so. -->
+
+  <!-- Loads rotelyx-wasm and exposes it as window.rotelyx. Must be a module,
+       and must come before Flutter so the bridge is resolving while the engine
+       boots rather than after it. -->
+  <script src="rotelyx_bridge.js" type="module"></script>
+
+  <script src="flutter_bootstrap.js" async></script>
+
+  <!-- The boot screen.
+
+       Inline because it has to paint before anything else has loaded, and the
+       CSP permits inline styles while refusing inline scripts. The colours are
+       the application's own, from lib/ui/theme.dart, so the engine appearing
+       is a change of content rather than a change of scene.
+
+       The background is set on <html> as well as on the panel: without it the
+       browser paints its default white for the first frames, which is a flash
+       of the wrong colour on a dark application. -->
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      background: #0B0A0F;
+    }
+
+    #rotelyx-boot {
+      position: fixed;
+      inset: 0;
+      z-index: 2147483647;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 28px;
+      background: #0B0A0F;
+      transition: opacity .4s ease;
+    }
+
+    #rotelyx-boot.rotelyx-boot-out { opacity: 0; }
+
+    #rotelyx-boot img {
+      width: 216px;
+      max-width: 54vw;
+      height: auto;
+      /* The mark fades up rather than appearing, so a fast load does not
+         flash and a slow one has something to watch. */
+      animation: rotelyx-rise .55s ease-out both;
+    }
+
+    /* A determinate-looking bar would be a lie: nothing here reports progress.
+       A track with a shuttle in it says "working" and claims nothing. */
+    #rotelyx-boot .track {
+      width: 176px;
+      max-width: 44vw;
+      height: 2px;
+      border-radius: 2px;
+      background: #1C1B23;
+      overflow: hidden;
+    }
+
+    #rotelyx-boot .track i {
+      display: block;
+      width: 42%;
+      height: 100%;
+      border-radius: 2px;
+      background: #6A31EE;
+      animation: rotelyx-sweep 1.25s ease-in-out infinite;
+    }
+
+    @keyframes rotelyx-rise {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: none; }
+    }
+
+    @keyframes rotelyx-sweep {
+      0%   { transform: translateX(-100%); }
+      100% { transform: translateX(238%); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      #rotelyx-boot img { animation: none; }
+      #rotelyx-boot .track i { animation: none; width: 100%; opacity: .5; }
+    }
+  </style>
+</head>
+<body>
+  <div id="rotelyx-boot">
+    <img src="rotelyx-boot.png" alt="Rotelyx" width="720" height="441">
+    <div class="track"><i></i></div>
+  </div>
+
+  <!-- After the splash markup, so the element it looks for already exists. -->
+  <script src="boot.js"></script>
+</body>
+</html>

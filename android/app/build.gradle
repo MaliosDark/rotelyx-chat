@@ -1,0 +1,160 @@
+plugins {
+    id "com.android.application"
+    id "kotlin-android"
+    id "dev.flutter.flutter-gradle-plugin"
+}
+
+def localProperties = new Properties()
+def localPropertiesFile = rootProject.file('local.properties')
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.withReader('UTF-8') { reader ->
+        localProperties.load(reader)
+    }
+}
+
+def flutterVersionCode = localProperties.getProperty('flutter.versionCode')
+if (flutterVersionCode == null) {
+    flutterVersionCode = '1'
+}
+
+def flutterVersionName = localProperties.getProperty('flutter.versionName')
+if (flutterVersionName == null) {
+    flutterVersionName = '1.0'
+}
+
+// The upload key, read from a file that is not in the repository.
+//
+// Google Play rejects an upload signed with the debug key, which is what this
+// build used and what `flutter create` leaves behind. Worse than rejection: a
+// debug key is the same on every machine that ever ran Android Studio, so an
+// application shipped with one can be replaced by anybody.
+//
+// The properties live in android/key.properties, which .gitignore excludes.
+// When it is absent the release build falls back to the debug key so that
+// `flutter run --release` still works on a development machine, and prints why,
+// because a silent fallback is how an unsigned build reaches a store listing.
+// See docs/RELEASING.md.
+def keystoreProperties = new Properties()
+def keystorePropertiesFile = rootProject.file('key.properties')
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+} else {
+    println 'android/key.properties is absent: signing the release build with ' +
+            'the debug key. This build cannot be uploaded. See docs/RELEASING.md.'
+}
+
+android {
+    namespace "com.ideoalabs.rotelyx"
+    // 35 is what Google Play requires of every new application and every
+    // update since 31 August 2025. Compiling against it is not the same as
+    // targeting it, and both are needed.
+    compileSdkVersion 35
+    ndkVersion flutter.ndkVersion
+
+    // 17 to match the Android Gradle Plugin 8 line, which will not run on 11
+    // and warns on 8.
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+
+    sourceSets {
+        main.java.srcDirs += 'src/main/kotlin'
+    }
+
+    defaultConfig {
+        applicationId "com.ideoalabs.rotelyx"
+
+        // 24 is where the engine's dependencies land, and it is also where the
+        // Rust library is built for: see tool/native/build-android.sh.
+        minSdkVersion 24
+        targetSdkVersion 35
+        versionCode flutterVersionCode.toInteger()
+        versionName flutterVersionName
+    }
+
+    signingConfigs {
+        release {
+            if (keystorePropertiesFile.exists()) {
+                keyAlias keystoreProperties['keyAlias']
+                keyPassword keystoreProperties['keyPassword']
+                storeFile file(keystoreProperties['storeFile'])
+                storePassword keystoreProperties['storePassword']
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            signingConfig keystorePropertiesFile.exists()
+                    ? signingConfigs.release
+                    : signingConfigs.debug
+
+            // Left off deliberately.
+            //
+            // R8 would shrink the Dart-side nothing and the Kotlin-side very
+            // little, because the application is one activity and a method
+            // channel, and it has broken Flutter plugin registration often
+            // enough that the cost is real and the saving is not.
+            minifyEnabled false
+            shrinkResources false
+        }
+    }
+
+    packagingOptions {
+        jniLibs {
+            // Load the Rust library straight out of the APK rather than
+            // extracting it to disk on install. Required for the sixteen
+            // kilobyte page alignment to mean anything, and it is what makes
+            // the installed size smaller than the download.
+            useLegacyPackaging false
+        }
+    }
+}
+
+flutter {
+    source '../..'
+}
+
+dependencies {
+    // Notifications, and nothing else.
+    //
+    // `NotificationCompat`, `Person` and `IconCompat` come from here, and they
+    // are what makes an arriving message render as a message with a name and a
+    // face rather than as an alert from an application. AndroidX is already on
+    // the classpath through the Flutter embedding; naming it means the version
+    // is decided here rather than inherited.
+    implementation 'androidx.core:core-ktx:1.13.1'
+
+    // The back camera, for scanning a meeting code. See QrCamera.kt.
+    //
+    // CameraX rather than Camera2 directly: the same job in a fifth of the
+    // code, and the parts it hides are the ones that differ between devices.
+    // `camera-view` is deliberately absent, because the preview is rendered
+    // through a Flutter texture rather than an Android view.
+    implementation 'androidx.camera:camera-core:1.3.4'
+    implementation 'androidx.camera:camera-camera2:1.3.4'
+    implementation 'androidx.camera:camera-lifecycle:1.3.4'
+
+    // `ProcessCameraProvider.getInstance` hands back a Guava
+    // `ListenableFuture`, and getting that one interface onto the compile
+    // classpath is fiddlier than it sounds.
+    //
+    // Guava 28.1 is already in this build, pulled in by something else, so the
+    // class is present when the application runs. What is missing is only the
+    // declaration at compile time, and the error names Guava, which this
+    // project does not use, rather than CameraX, which is what asked for it.
+    //
+    // `compileOnly`, therefore, and not `implementation`: the bytes are already
+    // in the APK and adding them again is two and a half megabytes for nothing.
+    // Forcing `com.google.guava:listenablefuture:1.0` instead is the other
+    // common answer and produces a duplicate class error, because full Guava
+    // defines the same interface.
+    compileOnly 'com.google.guava:guava:28.1-android'
+    implementation 'androidx.concurrent:concurrent-futures:1.1.0'
+}
+

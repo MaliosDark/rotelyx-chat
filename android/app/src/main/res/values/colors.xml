@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Tone.dBackdrop in lib/ui/theme.dart. Named here as well because the
+         launch screen is drawn by Android before any Dart runs, so it cannot
+         read the palette and has to be told. -->
+    <color name="rotelyx_backdrop">#FF0B0A0F</color>
+</resources>

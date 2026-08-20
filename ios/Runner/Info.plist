@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>CFBundleDisplayName</key>
+	<string>Rotelyx Chat</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>Rotelyx Chat</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<!-- Export compliance.
+
+	     TRUE, and this is not the cautious answer, it is the correct one.
+
+	     The exemption most applications claim covers software that only calls
+	     the encryption already in the operating system. This one does not: it
+	     ships its own implementation of MLS and X-Wing in a Rust library, which
+	     is exactly what the exemption excludes.
+
+	     Declaring false here to skip the questionnaire is a false statement to
+	     Apple and, through them, to the United States Bureau of Industry and
+	     Security. What it actually requires is an annual self-classification
+	     report, or a CCATS, before distribution. See docs/RELEASING.md, which
+	     also covers the separate French declaration.
+	-->
+	<!-- Woken by a push, and by nothing else.
+
+	     `remote-notification` is what lets the notification service extension
+	     run when a content-free push arrives. There is no `fetch` and no
+	     `processing`: this application does not poll in the background, because
+	     iOS does not permit the socket that would make polling useful.
+
+	     Notably absent: `audio` and `voip`. PushKit is the right mechanism for
+	     an incoming call and the wrong one for a message, and Apple revokes the
+	     entitlement of applications that use it for messages.
+	-->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<true/>
+	<key>CFBundleShortVersionString</key>
+	<string>$(FLUTTER_BUILD_NAME)</string>
+	<key>CFBundleSignature</key>
+	<string>????</string>
+	<key>CFBundleVersion</key>
+	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+	<key>UILaunchStoryboardName</key>
+	<string>LaunchScreen</string>
+	<key>UIMainStoryboardFile</key>
+	<string>Main</string>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>CADisableMinimumFrameDurationOnPhone</key>
+	<true/>
+	<key>UIApplicationSupportsIndirectInputEvents</key>
+	<true/>
+</dict>
+</plist>
