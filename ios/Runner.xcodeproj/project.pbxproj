@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		E5A1B2C3D4E5F60000000021 /* CallAudio.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5A1B2C3D4E5F60000000020 /* CallAudio.swift */; };
+		E5A1B2C3D4E5F60000000023 /* QrCamera.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5A1B2C3D4E5F60000000022 /* QrCamera.swift */; };
+		E5A1B2C3D4E5F60000000025 /* FilePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5A1B2C3D4E5F60000000024 /* FilePicker.swift */; };
 		E5A1B2C3D4E5F60000000017 /* SharedContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5A1B2C3D4E5F60000000016 /* SharedContainer.swift */; };
 		E5A1B2C3D4E5F6000000000C /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5A1B2C3D4E5F6000000000B /* NotificationService.swift */; };
 		E5A1B2C3D4E5F60000000011 /* NotificationService.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = E5A1B2C3D4E5F60000000002 /* NotificationService.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -62,6 +65,9 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		E5A1B2C3D4E5F60000000020 /* CallAudio.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallAudio.swift; sourceTree = "<group>"; };
+		E5A1B2C3D4E5F60000000022 /* QrCamera.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QrCamera.swift; sourceTree = "<group>"; };
+		E5A1B2C3D4E5F60000000024 /* FilePicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilePicker.swift; sourceTree = "<group>"; };
 		E5A1B2C3D4E5F60000000016 /* SharedContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedContainer.swift; sourceTree = "<group>"; };
 		E5A1B2C3D4E5F60000000002 /* NotificationService.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = NotificationService.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		E5A1B2C3D4E5F6000000000B /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
@@ -154,6 +160,9 @@
 				1498D2321E8E86230040F4C2 /* GeneratedPluginRegistrant.h */,
 				1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */,
 				74858FAE1ED2DC5600515810 /* AppDelegate.swift */,
+				E5A1B2C3D4E5F60000000020 /* CallAudio.swift */,
+				E5A1B2C3D4E5F60000000022 /* QrCamera.swift */,
+				E5A1B2C3D4E5F60000000024 /* FilePicker.swift */,
 				E5A1B2C3D4E5F60000000016 /* SharedContainer.swift */,
 				74858FAD1ED2DC5600515810 /* Runner-Bridging-Header.h */,
 				E5A1B2C3D4E5F6000000000F /* Runner.entitlements */,
@@ -359,6 +368,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E5A1B2C3D4E5F60000000021 /* CallAudio.swift in Sources */,
+				E5A1B2C3D4E5F60000000023 /* QrCamera.swift in Sources */,
+				E5A1B2C3D4E5F60000000025 /* FilePicker.swift in Sources */,
 				E5A1B2C3D4E5F60000000017 /* SharedContainer.swift in Sources */,
 				74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */,
 				1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */,

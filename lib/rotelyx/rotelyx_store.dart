@@ -38,6 +38,7 @@ import 'dart:typed_data';
 import 'package:get_storage/get_storage.dart';
 
 import 'ephemeral.dart';
+import 'chat_lock.dart' as chat_lock;
 import 'rotelyx_wasm.dart';
 
 /// One stored message.
@@ -49,6 +50,7 @@ class StoredMessage {
     this.author = '',
     this.inMailbox = true,
     this.seen = false,
+    this.seenBy = const [],
     this.reactions = const {},
     this.burnAt,
   });
@@ -69,7 +71,19 @@ class StoredMessage {
   /// receipts switched on. Nothing infers this: absence means "they did not
   /// say", not "they did not read", and the interface has to say so or it is
   /// inventing a fact about somebody.
+  ///
+  /// In a group this means **everybody** in [seenBy] has said so, which is what
+  /// a double tick is taken to mean. Anything less is [seenBy] on its own.
   final bool seen;
+
+  /// Who has said they read it, by the label they chose.
+  ///
+  /// Empty in a conversation of two, where [seen] carries the whole answer and
+  /// a list of one name is noise. A group of eight is the case this exists for:
+  /// "somebody read it" and "everybody read it" are different facts, and a tick
+  /// that means the first while looking like the second is the kind of small
+  /// lie that gets believed.
+  final List<String> seenBy;
 
   /// Emoji to the people who sent them. Empty for the overwhelming majority.
   final Map<String, List<String>> reactions;
@@ -102,6 +116,7 @@ class StoredMessage {
   StoredMessage copyWith({
     bool? inMailbox,
     bool? seen,
+    List<String>? seenBy,
     Map<String, List<String>>? reactions,
     DateTime? burnAt,
   }) =>
@@ -112,6 +127,7 @@ class StoredMessage {
         author: author,
         inMailbox: inMailbox ?? this.inMailbox,
         seen: seen ?? this.seen,
+        seenBy: seenBy ?? this.seenBy,
         reactions: reactions ?? this.reactions,
         burnAt: burnAt ?? this.burnAt,
       );
@@ -123,6 +139,7 @@ class StoredMessage {
         if (author.isNotEmpty) 'w': author,
         if (mine && !inMailbox) 'p': true,
         if (seen) 's': true,
+        if (seenBy.isNotEmpty) 'sb': seenBy,
         if (reactions.isNotEmpty) 'r': reactions,
         if (burnAt != null) 'b': burnAt!.millisecondsSinceEpoch,
       };
@@ -134,6 +151,7 @@ class StoredMessage {
         author: j['w'] as String? ?? '',
         inMailbox: j['p'] != true,
         seen: j['s'] == true,
+        seenBy: (j['sb'] as List? ?? const []).cast<String>(),
         reactions: (j['r'] as Map?)?.map((k, v) =>
                 MapEntry('$k', (v as List).map((e) => '$e').toList())) ??
             const {},
@@ -256,6 +274,9 @@ class RotelyxStore {
   static const _kIndex = 'rotelyx.index';
   static String _kSession(String id) => 'rotelyx.session.$id';
   static String _kLog(String id) => 'rotelyx.log.$id';
+
+  /// The blob that proves a conversation PIN. Absent when it is not locked.
+  static String _kChatLock(String id) => 'rotelyx.chat-lock.$id';
 
   final _box = GetStorage();
   WasmKey? _key;
@@ -408,6 +429,9 @@ class RotelyxStore {
   /// Forget the key. The blobs stay on disk; nothing can read them until the
   /// passphrase is given again.
   void lock() {
+    // Every conversation PIN as well. Leaving one open would mean a locked
+    // conversation readable after the vault itself was shut.
+    chat_lock.closeAll();
     _key?.dispose();
     _key = null;
     _ephemeral.clear();
@@ -418,6 +442,7 @@ class RotelyxStore {
     for (final id in conversationIds) {
       _box.remove(_kSession(id));
       _box.remove(_kLog(id));
+      _box.remove(_kChatLock(id));
     }
     _box.remove(_kIndex);
     _box.remove(_kProbe);
@@ -468,13 +493,72 @@ class RotelyxStore {
       if (c.burnAcks.isNotEmpty) 'acks': c.burnAcks,
     });
 
-    _box.write(_kLog(c.id),
-        RotelyxWasm.sealBlob(key, base64Encode(utf8.encode(payload))));
+    // A locked conversation is sealed twice: once under its own PIN and then
+    // under the vault key like everything else. Both are needed to read it,
+    // which is what makes it a lock rather than a hidden screen. See
+    // `chat_lock.dart`.
+    var inner = base64Encode(utf8.encode(payload));
+
+    if (isLocked(c.id)) {
+      final chatKey = chat_lock.keyFor(c.id);
+      if (chatKey == null) {
+        // Locked and not opened this run. Refusing to write is right: saving
+        // it under the vault key alone would quietly remove the lock, and a
+        // lock that comes off when something forgot to ask is not one.
+        return;
+      }
+      inner = RotelyxWasm.sealBlob(chatKey, inner);
+    }
+
+    _box.write(_kLog(c.id), RotelyxWasm.sealBlob(key, inner));
 
     final session = c.session;
     if (session != null) _box.write(_kSession(c.id), session);
 
     _index(c.id, add: true);
+  }
+
+  /// Every stored value, for a test that asserts a secret is not among them.
+  ///
+  /// Only ever called from `test/chat_lock_test.dart`. It exists because
+  /// "the PIN is not stored" is a claim worth checking against the storage
+  /// rather than against the code that was supposed to not store it.
+  List<Object?> debugAllValues() =>
+      _box.getKeys<Iterable<String>>().map(_box.read<Object?>).toList();
+
+  /// Whether this conversation has a PIN of its own.
+  bool isLocked(String id) => _box.read(_kChatLock(id)) is String;
+
+  /// Whether it has been opened during this run.
+  bool isOpened(String id) => !isLocked(id) || chat_lock.isOpen(id);
+
+  /// Give a conversation a PIN.
+  ///
+  /// Re-saves it immediately, so the sealed form on disk matches the lock from
+  /// this moment rather than from the next time anything writes.
+  void lockChat(String id, String pin) {
+    final conversation = load(id);
+    if (conversation == null) return;
+
+    _box.write(_kChatLock(id), chat_lock.seal(id, pin));
+    save(conversation);
+  }
+
+  /// Try a PIN.
+  bool openChat(String id, String pin) {
+    final probe = _box.read(_kChatLock(id));
+    if (probe is! String) return true;
+    return chat_lock.open(id, pin, probe);
+  }
+
+  /// Take the PIN off, which needs it to be open.
+  void unlockChat(String id) {
+    if (!isOpened(id)) return;
+
+    final conversation = load(id);
+    _box.remove(_kChatLock(id));
+    chat_lock.close(id);
+    if (conversation != null) save(conversation);
   }
 
   /// Read one back. Null when absent, locked, or sealed under another key.
@@ -486,7 +570,18 @@ class RotelyxStore {
     if (blob == null) return null;
 
     try {
-      final json = jsonDecode(utf8.decode(base64Decode(RotelyxWasm.openBlob(key, blob))))
+      var inner = RotelyxWasm.openBlob(key, blob);
+
+      if (isLocked(id)) {
+        final chatKey = chat_lock.keyFor(id);
+        // Null means the PIN has not been given this run. Null is returned
+        // rather than a partial conversation, so nothing upstream can show a
+        // preview of something that is supposed to be shut.
+        if (chatKey == null) return null;
+        inner = RotelyxWasm.openBlob(chatKey, inner);
+      }
+
+      final json = jsonDecode(utf8.decode(base64Decode(inner)))
           as Map<String, dynamic>;
 
       final picture = json['pic'];

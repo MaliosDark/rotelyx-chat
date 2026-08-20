@@ -46,6 +46,21 @@
 	<array>
 		<string>remote-notification</string>
 	</array>
+	<!-- What iOS shows the person when it asks.
+
+	     These are not boilerplate. iOS refuses to launch an application that
+	     touches the microphone or camera without them, and the text is what the
+	     person reads while deciding, so it says what the thing is for and stops.
+
+	     Notably absent: NSPhotoLibraryUsageDescription. Attachments go through
+	     the system document picker, which asks for nothing. Reading the photo
+	     library would give a prettier grid and cost a line that a person reads
+	     as "this app can see all my photographs".
+	-->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Rotelyx needs the microphone for voice calls. It is used only while a call is running.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Rotelyx needs the camera to scan a meeting code. Nothing is recorded and nothing is sent.</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<true/>
 	<key>CFBundleShortVersionString</key>

@@ -37,7 +37,7 @@ sealed into padded envelopes and left in a blind mailbox.
 | Client source | about 15,900 lines under `lib/`, 72 files |
 | Runtime dependencies | 4: `web`, `ffi`, `get_storage`, `qr_flutter` |
 | Targets | web and Android build here; iOS, Linux, macOS and Windows are scaffolded |
-| Tests | 127, all passing |
+| Tests | 141, all passing |
 | Outbound addresses | 2, both ours |
 | Third-party services | none |
 
@@ -47,7 +47,9 @@ self-destructing messages that burn on both devices from the moment the
 recipient reads them; encrypted local history; attachments up to 5 MB; unread
 counts; a read tick that is never inferred; contact names, pictures, pinning and
 muting; notifications with the sender's name and picture and no push service
-involved; a PIN for the application; safety numbers; light and dark themes.
+involved; a PIN for the application and a separate one that seals a single
+conversation; withdrawing a message from both sides; copying and exporting a
+conversation; safety numbers; light and dark themes.
 
 **Calls:** built and relayed, keyed from the same MLS group as the messages.
 Each part is tested; they have not yet been run together on two phones.
@@ -241,30 +243,55 @@ on reload, which is the stronger position and an inconvenient default.
 `docs/PERSISTENCE.md` records what the protocol repository had to expose for
 this to be possible.
 
+## Built, and not yet proven on two phones
+
+Calls are built end to end and each part is tested on its own:
+
+| | |
+|---|---|
+| Audio across the codec, between two members of one group | `test/call_test.dart` |
+| A datagram across a real relay, between two endpoints | `test/transport_test.dart` |
+| Ringing and answering, against signals that arrive out of order | `test/call_state_test.dart` |
+
+What has not happened is the three running together on two devices, which is
+where this kind of thing fails. To try it, you need two Android phones:
+
+```bash
+tool/native/build-android.sh
+flutter build apk --release
+adb install -r build/app/outputs/flutter-apk/app-release.apk
+```
+
+Install on both, pair them with a QR code, and press the call button in the
+chat header. The relay has to be reachable from both: `rotelyxConfig.relay` in
+`lib/rotelyx/rotelyx_config.dart` points at `relay-rotelyx.ideoa.co` in
+production and at `127.0.0.1:3340` in development, and a phone cannot reach the
+second one.
+
+If it does not connect, the two things to check first are that the microphone
+permission was granted on both and that the relay is the production one.
+
 ## Not built yet
 
-- **Calls between two phones.** Every part is built and tested on its own: audio
-  crosses the codec between two members of a group, a datagram crosses the relay
-  between two endpoints, and the state machine holds up against signals that
-  arrive out of order. The three have not yet been run together on two devices,
-  which is where this kind of thing fails.
 - **Calls in a browser.** QUIC datagrams are native only, so a tab cannot carry
   one. Text still works there; a call does not.
-- **The camera, the file picker and audio on iOS.** All three are platform
-  channels and all three are written for Android only. On iOS the scanner falls
-  back to typing a code, which works, and the attachment button says so rather
-  than opening nothing.
+- **iOS, built but never compiled.** The camera, the file picker and the audio
+  devices are written in `ios/Runner/` and added to the Xcode target, in the
+  same shapes Android answers on, so nothing above them knows which platform
+  they are. None of it has been through a compiler: there is no Mac here. Treat
+  it as a first draft that analyses correctly and expect to fix things.
 - **Push on iOS.** The client side is built: registration with Apple, the
   mailbox frames, and a notification service extension. What remains is the
-  mailbox sending the push and five steps that need a Mac. `docs/PUSH.md`.
-  Android needs none of it and uses none of it.
+  mailbox sending the push and the Xcode steps in `docs/PUSH.md`. Android needs
+  none of it and uses none of it.
 - **Direct peer to peer in a browser.** `rotelyx-wasm` is the message layer.
   Transport is native only, so every browser message goes through the mailbox.
-- **A conversation lock.** The application PIN is built. Locking one
-  conversation is a different thing: it has to seal that conversation under a
-  key derived from the PIN as well as the passphrase, or it is a curtain with a
-  padlock painted on it.
-- **Group read receipts.** The tick says somebody read it, not everybody.
+- **A desktop window.** The four platform folders exist and the native engine
+  builds for them. A Linux build needs `ninja-build`, `clang`, `libgtk-3-dev`
+  and `pkg-config`; Windows needs Visual Studio's C++ workload; macOS needs
+  Xcode. The layout has also never been drawn for a large screen beyond what
+  the existing breakpoint does.
+- **Editing a message, forwarding one, and biometric unlock.**
 
 ## Running it
 

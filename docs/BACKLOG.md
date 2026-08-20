@@ -191,12 +191,26 @@ The window has also never been laid out for a large screen beyond what the
 existing breakpoint does, and a desktop messenger with a phone's proportions
 looks like a phone emulator.
 
-### iOS, the last mile
+### iOS, written and never compiled
 
-The extension target, the App Group and the entitlements are built. What is left
-is the decision in `docs/PUSH.md` about putting the vault key in the Keychain,
-without which the extension can show who a message is from and not what it says,
-and four steps that need a Mac and a developer account.
+`ios/Runner/` now carries `CallAudio.swift`, `QrCamera.swift` and
+`FilePicker.swift`, added to the Xcode target, answering the same three channels
+Android answers on. The usage descriptions are in `Info.plist` and
+`NSPhotoLibraryUsageDescription` is deliberately absent: attachments go through
+the system document picker, which asks for nothing.
+
+**None of it has been through a compiler.** There is no Mac here. It is written
+against the documented APIs and it is a first draft.
+
+Two things in it are worth reading before trusting them. `AVAudioSession` is set
+to `.playAndRecord` with `.voiceChat`, which is the whole of the call routing:
+set wrong it does not fail, it produces a call that sounds like a speakerphone
+in a bathroom. And the camera copies the luma plane row by row because
+`CVPixelBuffer` pads each row, and ignoring that shears the picture into
+something that still looks like a photograph and never decodes.
+
+The push extension still needs the decision in `docs/PUSH.md` about the Keychain
+and the mailbox sending the push.
 
 ### Smaller, and honest about being smaller
 

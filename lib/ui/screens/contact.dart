@@ -20,11 +20,14 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
+import '../../rotelyx/export.dart';
 import '../../rotelyx/rotelyx_store.dart';
 import '../theme.dart';
 import '../widgets.dart';
 import 'picture.dart';
+import 'pin_set.dart';
 
 class ContactSheet extends StatefulWidget {
   const ContactSheet({super.key, required this.conversationId, this.onChanged});
@@ -226,6 +229,64 @@ class _ContactSheetState extends State<ContactSheet> {
                 'when you read even though not what. It is off by default for '
                 'that reason and not because it is hard.',
                 title: 'What a receipt costs',
+              ),
+
+              const SizedBox(height: Metrics.gap),
+              const _Section('Lock this conversation'),
+              _Toggle(
+                title: 'Ask for a PIN to open it',
+                subtitle: store.isLocked(c.id)
+                    ? 'Sealed under that PIN as well as your passphrase'
+                    : 'Off. It opens with the rest of your history',
+                icon: Icons.lock_outline,
+                value: store.isLocked(c.id),
+                onChanged: (want) async {
+                  if (!want) {
+                    store.unlockChat(c.id);
+                    if (mounted) setState(() {});
+                    widget.onChanged?.call();
+                    return;
+                  }
+                  final pin = await SetPinSheet.ask(context);
+                  if (pin == null) return;
+                  store.lockChat(c.id, pin);
+                  if (mounted) setState(() {});
+                  widget.onChanged?.call();
+                },
+              ),
+              const SizedBox(height: 6),
+              const RxNote(
+                'This one seals rather than hides. The conversation is '
+                'encrypted under its PIN as well as your passphrase, so it '
+                'stays unreadable even to this application with your vault '
+                'open. Forgetting the PIN loses this conversation and nothing '
+                'else, and nothing here can recover it.\n\n'
+                'What stays visible is that the conversation exists and who it '
+                'is with. Hiding that would mean hiding the row, and then '
+                'nobody could find it to unlock.',
+                title: 'What this locks and what it does not',
+              ),
+
+              const SizedBox(height: Metrics.gap),
+              const _Section('Export'),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(Icons.description_outlined, size: 20, color: t.muted),
+                title: Text('Copy this conversation as text',
+                    style: Type.body.copyWith(color: t.text)),
+                subtitle: Text(
+                    'Goes to the clipboard, unencrypted',
+                    style: Type.small.copyWith(color: t.faint)),
+                onTap: () {
+                  Clipboard.setData(
+                      ClipboardData(text: exportConversation(c)));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                        content: Text(
+                            'Copied. It is not encrypted: paste it somewhere '
+                            'you would keep the conversation itself.')),
+                  );
+                },
               ),
 
               const SizedBox(height: Metrics.gap),

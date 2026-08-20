@@ -13,7 +13,7 @@ import 'package:flutter/services.dart';
 const MethodChannel _channel = MethodChannel('rotelyx/call-audio');
 
 /// Whether this platform has the audio devices wired up.
-bool get audioIsBuilt => Platform.isAndroid;
+bool get audioIsBuilt => Platform.isAndroid || Platform.isIOS;
 
 /// Ask for the microphone. False when it was refused.
 Future<bool> permitMicrophone() async {

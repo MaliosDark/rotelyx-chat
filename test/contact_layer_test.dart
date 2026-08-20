@@ -110,4 +110,28 @@ void main() {
     expect(Signal.isControl('rx-signal\x1fmute'), isTrue,
         reason: 'the marker exists, but nothing sends a mute and nothing should');
   });
+
+  test('a double tick in a group means everybody, not somebody', () {
+    // The distinction this exists for. A tick that means "somebody read it"
+    // while looking like "everybody read it" is a small lie told to everybody
+    // in the group, every time.
+    final m = msg('to eight people', mine: true);
+
+    final oneReader = m.copyWith(seenBy: ['Ana'], seen: false);
+    expect(oneReader.seen, isFalse);
+    expect(oneReader.seenBy, ['Ana']);
+
+    final everyone =
+        m.copyWith(seenBy: ['Ana', 'Beto', 'Carla'], seen: true);
+    expect(everyone.seen, isTrue);
+  });
+
+  test('who read it survives storage, and is absent when nobody has', () {
+    final read = msg('x', mine: true).copyWith(seenBy: ['Ana', 'Beto']);
+    expect(StoredMessage.fromJson(read.toJson()).seenBy, ['Ana', 'Beto']);
+
+    // Absent rather than empty, so a log does not grow by a key per message
+    // for a feature nobody switched on.
+    expect(msg('x', mine: true).toJson().containsKey('sb'), isFalse);
+  });
 }

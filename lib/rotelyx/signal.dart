@@ -48,6 +48,9 @@ enum SignalKind {
 
   /// Somebody is calling, has answered, has declined, or has hung up.
   call,
+
+  /// A message was withdrawn by whoever sent it.
+  retract,
 }
 
 /// What a [SignalKind.call] is saying.
@@ -165,6 +168,33 @@ class Signal {
 
   /// Which messages the other side has read. See [Ephemeral].
   List<String> get burnIds => fields.where((f) => f.isNotEmpty).toList();
+
+  // --- retract -----------------------------------------------------------------
+
+  /// Withdraw a message, named by when its author sent it.
+  ///
+  /// # What this can and cannot do, said plainly
+  ///
+  /// It asks. The other side's copy goes because their client removes it, and
+  /// nothing here reaches into somebody else's device. A recipient running a
+  /// modified client, or one who took a photograph, keeps it.
+  ///
+  /// That is the same limit self destructing messages have and it is worth
+  /// stating in the interface rather than implying that a message can be
+  /// unsent. What it does deliver is real: on an ordinary client the message is
+  /// gone from both logs, so a phone handed over later does not have it.
+  ///
+  /// Only the author may withdraw. A retract naming somebody else's message is
+  /// ignored, because otherwise anybody in a group could delete anybody's
+  /// history.
+  factory Signal.retract(DateTime at) => Signal(
+        kind: SignalKind.retract,
+        fields: [at.millisecondsSinceEpoch.toString()],
+      );
+
+  /// Which message, by its author's timestamp.
+  DateTime get retractedAt => DateTime.fromMillisecondsSinceEpoch(
+      int.tryParse(fields.isEmpty ? '' : fields.first) ?? 0);
 
   // --- call -------------------------------------------------------------------
 

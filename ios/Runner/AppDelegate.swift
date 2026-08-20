@@ -34,6 +34,10 @@ import UserNotifications
   /// registration has finished.
   private var waiting: [FlutterResult] = []
 
+  private var audio: CallAudio?
+  private var camera: QrCamera?
+  private var files: FilePicker?
+
   override func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
@@ -59,6 +63,28 @@ import UserNotifications
           result(FlutterMethodNotImplemented)
         }
       }
+    }
+
+    if let controller = window?.rootViewController as? FlutterViewController {
+      // The three platform channels, in the same shapes Android answers on, so
+      // nothing above them knows which platform it is talking to.
+      let calls = CallAudio()
+      audio = calls
+      FlutterMethodChannel(name: CallAudio.channel,
+                           binaryMessenger: controller.binaryMessenger)
+        .setMethodCallHandler { call, result in calls.handle(call, result) }
+
+      let scanner = QrCamera(registry: registrar(forPlugin: "QrCamera")?.textures())
+      camera = scanner
+      FlutterMethodChannel(name: QrCamera.channel,
+                           binaryMessenger: controller.binaryMessenger)
+        .setMethodCallHandler { call, result in scanner.handle(call, result) }
+
+      let picker = FilePicker(host: controller)
+      files = picker
+      FlutterMethodChannel(name: FilePicker.channel,
+                           binaryMessenger: controller.binaryMessenger)
+        .setMethodCallHandler { call, result in picker.handle(call, result) }
     }
 
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)

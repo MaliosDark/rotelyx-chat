@@ -227,6 +227,8 @@ class RotelyxService {
         _theyReacted(signal);
       case SignalKind.profile:
         _theyChangedPicture(signal.picture);
+      case SignalKind.retract:
+        _theyWithdrew(signal.retractedAt);
       case SignalKind.call:
         // Ringing, answering, hanging up. Passed straight out rather than
         // acted on here: whether a call may start is a question about what is
@@ -248,13 +250,28 @@ class RotelyxService {
   /// right in: they read in order, and anything sent after they looked is not
   /// covered.
   void _theySawUpTo(DateTime through) {
+    // Who said it. A group of eight needs all eight before a double tick is
+    // honest, and in a conversation of two this is the only other member.
+    final who = conversationName ?? 'They';
+    final others = memberCount > 1 ? memberCount - 1 : 1;
+
     _rewrite((messages) {
       var changed = false;
       for (var i = 0; i < messages.length; i++) {
         final m = messages[i];
         if (!m.mine || m.seen) continue;
         if (m.at.isAfter(through)) continue;
-        messages[i] = m.copyWith(seen: true);
+        if (m.seenBy.contains(who)) continue;
+
+        final readers = [...m.seenBy, who];
+
+        // The tick only once everybody has said so. Until then the names are
+        // kept and the tick is not shown, because "somebody read it" and
+        // "everybody read it" are different facts.
+        messages[i] = m.copyWith(
+          seenBy: readers,
+          seen: readers.length >= others,
+        );
         changed = true;
       }
       return changed;
@@ -326,6 +343,35 @@ class RotelyxService {
     if (!change(conversation.messages)) return;
     store.save(conversation);
     _stateChanges.add(state);
+  }
+
+  /// Remove a message its author has withdrawn.
+  ///
+  /// Theirs only. A retract naming one of ours would let anybody in a group
+  /// delete anybody's history, so the author is checked rather than trusted.
+  void _theyWithdrew(DateTime at) {
+    _rewrite((messages) {
+      final before = messages.length;
+      messages.removeWhere((m) => !m.mine && m.at.isAtSameMomentAs(at));
+      return messages.length != before;
+    });
+  }
+
+  /// Withdraw one of ours, from both sides.
+  ///
+  /// Returns false when the message is not ours to withdraw. It only asks: the
+  /// other copy goes because their client removes it, and a modified client
+  /// keeps it. See `Signal.retract`.
+  bool retract(StoredMessage message) {
+    if (!message.mine) return false;
+    if (!signal(Signal.retract(message.at))) return false;
+
+    _rewrite((messages) {
+      final before = messages.length;
+      messages.removeWhere((m) => m.mine && m.at.isAtSameMomentAs(message.at));
+      return messages.length != before;
+    });
+    return true;
   }
 
   /// Tell them we have read this conversation, if they are to be told.

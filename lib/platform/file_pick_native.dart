@@ -27,7 +27,7 @@ export 'file_pick_api.dart';
 const MethodChannel _channel = MethodChannel('rotelyx/files');
 
 Future<PickedFile?> pickFile({int? maxBytes}) async {
-  if (!Platform.isAndroid) {
+  if (!Platform.isAndroid && !Platform.isIOS) {
     throw const NoFilePicker(
         'Choosing a file is not built for this platform yet.');
   }

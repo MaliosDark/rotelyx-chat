@@ -9,6 +9,7 @@ library;
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../platform/file_pick.dart';
 
@@ -73,6 +74,9 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void initState() {
     super.initState();
+    _shut = store.isLocked(widget.conversationId) &&
+        !store.isOpened(widget.conversationId);
+
     _conversation = store.load(widget.conversationId);
     // While this is on screen, a message in this conversation is not news.
     alerts.openConversation = widget.conversationId;
@@ -393,56 +397,117 @@ class _ChatScreenState extends State<ChatScreen> {
   static const _offered = ['\u2764\ufe0f', '\ud83d\udc4d', '\ud83d\ude02',
       '\ud83d\ude2e', '\ud83d\ude22', '\ud83d\ude4f'];
 
-  Future<void> _pickReaction(StoredMessage message) async {
+  /// What a long press offers.
+  ///
+  /// Reactions first, because that is what a long press mostly means now, and
+  /// the rest under them. Everything here acts on one message and everything
+  /// here is reversible except the last, which asks.
+  Future<void> _messageActions(StoredMessage message) async {
     final t = RotelyxThemeScope.of(context);
-    final mine = message.reactions.entries
-        .where((e) => e.value.contains(rotelyx.displayName))
-        .map((e) => e.key)
-        .toSet();
+    final body = Ephemeral.plain(Quoted.plain(message.text));
 
-    final chosen = await showModalBottomSheet<String>(
+    await showModalBottomSheet<void>(
       context: context,
       backgroundColor: t.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
       ),
       builder: (sheet) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-              horizontal: Metrics.pad, vertical: Metrics.gap),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              for (final emoji in _offered)
-                InkWell(
-                  borderRadius: BorderRadius.circular(24),
-                  onTap: () => Navigator.of(sheet).pop(emoji),
-                  child: Container(
-                    padding: const EdgeInsets.all(9),
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: mine.contains(emoji)
-                          ? Tone.accent.withOpacity(0.18)
-                          : Colors.transparent,
-                    ),
-                    child: Text(emoji, style: const TextStyle(fontSize: 26)),
-                  ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (!message.mine)
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: Metrics.pad, vertical: Metrics.pad),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    for (final emoji in _offered)
+                      InkWell(
+                        borderRadius: BorderRadius.circular(24),
+                        onTap: () {
+                          Navigator.of(sheet).pop();
+                          unawaited(_react(message, emoji));
+                        },
+                        child: Padding(
+                          padding: const EdgeInsets.all(9),
+                          child:
+                              Text(emoji, style: const TextStyle(fontSize: 26)),
+                        ),
+                      ),
+                  ],
                 ),
-            ],
-          ),
+              ),
+            ListTile(
+              leading: Icon(Icons.reply, size: 20, color: t.muted),
+              title: Text('Reply', style: Type.body.copyWith(color: t.text)),
+              onTap: () {
+                Navigator.of(sheet).pop();
+                _replyTo(message);
+              },
+            ),
+            if (body.isNotEmpty)
+              ListTile(
+                leading: Icon(Icons.copy_outlined, size: 20, color: t.muted),
+                title: Text('Copy', style: Type.body.copyWith(color: t.text)),
+                onTap: () {
+                  Navigator.of(sheet).pop();
+                  Clipboard.setData(ClipboardData(text: body));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Copied')),
+                  );
+                },
+              ),
+            if (message.mine)
+              ListTile(
+                leading: const Icon(Icons.delete_outline,
+                    size: 20, color: Color(0xFFE0574A)),
+                title: Text('Delete for everyone',
+                    style: Type.body.copyWith(color: const Color(0xFFE0574A))),
+                subtitle: Text(
+                    'Asks their device to remove it. A modified client keeps it',
+                    style: Type.small.copyWith(color: t.faint)),
+                onTap: () {
+                  Navigator.of(sheet).pop();
+                  _withdraw(message);
+                },
+              ),
+            const SizedBox(height: 8),
+          ],
         ),
       ),
     );
+  }
 
-    if (chosen == null || !mounted) return;
+  /// Withdraw one of ours from both sides.
+  void _withdraw(StoredMessage message) {
+    if (!rotelyx.retract(message)) return;
+
+    final c = _conversation;
+    if (c == null) return;
+
+    setState(() {
+      c.messages.removeWhere(
+          (m) => m.mine && m.at.isAtSameMomentAs(message.at));
+      _conversation = store.load(c.id) ?? c;
+    });
+    widget.onChanged?.call();
+  }
+
+  Future<void> _react(StoredMessage message, String chosen) async {
+    final mine = message.reactions.entries
+        .where((e) => e.value.contains(rotelyx.displayName))
+        .map((e) => e.key)
+        .toSet();
 
     // Tapping one already sent takes it back, which is the only way to remove
     // one and the behaviour every person tries first.
     final removing = mine.contains(chosen);
     if (!rotelyx.react(at: message.at, emoji: chosen, remove: removing)) return;
 
-    // Shown here as well as sent, because the other side's copy is the one
-    // the signal changes and ours has to be changed by us.
+    // Shown here as well as sent, because the other side's copy is what the
+    // signal changes and ours has to be changed by us.
     final c = _conversation;
     if (c == null) return;
 
@@ -462,6 +527,7 @@ class _ChatScreenState extends State<ChatScreen> {
         people.add(rotelyx.displayName);
       }
 
+      if (!mounted) return;
       setState(() => c.messages[i] = m.copyWith(reactions: next));
       store.save(c);
       break;
@@ -509,9 +575,27 @@ class _ChatScreenState extends State<ChatScreen> {
     _focus.requestFocus();
   }
 
+  /// Whether this conversation is locked and has not been opened this run.
+  bool _shut = false;
+
   @override
   Widget build(BuildContext context) {
     final t = RotelyxThemeScope.of(context);
+
+    // Before anything is loaded, let alone drawn. A locked conversation that
+    // showed its last message while asking for a PIN would have already given
+    // away the thing the PIN is for.
+    if (_shut) {
+      return _Shut(
+        onOpened: () => setState(() {
+          _shut = false;
+          _conversation = store.load(widget.conversationId);
+        }),
+        conversationId: widget.conversationId,
+        onBack: widget.onBack,
+      );
+    }
+
     final c = _conversation;
 
     if (c == null) {
@@ -598,9 +682,7 @@ class _ChatScreenState extends State<ChatScreen> {
                           // untouched beneath it.
                           burning: _burning.contains(message.at),
                           onGone: () => _gone(message),
-                          onReact: message.mine
-                              ? null
-                              : () => _pickReaction(message),
+                          onReact: () => _messageActions(message),
                         );
                       },
                     ),
@@ -842,8 +924,9 @@ class _Bubble extends StatelessWidget {
   /// Called when the fire has finished and the message can be removed.
   final VoidCallback? onGone;
 
-  /// Offer a reaction. Null on our own messages: reacting to yourself is a
-  /// thing other applications allow and nobody has ever wanted.
+  /// Reply, copy, react, withdraw. Reactions are offered only on their
+  /// messages: reacting to yourself is a thing other applications allow and
+  /// nobody has ever wanted.
   final VoidCallback? onReact;
 
   @override
@@ -1031,6 +1114,18 @@ class _Bubble extends StatelessWidget {
                         // are different facts and only one of them is ever
                         // inferred. A tick that guesses is worse than no tick:
                         // it invents something about the other person.
+                        // Four states in a group, not three. A single tick
+                        // that some people have read is not the same as one
+                        // nobody has, and a double tick that means "somebody"
+                        // is a small lie told to everybody.
+                        if (message.seenBy.isNotEmpty && !message.seen)
+                          Tooltip(
+                            message: 'Read by ${message.seenBy.join(', ')}',
+                            child: Text('${message.seenBy.length}',
+                                style: Type.small.copyWith(
+                                    fontSize: 9,
+                                    color: t.mineText.withOpacity(0.8))),
+                          ),
                         Icon(
                           message.seen
                               ? Icons.done_all
@@ -1430,4 +1525,108 @@ class _FileRow extends StatelessWidget {
           ),
         ],
       );
+}
+
+/// A conversation that is locked, asking for its PIN.
+///
+/// Deliberately shows nothing else. Not the last message, not the count, not
+/// the time: a locked conversation that previews itself while asking has
+/// already given away what the lock was for.
+class _Shut extends StatefulWidget {
+  const _Shut({
+    required this.conversationId,
+    required this.onOpened,
+    required this.onBack,
+  });
+
+  final String conversationId;
+  final VoidCallback onOpened;
+  final VoidCallback? onBack;
+
+  @override
+  State<_Shut> createState() => _ShutState();
+}
+
+class _ShutState extends State<_Shut> {
+  final _pin = TextEditingController();
+  bool _wrong = false;
+
+  @override
+  void dispose() {
+    _pin.dispose();
+    super.dispose();
+  }
+
+  void _try() {
+    if (store.openChat(widget.conversationId, _pin.text.trim())) {
+      widget.onOpened();
+      return;
+    }
+    HapticFeedback.mediumImpact();
+    setState(() {
+      _wrong = true;
+      _pin.clear();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = RotelyxThemeScope.of(context);
+
+    return SwipeBack(
+      onBack: widget.onBack,
+      child: Container(
+        color: t.backdrop,
+        child: SafeArea(
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 320),
+              child: Padding(
+                padding: const EdgeInsets.all(Metrics.gap),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.lock_outline, size: 40, color: t.muted),
+                    const SizedBox(height: Metrics.gap),
+                    Text('This conversation is locked',
+                        style: Type.title.copyWith(color: t.text)),
+                    const SizedBox(height: 6),
+                    Text(
+                      _wrong
+                          ? 'That is not the PIN'
+                          : 'It is sealed under its own PIN',
+                      style: Type.small.copyWith(
+                          color: _wrong ? const Color(0xFFE0574A) : t.faint),
+                    ),
+                    const SizedBox(height: Metrics.gap),
+                    TextField(
+                      controller: _pin,
+                      obscureText: true,
+                      autofocus: true,
+                      keyboardType: TextInputType.number,
+                      textAlign: TextAlign.center,
+                      style: Type.body.copyWith(color: t.text, letterSpacing: 6),
+                      decoration: InputDecoration(
+                        filled: true,
+                        fillColor: t.raised,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(Metrics.radius),
+                          borderSide: BorderSide.none,
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                      onChanged: (_) => setState(() => _wrong = false),
+                      onSubmitted: (_) => _try(),
+                    ),
+                    const SizedBox(height: Metrics.gap),
+                    RxButton('Open', onTap: _try),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
