@@ -34,16 +34,20 @@ sealed into padded envelopes and left in a blind mailbox.
 
 | | |
 |---|---|
-| Client source | about 5600 lines under `lib/` |
+| Client source | about 15,900 lines under `lib/`, 72 files |
 | Runtime dependencies | 4: `web`, `ffi`, `get_storage`, `qr_flutter` |
-| Targets | web, Android; iOS prepared and needs a Mac to build |
-| Tests | 51, all passing |
+| Targets | web and Android build here; iOS, Linux, macOS and Windows are scaffolded |
+| Tests | 127, all passing |
 | Outbound addresses | 2, both ours |
 | Third-party services | none |
 
-**Working:** pairing by QR, phrase or invitation; one-to-one and group
-conversations; encrypted local history; attachments up to 5 MB; delivery state
-from real mailbox acknowledgements; safety numbers; light and dark themes.
+**Working:** pairing by QR, phrase or invitation, with the camera reading the
+code on a phone; one-to-one and group conversations; replies; reactions;
+self-destructing messages that burn on both devices from the moment the
+recipient reads them; encrypted local history; attachments up to 5 MB; unread
+counts; a read tick that is never inferred; contact names, pictures, pinning and
+muting; notifications with the sender's name and picture and no push service
+involved; a PIN for the application; safety numbers; light and dark themes.
 
 **Calls:** built and relayed, keyed from the same MLS group as the messages.
 Each part is tested; they have not yet been run together on two phones.
@@ -75,9 +79,9 @@ mailbox explicitly. If a dependency ever tries to phone somewhere else, the
 browser blocks it rather than the traffic leaving quietly.
 
 `test/no_foreign_infrastructure_test.dart` scans the sources for hosts outside
-the allowlist. It is not decoration: it has caught a hostname added to a URL
-parser that would never have been fetched, which is the correct level of
-paranoia for a property this easy to lose by accident.
+the allowlist, including ones that would never actually be fetched. That is the
+right level for a property this easy to lose by accident: a dependency adds a
+telemetry ping, somebody pastes a CDN link in to fix a font, and nothing fails.
 
 ## Architecture
 
@@ -92,6 +96,8 @@ lib/rotelyx/
   engine/backend.dart   one line, picking an implementation at compile time
   engine/web.dart       the wasm module through the JS bridge
   engine/native.dart    librotelyx_mobile through dart:ffi
+  engine/call_native.dart  the codec, six C functions, no JSON per frame
+  engine/net_native.dart   the QUIC connection a call runs on
   mailbox_client.dart   deposit / subscribe / unsubscribe, over platform/socket
   e2e.dart              the test hook, web only, behind a compile-time define
   rotelyx_service.dart  identity, pairing handshake, message flow
@@ -99,29 +105,47 @@ lib/rotelyx/
   rotelyx_config.dart   endpoints; no Default, no environment override
   meeting_code.dart     the 29-character string a QR carries
   attachment.dart       files as messages, 5 MB, marker-prefixed
-  push.dart             waking a device, batch registration only
+  quoted.dart           a reply, carrying its own excerpt
+  ephemeral.dart        a message that expires, and what identifies it
+  burn_clock.dart       when each side's countdown starts, and why it is one event
+  signal.dart           receipts, reactions, pictures, call signalling
+  alerts.dart           whether to interrupt somebody
+  lock.dart             the application PIN, and what it does not protect
+  passphrase.dart       generating one, with the entropy stated
+  calls.dart            placing, ringing, answering, hanging up
+  call_state.dart       who may do which of those, and when
+  call_loop.dart        the twenty millisecond loop a call is made of
+  push.dart             waking a device, and why the token carries no tag
 
-lib/platform/           the four things a browser does that a phone does not
+lib/platform/           what a browser does that a phone does not, and back
   socket*.dart          package:web WebSocket, or dart:io's
   host*.dart            URL strategy and the boot screen, or nothing
-  file_pick*.dart       an <input type=file>, or not built yet
+  file_pick*.dart       an <input type=file>, or the system document picker
+  notify*.dart          the Notification API, or a channel to Android
+  call_audio.dart       the microphone and speaker, in 20 ms frames
+  apple_push*.dart      registering with Apple, or nothing
 
 lib/qr/                 a QR reader written here rather than imported
   tables.dart           the standard's block and alignment tables
   decode.dart           modules to text: format, mask, layout, Reed-Solomon
   detect.dart           camera frame to modules: binarise, locate, sample
-  camera*.dart          getUserMedia and the frame loop, or not built yet
+  camera*.dart          getUserMedia, or CameraX through a texture
 
 lib/ui/
-  app.dart              the shell, four surfaces, no router
+  app.dart              the shell and its surfaces, no router
   theme.dart            the design system
   widgets.dart          buttons, fields, chips, notes
   brand.dart            the logo, and the QR that carries it
+  gestures.dart         swipe from the edge, pull for settings
+  burn.dart             the fire, and the shader that draws it
   screens/unlock.dart   whether this device keeps anything
+  screens/pin.dart      the PIN, on a keypad that does not move
   screens/home.dart     two panes, collapsing below 900 px
   screens/pair.dart     QR, phrase, or invitation
   screens/scan.dart     the camera, with a typed fallback always present
   screens/chat.dart     the conversation, safety number on the wall
+  screens/contact.dart  their name, picture, and what this device does about them
+  screens/call.dart     a call, ringing or in progress
   screens/settings.dart
 ```
 
@@ -219,31 +243,28 @@ this to be possible.
 
 ## Not built yet
 
-- **Calls.** The protocol repository now has the media layer: `rotelyx-media`
-  for frame encryption, jitter buffering and loss recovery, and `rotelyx-codec`
-  for the Telyx speech codec. Neither is reachable from this client, and the
-  browser could not carry a call regardless, since QUIC datagrams are
-  native-only. Calls belong in the native builds.
-- **Calls on a phone**, which is the point of the native build and is three
-  steps away. The protocol repository has the hard half done and tested:
-  `rotelyx-media` for frame encryption, jitter buffering and loss recovery, and
-  `rotelyx-codec` for the Telyx speech codec, 150 tests passing, and calls
-  relayed by construction rather than by setting. What is missing is a second
-  ABI entry point that does not encode JSON per frame, device capture on each
-  platform, and a listening test that nobody has run. `docs/NATIVE.md` sets all
-  three out.
-- **The camera and the file picker on a phone.** Both need a platform channel.
-  The scanner already has a typed fallback under the viewfinder, and the
-  attachment button explains itself rather than opening nothing.
-- **Push.** `docs/PUSH.md` sets out three options and does not choose. That
-  choice has to be made before either store build.
-- **Direct peer to peer in the browser.** `rotelyx-wasm` is the message layer.
-  QUIC transport is native-only, so every browser message goes through the
-  mailbox.
-- **Read receipts**, deliberately. Delivery state stops at *in their mailbox*,
-  which is what the mailbox actually reports. A read receipt would need the
-  recipient to send something back on every message: a full fan-out each, and a
-  signal to the operator of exactly when somebody is reading.
+- **Calls between two phones.** Every part is built and tested on its own: audio
+  crosses the codec between two members of a group, a datagram crosses the relay
+  between two endpoints, and the state machine holds up against signals that
+  arrive out of order. The three have not yet been run together on two devices,
+  which is where this kind of thing fails.
+- **Calls in a browser.** QUIC datagrams are native only, so a tab cannot carry
+  one. Text still works there; a call does not.
+- **The camera, the file picker and audio on iOS.** All three are platform
+  channels and all three are written for Android only. On iOS the scanner falls
+  back to typing a code, which works, and the attachment button says so rather
+  than opening nothing.
+- **Push on iOS.** The client side is built: registration with Apple, the
+  mailbox frames, and a notification service extension. What remains is the
+  mailbox sending the push and five steps that need a Mac. `docs/PUSH.md`.
+  Android needs none of it and uses none of it.
+- **Direct peer to peer in a browser.** `rotelyx-wasm` is the message layer.
+  Transport is native only, so every browser message goes through the mailbox.
+- **A conversation lock.** The application PIN is built. Locking one
+  conversation is a different thing: it has to seal that conversation under a
+  key derived from the PIN as well as the passphrase, or it is a curtain with a
+  padlock painted on it.
+- **Group read receipts.** The tick says somebody read it, not everybody.
 
 ## Running it
 
@@ -312,11 +333,10 @@ blocks it instead, correctly, since that request tells Google who is reading
 what.
 
 The consequence is more severe than a substituted typeface. **CanvasKit cannot
-see platform fonts at all.** With nothing bundled and the CDN blocked, there is
-no font to fall back to, and the app renders every layout perfectly with *no
-text anywhere*. This build shipped exactly that until somebody opened it in a
-browser and looked; nothing in `flutter analyze`, `flutter test` or
-`flutter build` reports it.
+see platform fonts at all.** With nothing bundled and the CDN blocked there is
+no font to fall back to, and the application renders every layout perfectly with
+*no text anywhere*. Nothing in `flutter analyze`, `flutter test` or
+`flutter build` reports that, which is why the fonts below are not optional.
 
 `assets/fonts/` therefore carries:
 
@@ -332,11 +352,10 @@ resolves. Flutter walks the fallback list per glyph, so each script picks up its
 own face without the surrounding Latin text changing typeface.
 
 The interface is English only, so the fallbacks matter for message content
-rather than for the interface. **Hangul is not covered.** Droid Sans Fallback
-was bundled first and looked right, it covers U+AC00, but lacks U+D55C, so real
-Korean text still showed boxes while costing 3.9 MB. It was removed. Covering
-Hangul needs a subsetted Noto Sans KR; the only full-Hangul fonts on a typical
-Linux box are 19 MB CJK collections.
+rather than for the interface. **Hangul is not covered.** Covering it needs a
+subsetted Noto Sans KR: the full-Hangul fonts on a typical Linux box are 19 MB
+CJK collections, and the smaller candidates cover part of the syllable range and
+show boxes for the rest.
 
 Substituting Manrope, which the design was drawn in, is a file swap in
 `assets/fonts/` and a rename in `pubspec.yaml`. No code changes.
@@ -366,7 +385,12 @@ answers from a build it cached.
 
 Five levels, because each catches something the one below it cannot.
 
-**`flutter test`**, 26 tests, runs anywhere in about eight seconds.
+**`flutter test`**, 127 tests across 19 files, in about thirty seconds. The
+engine and transport tests need the native library on the loader path:
+
+```bash
+LD_LIBRARY_PATH="$PWD/build/native" flutter test
+```
 
 | File | What it covers |
 |---|---|
@@ -375,6 +399,18 @@ Five levels, because each catches something the one below it cannot.
 | `meeting_code_test.dart` | Minting, parsing, and the logo's error-correction budget |
 | `rendered_qr_test.dart` | A screenshot of the running app, read by the real decoder |
 | `no_foreign_infrastructure_test.dart` | No host outside the allowlist, no overridable endpoint |
+| `native_engine_test.dart` | The FFI engine: pairing, sealing, a message across |
+| `call_test.dart` | A call between two members, with audio crossing the codec |
+| `transport_test.dart` | Two endpoints and a datagram, through a real relay |
+| `call_state_test.dart` | Ringing and answering, against signals that arrive out of order |
+| `burn_clock_test.dart` | Which side's countdown starts when |
+| `ephemeral_test.dart`, `quoted_test.dart`, `signal_test.dart` | The wire formats |
+| `store_ephemeral_test.dart` | That nothing reaches disk without a passphrase |
+| `lock_test.dart` | The PIN, its attempt limit, and what survives a restart |
+| `contact_layer_test.dart` | Names, receipts and reactions, and what they may not say |
+| `push_test.dart` | That a wake registration names a device and nothing else |
+| `passphrase_test.dart` | The generator, and the entropy it claims |
+| `widget_test.dart` | That the application assembles a frame, at three widths |
 
 **`tool/e2e/drive-dart.py`**: pairs two headless Firefox tabs through
 `RotelyxService` itself, against the production mailbox, over the meeting-code
