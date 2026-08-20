@@ -951,6 +951,14 @@ class RotelyxService {
   /// The conversation this service is persisting to, if any.
   String? get conversationId => _persistId;
 
+  /// The live session, for a call to key from.
+  ///
+  /// Exposed for exactly one caller. A call derives its per-sender keys from
+  /// the group secret, so it needs the session rather than a copy of anything:
+  /// the whole reason a call is as protected as a message is that they come
+  /// from the same place.
+  WasmSession? get session => _session;
+
   String? get conversationName {
     final others = roster.where((name) => name != _displayName).toList();
     if (others.isEmpty) return null;

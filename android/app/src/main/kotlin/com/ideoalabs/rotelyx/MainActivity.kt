@@ -13,6 +13,7 @@ class MainActivity : FlutterActivity() {
     private lateinit var notifications: Notifications
     private var camera: QrCamera? = null
     private var files: FilePicker? = null
+    private var audio: CallAudio? = null
 
     override fun configureFlutterEngine(engine: FlutterEngine) {
         super.configureFlutterEngine(engine)
@@ -33,6 +34,18 @@ class MainActivity : FlutterActivity() {
                     result.success(hasCamera())
                 } else {
                     scanner.handle(call, result)
+                }
+            }
+
+        val calls = CallAudio()
+        audio = calls
+        MethodChannel(engine.dartExecutor.binaryMessenger, CallAudio.CHANNEL)
+            .setMethodCallHandler { call, result ->
+                if (call.method == "permit") {
+                    requestMicrophone()
+                    result.success(hasMicrophone())
+                } else {
+                    calls.handle(call, applicationContext, result)
                 }
             }
 
@@ -81,6 +94,8 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onDestroy() {
+        audio?.stop()
+        audio = null
         camera?.dispose()
         camera = null
         super.onDestroy()
@@ -89,6 +104,18 @@ class MainActivity : FlutterActivity() {
     private fun hasCamera(): Boolean =
         ActivityCompat.checkSelfPermission(this, Manifest.permission.CAMERA) ==
             PackageManager.PERMISSION_GRANTED
+
+    private fun hasMicrophone(): Boolean =
+        ActivityCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) ==
+            PackageManager.PERMISSION_GRANTED
+
+    private fun requestMicrophone() {
+        if (!hasMicrophone()) {
+            ActivityCompat.requestPermissions(
+                this, arrayOf(Manifest.permission.RECORD_AUDIO), 3
+            )
+        }
+    }
 
     private fun requestCamera() {
         if (!hasCamera()) {

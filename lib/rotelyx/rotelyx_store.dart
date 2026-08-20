@@ -252,6 +252,7 @@ class RotelyxStore {
   static const _kPreviews = 'rotelyx.previews';
   static const _kConnected = 'rotelyx.connected';
   static const _kWakeSecret = 'rotelyx.wake-secret';
+  static const _kTransport = 'rotelyx.transport-identity';
   static const _kIndex = 'rotelyx.index';
   static String _kSession(String id) => 'rotelyx.session.$id';
   static String _kLog(String id) => 'rotelyx.log.$id';
@@ -317,6 +318,24 @@ class RotelyxStore {
     } else {
       _box.write(key, value);
     }
+  }
+
+  /// This device's long-term name on the call transport.
+  ///
+  /// Thirty two bytes, made once and kept. Outside the vault for the same
+  /// reason as the settings above: a call can arrive while the application is
+  /// locked, and an identity that needs a passphrase is one that cannot answer.
+  ///
+  /// It is not a message key and opens nothing. What it is, is stable, which is
+  /// the point: the same bytes on two devices is one identity in two places,
+  /// and the transport will not stop that and nobody will enjoy debugging it.
+  String get transportIdentity {
+    final held = _box.read(_kTransport) as String?;
+    if (held != null && held.length == 64) return held;
+
+    final fresh = newSecret();
+    _box.write(_kTransport, fresh);
+    return fresh;
   }
 
   /// What proves to the mailbox that a revocation came from this device.

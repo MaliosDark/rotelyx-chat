@@ -118,23 +118,63 @@ Two facts the tests pinned that are not obvious:
   * **`playback` returns silence, not nothing.** A speaker is running whether or
     not the network is, and handing it nothing produces a click.
 
+### What a call is made of, now that it is built
+
+    lib/rotelyx/engine/call_native.dart   the codec, six C functions
+    lib/rotelyx/engine/net_native.dart    the QUIC connection, eight more
+    lib/platform/call_audio.dart          the microphone and speaker
+    lib/rotelyx/call_loop.dart            the twenty millisecond loop
+    lib/rotelyx/call_state.dart           who may answer, decline, hang up
+    lib/ui/screens/call.dart              the screen
+
+**The transport had to be added to the ABI, and that crossed a line.** Every
+other operation in `rotelyx-mobile` is offline: `session.send` hands back
+ciphertext for the application to move. Twenty operations and not one opens a
+socket, which is what lets the phone carry bytes however it can.
+
+Voice cannot be carried that way. The mailbox is a WebSocket, which is TCP, and
+one lost segment stalls everything queued behind it; on a call a frame that
+arrives late is worse than one that never arrives. So `rotelyx_net_*` exists,
+it is the only thing in the ABI that touches the network, and the module header
+says so rather than leaving somebody to discover it.
+
+It has a measured cost: `librotelyx_mobile.so` went from **3.2 MB to 14.8 MB**,
+paid by every build that links it whether or not anybody calls.
+
+**Relay only, and not as a preference.** `MediaOut` refuses to be constructed on
+a connection whose policy permits a direct path, because a direct path shows the
+peer this device's address. `rotelyx_net_open` fixes the policy rather than
+accepting one, so there is nothing to get wrong.
+
+**The published address is filtered.** `rotelyx_net_addr` strips the IPs and
+puts the relay in their place. Without it the address carries this device's LAN
+address, published to whoever receives the invitation, on the one configuration
+whose entire purpose is not revealing it.
+
+### Two things testing found that reading would not
+
+**A blocking `accept` deadlocks a Dart isolate.** Written the obvious way first.
+An isolate has one thread, so a blocking accept does not wait alongside other
+work, it stops the isolate: the connect that was meant to run concurrently never
+ran, and the two sides waited for each other. It hung for ten minutes before
+anybody noticed. On a phone it would be worse than a deadlock, because blocking
+the interface thread for twenty seconds is an application the system offers to
+close. `accept` now takes a timeout and answers `0` for "not yet".
+
+**`playback` returns silence, not nothing.** A speaker is running whether or not
+the network is, and handing it nothing produces a click.
+
 ### What a call still needs
 
-**Audio.** Nothing captures a microphone or drives a speaker. Android needs
-`AudioRecord` and `AudioTrack` at 48 kHz mono, feeding and draining 960 sample
-frames on their own thread, plus `RECORD_AUDIO` and `MODIFY_AUDIO_SETTINGS`,
-which are still deliberately absent from the manifest.
+**Signalling end to end.** `Signal.call` and `CallState` are written and the
+service passes call signals out on a stream. Nothing yet places a call from the
+conversation screen or shows the incoming one.
 
-**Transport.** The datagrams have to reach the other device. The mailbox is
-store and forward and wrong for this: a voice frame that arrives late is worse
-than one that never arrives. `rotelyx-relay` exists in the protocol repository
-for exactly this and nothing here speaks to it yet.
+**Proving it between two devices.** The pieces are each tested: audio crosses
+the codec between two MLS sessions, a datagram crosses the relay between two
+endpoints. They have not been run together on two phones.
 
-**Signalling.** Ringing, accepting, declining. This is the cheap part and the
-pieces are already here: it goes over MLS as a `Signal`, the same way a read
-receipt does, which means the invitation to a call is as protected as the call.
-
-**A screen.** Nothing to show, answer or hang up with.
+**iOS.** The audio devices are Android only.
 
 ### Desktop
 

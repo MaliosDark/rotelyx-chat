@@ -302,3 +302,23 @@ class _WebEngine implements RotelyxEngine {
 
 /// The engine for this platform.
 RotelyxEngine createEngine() => const _WebEngine();
+
+// ---------------------------------------------------------------------------
+// Calls, which a browser does not have
+// ---------------------------------------------------------------------------
+//
+// Both return null rather than throwing, and `calls.dart` treats null as "this
+// build cannot call" rather than as a failure. A browser tab has no microphone
+// this application is willing to hold, no place to keep a transport identity
+// that survives being closed, and no way to be woken when it is not open.
+//
+// They exist so that `backend.dart` exports the same names on both platforms
+// and nothing above has to ask which one it is compiled for.
+
+/// A browser cannot open a QUIC endpoint.
+Object? openEndpoint({required String identityHex, required String relay}) => null;
+
+/// And has no codec to open a call on.
+Object? openNativeCall(Object session,
+        {int bytesPerFrame = 60, bool recoverLoss = false}) =>
+    null;

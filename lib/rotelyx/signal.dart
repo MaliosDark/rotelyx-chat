@@ -185,9 +185,16 @@ class Signal {
   /// envelopes in thirty seconds than a conversation usually sends in an hour,
   /// and it is visible as a burst. There is no way around it: a phone that is
   /// not being told cannot ring.
-  factory Signal.call(CallSignal what, {String id = ''}) => Signal(
+  /// [address] rides on the ring and on the answer, because a call needs both
+  /// the agreement and somewhere to connect, and a second signal for the
+  /// second half is a second thing to lose.
+  ///
+  /// It is already filtered where it is produced: no IP addresses, just the
+  /// relay. Sending it discloses nothing about where this device is.
+  factory Signal.call(CallSignal what, {String id = '', String address = ''}) =>
+      Signal(
         kind: SignalKind.call,
-        fields: [what.name, id],
+        fields: [what.name, id, address],
       );
 
   /// Which of the five, or null when it is from a build with more of them.
@@ -203,6 +210,9 @@ class Signal {
   /// without this the answer to one ends the other. Sixteen random characters
   /// from the same generator a burning message uses.
   String get callId => fields.length > 1 ? fields[1] : '';
+
+  /// Where to connect, on a ring or an answer. Empty on the others.
+  String get callAddress => fields.length > 2 ? fields[2] : '';
 
   // --- wire ------------------------------------------------------------------
 

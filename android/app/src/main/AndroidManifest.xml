@@ -58,6 +58,19 @@
     <uses-permission android:name="android.permission.CAMERA"/>
     <uses-feature android:name="android.hardware.camera" android:required="false"/>
 
+    <!-- Voice calls. Requested when a call starts and not before.
+
+         MODIFY_AUDIO_SETTINGS goes with it: a call has to put the device into
+         communication mode and choose between the earpiece and the speaker,
+         and neither is possible without it.
+
+         These were deliberately absent until now, because a permission list is
+         something people read and asking for a microphone before anything can
+         use one is how an application gets refused on principle. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
+    <uses-feature android:name="android.hardware.microphone" android:required="false"/>
+
     <application
         android:label="Rotelyx Chat"
         android:name="${applicationName}"

@@ -6,13 +6,18 @@
 /// application exists to not leave.
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../rotelyx/alerts.dart';
+import '../rotelyx/call_state.dart';
+import '../rotelyx/calls.dart';
 import '../rotelyx/lock.dart';
 import '../rotelyx/rotelyx_store.dart';
 import 'screens/home.dart';
 import 'screens/pair.dart';
+import 'screens/call.dart';
 import 'screens/pin.dart';
 import 'screens/settings.dart';
 import 'screens/unlock.dart';
@@ -46,8 +51,11 @@ class _RotelyxAppState extends State<RotelyxApp> with WidgetsBindingObserver {
 
   RotelyxTheme get _theme => _dark ? RotelyxTheme.dark : RotelyxTheme.light;
 
+  StreamSubscription<CallState>? _callChanges;
+
   @override
   void dispose() {
+    unawaited(_callChanges?.cancel());
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -116,6 +124,14 @@ class _RotelyxAppState extends State<RotelyxApp> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     alerts.start();
 
+    // A call has to appear over whatever is showing, including a locked screen
+    // and including nothing. Watched here rather than in a screen, because a
+    // screen that is not on cannot be the thing that decides to ring.
+    calls.start();
+    _callChanges = calls.changes.listen((_) {
+      if (mounted) setState(() {});
+    });
+
     // Decode the logo before the boot screen comes down, so no frame is ever
     // shown with a gap where it goes. See `warmBrand`.
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -168,6 +184,21 @@ class _RotelyxAppState extends State<RotelyxApp> with WidgetsBindingObserver {
   }
 
   Widget _current() {
+    // Over everything, including the PIN. Somebody whose phone is ringing
+    // should be able to answer it without unlocking the application first, and
+    // a call reveals nothing that the lock is protecting: no history, no
+    // conversation, just who is calling.
+    if (calls.state.isBusy || calls.state.phase == CallPhase.over) {
+      return CallScreen(
+        key: const ValueKey('call'),
+        who: calls.who,
+        state: calls.state,
+        loop: calls.loop,
+        onAnswer: () => unawaited(calls.answer()),
+        onEnd: calls.hangUp,
+      );
+    }
+
     // Before everything, including the passphrase screen. The PIN is what says
     // this phone is yours; the passphrase is what opens the history on it. In
     // that order, because somebody holding a phone they picked up should not

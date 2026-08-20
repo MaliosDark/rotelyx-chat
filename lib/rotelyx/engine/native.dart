@@ -40,6 +40,7 @@ import 'package:ffi/ffi.dart';
 
 import 'api.dart';
 import 'call_native.dart';
+import 'net_native.dart';
 
 typedef _CallNative = Int32 Function(Pointer<Utf8>, Pointer<Pointer<Utf8>>);
 typedef _CallDart = int Function(Pointer<Utf8>, Pointer<Pointer<Utf8>>);
@@ -134,6 +135,24 @@ class _Library {
   }
 
   static CallSymbols? _media;
+
+  /// The transport symbols, looked up on first use.
+  ///
+  /// Separate again, and for a stronger reason than the media ones: this is the
+  /// only part of the engine that opens a socket. A build that never places a
+  /// call never looks these up, and a library that predates them reports "no
+  /// calls here" rather than failing to load.
+  static NetSymbols? get transport {
+    final library = open();
+    if (library == null) return null;
+    try {
+      return _transport ??= NetSymbols(library.handle);
+    } on ArgumentError {
+      return null;
+    }
+  }
+
+  static NetSymbols? _transport;
 }
 
 /// Send one request and return its `result`, or throw.
@@ -204,6 +223,19 @@ class _NativeKey implements RotelyxKey {
       // worth propagating out of a disposal.
     }
   }
+}
+
+/// Bind this device's transport endpoint, for calls.
+///
+/// Null when the library has no transport, which is a build from before calls
+/// existed rather than a failure worth showing anybody.
+RotelyxEndpoint? openEndpoint({
+  required String identityHex,
+  required String relay,
+}) {
+  final symbols = _Library.transport;
+  if (symbols == null) return null;
+  return RotelyxEndpoint.open(symbols, identityHex: identityHex, relay: relay);
 }
 
 /// Open a voice call on a live session.

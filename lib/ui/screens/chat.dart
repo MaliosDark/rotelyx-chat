@@ -21,6 +21,7 @@ import '../../rotelyx/rotelyx_service.dart';
 import '../../rotelyx/rotelyx_store.dart';
 import '../burn.dart';
 import '../gestures.dart';
+import '../../rotelyx/calls.dart';
 import 'contact.dart';
 import '../theme.dart';
 import '../widgets.dart';
@@ -251,6 +252,18 @@ class _ChatScreenState extends State<ChatScreen> {
       // No clock is started here. Our copy waits for them to read it, which is
       // what makes both countdowns run from the same moment.
     }
+  }
+
+  /// Place a call in this conversation.
+  Future<void> _placeCall() async {
+    final c = _conversation;
+    if (c == null) return;
+
+    final refused = await calls.place(c);
+    if (refused == null || !mounted) return;
+
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(refused)));
   }
 
   /// Reading a message is what starts its clock, on both devices.
@@ -522,6 +535,7 @@ class _ChatScreenState extends State<ChatScreen> {
         child: Column(
           children: [
             _Header(
+              onCall: calls.isPossible ? _placeCall : null,
               onOpenContact: () => ContactSheet.open(
                 context,
                 widget.conversationId,
@@ -622,6 +636,7 @@ class _Header extends StatelessWidget {
   const _Header({
     required this.title,
     required this.onOpenContact,
+    required this.onCall,
     required this.onBack,
     required this.onToggleSafety,
     required this.onAddMember,
@@ -634,6 +649,10 @@ class _Header extends StatelessWidget {
 
   /// Their name, their picture, and what this device does about them.
   final VoidCallback onOpenContact;
+
+  /// Place a call. Null when this build cannot: a button that explains itself
+  /// after being pressed is worse than one that was never there.
+  final VoidCallback? onCall;
 
   final VoidCallback? onBack;
   final VoidCallback onToggleSafety;
@@ -727,6 +746,12 @@ class _Header extends StatelessWidget {
               onPressed: onAddMember,
               tooltip: 'Add someone',
               icon: Icon(Icons.person_add_alt, size: 19, color: t.muted),
+            ),
+          if (onCall != null)
+            IconButton(
+              onPressed: onCall,
+              tooltip: 'Call',
+              icon: Icon(Icons.call, size: 19, color: t.muted),
             ),
           IconButton(
             onPressed: onOpenContact,

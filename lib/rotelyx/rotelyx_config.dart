@@ -10,6 +10,7 @@ library;
 class RotelyxConfig {
   const RotelyxConfig({
     required this.mailbox,
+    required this.relay,
     required this.lookback,
   });
 
@@ -17,17 +18,27 @@ class RotelyxConfig {
   /// not both online; it never learns the sender and never sees plaintext.
   static const production = RotelyxConfig(
     mailbox: 'wss://mail-rotelyx.ideoa.co/mailbox',
+    relay: 'https://relay-rotelyx.ideoa.co',
     lookback: 2,
   );
 
   /// The sibling process from `docs/DEPLOYMENT.md`, for working offline.
   static const local = RotelyxConfig(
     mailbox: 'ws://127.0.0.1:3341/mailbox',
+    relay: 'http://127.0.0.1:3340',
     lookback: 2,
   );
 
   /// WebSocket URL of the blind mailbox.
   final String mailbox;
+
+  /// Where a call is relayed through.
+  ///
+  /// Always relayed, and that is not a fallback for when a direct path fails.
+  /// A direct path shows the other person this device's address, which on a
+  /// call is the one thing worth hiding, so the media layer refuses to run on a
+  /// connection that permits one.
+  final String relay;
 
   /// How many earlier hour buckets to poll alongside the current one.
   ///
