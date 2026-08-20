@@ -45,7 +45,8 @@ sealed into padded envelopes and left in a blind mailbox.
 conversations; encrypted local history; attachments up to 5 MB; delivery state
 from real mailbox acknowledgements; safety numbers; light and dark themes.
 
-**Not built:** calls. See [Not built yet](#not-built-yet).
+**Calls:** built and relayed, keyed from the same MLS group as the messages.
+Each part is tested; they have not yet been run together on two phones.
 
 Pairing and messaging are verified end to end through the real client against the
 production mailbox, not through a stand-in: `tool/e2e/drive-dart.py`, 9 of 9.
@@ -53,8 +54,7 @@ production mailbox, not through a stand-in: `tool/e2e/drive-dart.py`, 9 of 9.
 **And on a phone.** A Note 58 on Android 16 hosts a meeting place, a browser
 joins it, and a message crosses from one to the other and is still there when
 the conversation is opened afterwards. One side runs the WebAssembly build and
-the other the native library. `docs/NATIVE.md` records that, and the four
-defects it took a device to find.
+the other the native library. See `docs/NATIVE.md`.
 
 ## Third-party contact: none
 
@@ -343,16 +343,8 @@ Substituting Manrope, which the design was drawn in, is a file swap in
 
 ## Keeping the wasm in step
 
-`web/rotelyx/` is a **copy** of `site/rotelyx/` from the protocol repository. It
-does not rebuild itself, and a stale copy is the worst kind of failure here: the
-old build still loads, still pairs, and then silently fails to interoperate
-because the message path moved underneath it.
-
-That already happened once. The protocol moved from per-group mailbox tags to
-per-member tags (`sealForGroup` / `openMine` / `myPollingTags`), which a client
-on the old path cannot talk to.
-
-After every `wasm-pack` build in the protocol repository:
+`web/rotelyx/` is a **copy** of `site/rotelyx/` from the protocol repository and
+does not rebuild itself. After every `wasm-pack` build there:
 
 ```bash
 cp ../comms-real-e2e/site/rotelyx/rotelyx_wasm.js \
@@ -360,9 +352,15 @@ cp ../comms-real-e2e/site/rotelyx/rotelyx_wasm.js \
    web/rotelyx/
 ```
 
-The bridge in `web/rotelyx_bridge.js` and the bindings in
-`lib/rotelyx/rotelyx_wasm.dart` name every method they use, so a removed export
-surfaces as a missing-method error rather than as silence.
+A stale copy is worth catching early, because it does not announce itself: the
+old build loads and pairs, and only fails when it tries to talk to a client on
+the current message path.
+
+Two things make that visible rather than silent. The bridge in
+`web/rotelyx_bridge.js` and the bindings in `lib/rotelyx/rotelyx_wasm.dart` name
+every method they use, so a removed export is a missing-method error. And
+`tool/dev/build-web.sh` refuses to register a service worker, so a browser never
+answers from a build it cached.
 
 ## Testing
 
@@ -392,21 +390,10 @@ python3 tool/e2e/drive-dart.py
 define is passed, and is tree-shaken out of any build without it. Verified by
 grepping the compiled output, not by assuming.
 
-**It found the bug that mattered most.** `MailboxClient.connect()` waited for a
-`ready` frame before sending anything, on the documented reasoning that frames
-sent earlier would be dropped. `ready` is the *reply to* `subscribe`: the
-mailbox sends nothing on connection. So the client opened a socket, waited, and
-failed fifteen seconds later with "the mailbox did not respond". **Every attempt
-to pair from the Dart client had always failed**, and nothing caught it, because
-the only end to end test drove a JavaScript reimplementation that happens to
-subscribe on `onopen`.
+**Why it exists.** A harness that reimplements the protocol in JavaScript tests the protocol, not the client. This one drives `RotelyxService` itself, so a defect in the Dart has somewhere to show up.
 
 **`tool/e2e/drive.py`**: the older harness, driving `tool/e2e/pair.js` through
-`window.rotelyx`. It exercises the protocol and the wasm bridge rather than the
-Dart, which is exactly why it missed the above. Keep it: it is the control, and
-when the two disagree the disagreement is the finding. It found the epoch and
-re-subscribe bug that every static check passed, and its screenshots caught the
-no-text bug that every check including itself passed.
+`window.rotelyx`. It exercises the protocol and the wasm bridge rather than the Dart. Keep it: it is the control, and when the two harnesses disagree the disagreement is the finding.
 
 It expects two geckodriver instances already listening on 4444 and 4445, and the
 app served on 8765.
@@ -497,12 +484,10 @@ and `--pwa-strategy=none` does not change that. It empties
 settings at all is the only way to skip it.
 
 **Why it must not have one.** A service worker pins a build inside the browser
-and answers from it ahead of the network. That is the failure this README warns
-about under *Keeping the wasm in step*, wearing a different hat: an old build
-still loads, still pairs, and then silently fails to interoperate. It cost real
-time here, holding an old build through several rebuilds while every check on
-the serving side correctly reported that the new files were going out. It buys
-nothing in exchange, because every conversation needs the mailbox.
+and answers from it ahead of the network, which is the stale-copy problem above
+wearing a different hat: the old build loads, pairs, and then cannot talk to
+anything current. It buys nothing in exchange, because every conversation needs
+the mailbox and none of it works offline.
 
 **Removing one that already exists** is `web/boot.js`. Turning registration off
 does nothing for a browser that registered one earlier, which will keep serving
