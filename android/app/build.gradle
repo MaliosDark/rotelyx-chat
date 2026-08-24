@@ -48,7 +48,7 @@ android {
     // 35 is what Google Play requires of every new application and every
     // update since 31 August 2025. Compiling against it is not the same as
     // targeting it, and both are needed.
-    compileSdkVersion 35
+    compileSdkVersion 36
     ndkVersion flutter.ndkVersion
 
     // 17 to match the Android Gradle Plugin 8 line, which will not run on 11
@@ -72,9 +72,23 @@ android {
         // 24 is where the engine's dependencies land, and it is also where the
         // Rust library is built for: see tool/native/build-android.sh.
         minSdkVersion 24
-        targetSdkVersion 35
+        // Android 16. Google Play stopped accepting new applications and
+        // updates targeting anything lower on 31 August 2026.
+        targetSdkVersion 36
         versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName
+
+        // The three Flutter builds for, and no more.
+        //
+        // Without this the package also carried an `x86` folder holding CameraX
+        // and nothing else: no `libflutter.so`, no `librotelyx_mobile.so`.
+        // Flutter dropped x86 years ago, so a device that picked that folder
+        // would install an application whose engine is not in it and die at
+        // the first frame. A dependency pulling in an architecture the engine
+        // does not build for is enough to create one.
+        ndk {
+            abiFilters 'arm64-v8a', 'armeabi-v7a', 'x86_64'
+        }
     }
 
     signingConfigs {
@@ -136,9 +150,9 @@ dependencies {
     // code, and the parts it hides are the ones that differ between devices.
     // `camera-view` is deliberately absent, because the preview is rendered
     // through a Flutter texture rather than an Android view.
-    implementation 'androidx.camera:camera-core:1.3.4'
-    implementation 'androidx.camera:camera-camera2:1.3.4'
-    implementation 'androidx.camera:camera-lifecycle:1.3.4'
+    implementation 'androidx.camera:camera-core:1.4.2'
+    implementation 'androidx.camera:camera-camera2:1.4.2'
+    implementation 'androidx.camera:camera-lifecycle:1.4.2'
 
     // `ProcessCameraProvider.getInstance` hands back a Guava
     // `ListenableFuture`, and getting that one interface onto the compile

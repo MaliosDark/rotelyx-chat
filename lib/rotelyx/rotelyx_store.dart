@@ -460,6 +460,50 @@ class RotelyxStore {
     _ephemeral.clear();
   }
 
+  /// Stop writing anything down, without losing the conversations.
+  ///
+  /// # What this is and what it is not
+  ///
+  /// The same state a device is in when somebody chose ghost mode at first run:
+  /// no key, so every read and write goes to memory and nothing reaches disk.
+  /// The difference is that a vault already exists here, and it is left exactly
+  /// as it is. Nothing is deleted. The next launch asks for the password and
+  /// everything is where it was.
+  ///
+  /// What it costs is the history on screen. Without the key those blobs cannot
+  /// be read, so the conversations come back with their names and none of their
+  /// messages. That is the honest behaviour rather than a limitation: a mode
+  /// that leaves the last month of messages sitting on screen is not one you
+  /// would turn on for the reason people turn this on.
+  ///
+  /// The names are carried across on purpose. Dropping them too would leave a
+  /// list of strangers and no way to tell which conversation is which, and the
+  /// name is a note this device keeps rather than anything the mailbox knows.
+  void goDark() {
+    // Read the labels while there is still a key to read them with.
+    final labels = <String, String>{};
+    for (final id in conversationIds) {
+      final c = load(id);
+      if (c != null) labels[id] = c.title;
+    }
+
+    lock();
+
+    final now = DateTime.now();
+    for (final entry in labels.entries) {
+      _ephemeral[entry.key] = StoredConversation(
+        id: entry.key,
+        title: entry.value,
+        session: null,
+        messages: [],
+        lastActivity: now,
+      );
+    }
+  }
+
+  /// Whether nothing is being written down right now.
+  bool get isDark => _key == null;
+
   /// Delete everything, for a user who wants the record gone.
   void wipe() {
     for (final id in conversationIds) {

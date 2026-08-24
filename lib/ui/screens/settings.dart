@@ -234,15 +234,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                   const SizedBox(height: Metrics.gap),
                   const RxNote(
-                    'A PIN is short, and nothing changes that. Four digits is '
-                    'ten thousand possibilities, so this device makes each '
-                    'guess slow rather than pretending the number is large: it '
-                    'stretches the PIN the same way it stretches your '
-                    'passphrase, and stops answering for five minutes after ten '
-                    'wrong tries. It is a lock against somebody who picked up '
-                    'your phone. It is not a lock against somebody who took it '
-                    'away with a laboratory. Your passphrase is what protects '
-                    'the messages themselves.',
+                    'Four digits is ten thousand possibilities, so instead '
+                    'of pretending that is a lot, this device makes every '
+                    'guess slow and stops answering for five minutes after ten '
+                    'wrong ones. It locks out somebody who picked up your '
+                    'phone. It does not lock out somebody who took it away to '
+                    'a laboratory. Your password is what protects the messages '
+                    'themselves.',
                     title: 'What a PIN does and does not do',
                   ),
 
@@ -253,35 +251,79 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   _Row('Conversations', '${store.conversationIds.length}'),
                   const SizedBox(height: Metrics.gap),
                   const RxNote(
-                    'The mailbox keeps nothing. An envelope is removed when it '
-                    'is collected and what is never collected expires, so this '
-                    'device holds the only copy of anything you can still read.',
+                    'The server keeps nothing. A message is deleted the '
+                    'moment it is collected, and anything never collected '
+                    'expires on its own. This phone holds the only copy of '
+                    'anything you can still read.',
                     title: 'Where your messages live',
                   ),
 
                   const SizedBox(height: Metrics.pad),
-                  const _Section('Protocol'),
-                  _Row('Version', ready ? RotelyxWasm.protocolVersion : 'not loaded'),
-                  const _Row('Key agreement', 'X-Wing · ML-KEM-768 + X25519'),
-                  const _Row('Message layer', 'MLS'),
-                  _Row('Largest group', ready ? '${RotelyxWasm.maxMembers}' : 'not loaded'),
-                  _Row('Mailbox', Uri.parse(rotelyxConfig.mailbox).host),
-                  // Users deserve to know whether Google is in the path of a
-                  // notification, so the transport is named rather than assumed.
-                  _Row('Wake service', pushTransport.name),
+                  const _Section('Under the hood'),
+                  _Fold(
+                    title: 'How your messages are protected',
+                    summary: 'Built to hold up even against a quantum computer',
+                    children: [
+                      _Row('Version',
+                          ready ? RotelyxWasm.protocolVersion : 'not loaded'),
+                      const _Row('Key agreement', 'X-Wing · ML-KEM-768 + X25519'),
+                      const _Row('Message layer', 'MLS'),
+                      _Row('Largest group',
+                          ready ? '${RotelyxWasm.maxMembers}' : 'not loaded'),
+                      _Row('Mailbox', Uri.parse(rotelyxConfig.mailbox).host),
+                      // Users deserve to know whether Google is in the path of
+                      // a notification, so the transport is named rather than
+                      // assumed.
+                      _Row('Wake service', pushTransport.name),
+                      const SizedBox(height: Metrics.gap),
+                      const RxNote(
+                        'Two separate key exchanges, one of them designed to '
+                        'survive a computer that does not exist yet. Anything '
+                        'recorded today stays unreadable if one is broken '
+                        'later, which is the point: a message taken now can be '
+                        'kept for twenty years before anyone tries.',
+                        title: 'What that means',
+                      ),
+                    ],
+                  ),
 
                   const SizedBox(height: Metrics.gap),
                   const RxNote(
-                    'Calls are always relayed, and that is deliberate. On a '
-                    'direct path the other participants learn your address, so '
-                    'for a call the exposure that matters is to whoever is on '
-                    'it rather than to a server. There is no switch for this.',
-                    title: 'Why calls are slower',
+                    'Calls always go through a relay, on purpose. A direct '
+                    'connection would show the other person your address, so '
+                    'the slower path is the one that keeps it to yourself. '
+                    'There is no switch for this.',
+                    title: 'Why calls take a moment to connect',
                   ),
 
                   const SizedBox(height: Metrics.pad),
                   const _Section('About'),
                   const _Vendor(),
+
+                  const SizedBox(height: Metrics.pad),
+                  const _Section('Right now'),
+                  if (store.isDark)
+                    const RxNote(
+                      'Nothing you do is being written to this phone. Your '
+                      'conversations are still on it, sealed, and the next '
+                      'time you open the app your password brings them back.',
+                      title: 'Ghost mode is on',
+                      tone: Tone.good,
+                    )
+                  else ...[
+                    RxButton('Turn on ghost mode',
+                        weight: Weight.secondary,
+                        icon: Icons.auto_delete_outlined,
+                        wide: true,
+                        onTap: () => _confirmGoDark(context)),
+                    const SizedBox(height: Metrics.gap),
+                    const RxNote(
+                      'Stops writing anything down until you quit. What is '
+                      'already saved stays saved and stays sealed, so this '
+                      'deletes nothing, but the history comes off the screen '
+                      'while it is on.',
+                    ),
+                  ],
 
                   const SizedBox(height: Metrics.pad),
                   const _Section('Danger'),
@@ -293,9 +335,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                   const SizedBox(height: Metrics.wide),
                   const RxNote(
-                    'Rotelyx is unaudited and pre-release. It makes no security '
-                    'claims until an independent cryptographic review is '
-                    'complete. Do not use it to protect anything.',
+                    'Rotelyx has not been independently audited yet, and this '
+                    'is a pre-release build. The cryptography is public and '
+                    'the code is there to read, but nobody outside the project '
+                    'has reviewed it. Weigh that against what you are about to '
+                    'say.',
                     tone: Tone.warn,
                   ),
                 ],
@@ -307,6 +351,44 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       ),
     );
+  }
+
+  /// Confirmed, because it clears the screen and looks like data loss.
+  ///
+  /// Nothing is deleted, but somebody watching their history vanish will not
+  /// believe that unless they were told first.
+  Future<void> _confirmGoDark(BuildContext context) async {
+    final t = RotelyxThemeScope.of(context);
+
+    final yes = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: t.surface,
+        title: Text('Turn on ghost mode?',
+            style: Type.title.copyWith(color: t.text)),
+        content: Text(
+          'From now until you quit, nothing is written to this phone. Your '
+          'saved conversations are not deleted, but they come off the screen '
+          'until you open the app again and enter your password.',
+          style: Type.body.copyWith(color: t.muted),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child:
+                  Text('Cancel', style: Type.label.copyWith(color: t.muted))),
+          TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: Text('Turn it on',
+                  style: Type.label.copyWith(color: Tone.accent))),
+        ],
+      ),
+    );
+
+    if (yes == true) {
+      store.goDark();
+      if (context.mounted) setState(() {});
+    }
   }
 
   Future<void> _confirmWipe(BuildContext context) async {
@@ -380,6 +462,89 @@ class _Vendor extends StatelessWidget {
           const RxChip('pre-release', tone: Tone.warn),
         ],
       ),
+    );
+  }
+}
+
+/// A section that starts closed.
+///
+/// # Why the protocol details are folded rather than removed
+///
+/// This application argues that hiding the cryptography is what every other
+/// messenger does because their cryptography is the same as everyone else's.
+/// That argument is only worth making if the details are actually here.
+///
+/// But they are not what somebody came to settings for. A person opening this
+/// screen wants to turn notifications off, and meeting a key agreement they
+/// have never heard of on the way is what makes an application feel like it
+/// was built for somebody else. So they are one tap away rather than gone, and
+/// the summary line says in ordinary words what the rows underneath say
+/// precisely.
+class _Fold extends StatefulWidget {
+  const _Fold({required this.title, required this.summary, required this.children});
+
+  final String title;
+  final String summary;
+  final List<Widget> children;
+
+  @override
+  State<_Fold> createState() => _FoldState();
+}
+
+class _FoldState extends State<_Fold> {
+  bool _open = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = RotelyxThemeScope.of(context);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => setState(() => _open = !_open),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(widget.title,
+                          style: Type.label.copyWith(color: t.text)),
+                      const SizedBox(height: 2),
+                      Text(widget.summary,
+                          style: Type.small.copyWith(color: t.faint)),
+                    ],
+                  ),
+                ),
+                AnimatedRotation(
+                  turns: _open ? 0.5 : 0,
+                  duration: Motion.enter,
+                  curve: Motion.enterCurve,
+                  child: Icon(Icons.expand_more, size: 20, color: t.muted),
+                ),
+              ],
+            ),
+          ),
+        ),
+        AnimatedSize(
+          duration: Motion.sheet,
+          curve: Motion.sheetCurve,
+          alignment: Alignment.topCenter,
+          child: _open
+              ? Padding(
+                  padding: const EdgeInsets.only(top: Metrics.gap),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: widget.children,
+                  ),
+                )
+              : const SizedBox(width: double.infinity),
+        ),
+      ],
     );
   }
 }

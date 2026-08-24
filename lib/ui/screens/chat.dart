@@ -71,6 +71,13 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Timer? _tick;
 
+  /// When this transcript was opened.
+  ///
+  /// Only messages that arrive after it animate in. Without this, opening a
+  /// conversation replays every message in it, and a long history turns into a
+  /// wall of moving text that has to finish before it can be read.
+  final _openedAt = DateTime.now();
+
   @override
   void initState() {
     super.initState();
@@ -110,10 +117,36 @@ class _ChatScreenState extends State<ChatScreen> {
     super.dispose();
   }
 
+  /// Whether the service is joined *to this conversation*.
+  ///
+  /// Not the same question as whether it is joined at all, and the difference
+  /// is not cosmetic: the state alone is true whenever any conversation is
+  /// live, so acting on it sent messages, attachments and invitations into
+  /// whichever one happened to be open last. Every place in this screen that
+  /// used to ask the shorter question now asks this one.
+  bool get _live =>
+      rotelyx.state == RotelyxState.joined &&
+      rotelyx.conversationId == widget.conversationId;
+
   /// Reopen the MLS session for this conversation when it is not the live one.
+  ///
+  /// # What this used to get wrong
+  ///
+  /// It asked whether *a* conversation was live rather than whether *this* one
+  /// was. Opening a second conversation while the first was still joined left
+  /// the first one's session in place, so the transcript on screen belonged to
+  /// one conversation and everything typed into it went to another.
+  ///
+  /// The forwarding path a few hundred lines below already compared
+  /// `rotelyx.conversationId` for exactly this reason. This now does the same.
   Future<void> _resumeIfNeeded() async {
-    if (rotelyx.state == RotelyxState.joined) return;
-    if (store.sessionBlob(widget.conversationId) == null) return;
+    if (_live) return;
+
+    // A conversation with yourself is founded on first open rather than paired
+    // into existence, so having no sealed session is what is expected the first
+    // time rather than a reason to give up on it.
+    final self = widget.conversationId == RotelyxService.selfConversationId;
+    if (!self && store.sessionBlob(widget.conversationId) == null) return;
 
     setState(() => _resuming = true);
     await rotelyx.resume(widget.conversationId);
@@ -171,7 +204,10 @@ class _ChatScreenState extends State<ChatScreen> {
     final attachment =
         Attachment(name: file.name, mime: file.mime, bytes: file.bytes);
 
-    if (rotelyx.state != RotelyxState.joined) return;
+    // Same fault the composer had: an attachment sent on the shorter question
+    // lands in whichever conversation is live, which for a file is worse than
+    // for a sentence.
+    if (!_live) return;
     rotelyx.send(attachment.encode());
   }
 
@@ -197,15 +233,16 @@ class _ChatScreenState extends State<ChatScreen> {
             Text('Add someone', style: Type.title.copyWith(color: t.text)),
             const SizedBox(height: Metrics.gap),
             Text(
-              'Give them the same meeting phrase. This conversation is still '
-              'listening there, and whoever knocks next is admitted and '
-              'brought up to the current epoch.',
+              'Give them the same phrase you used the first time. This '
+              'conversation is still listening for it, and the next person to '
+              'arrive joins here.',
               style: Type.body.copyWith(color: t.muted),
             ),
             const SizedBox(height: Metrics.pad),
             const RxNote(
-              'Everyone already here re-derives their keys when a member joins, '
-              'so the newcomer cannot read anything said before they arrived.',
+              'Everybody already here gets new keys the moment somebody '
+              'joins, so a newcomer cannot read a word of what was said before '
+              'they arrived.',
               title: 'What they will and will not see',
             ),
             const SizedBox(height: Metrics.pad),
@@ -223,7 +260,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final text = _input.text.trim();
     if (text.isEmpty) return;
 
-    if (rotelyx.state != RotelyxState.joined) {
+    if (!_live) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('This conversation is not connected.')));
       return;
@@ -797,6 +834,7 @@ class _ChatScreenState extends State<ChatScreen> {
         child: Column(
           children: [
             _Header(
+              live: _live,
               onCall: calls.isPossible ? _placeCall : null,
               onOpenContact: () => ContactSheet.open(
                 context,
@@ -815,9 +853,16 @@ class _ChatScreenState extends State<ChatScreen> {
               resuming: _resuming,
               resumable: store.sessionBlob(widget.conversationId) != null,
             ),
-            if (_showSafety) _SafetyPanel(),
+            AnimatedSize(
+              duration: Motion.sheet,
+              curve: Motion.sheetCurve,
+              alignment: Alignment.topCenter,
+              child: _showSafety
+                  ? _SafetyPanel()
+                  : const SizedBox(width: double.infinity),
+            ),
             if (!_resuming &&
-                rotelyx.state != RotelyxState.joined &&
+                !_live &&
                 store.sessionBlob(widget.conversationId) == null)
               const Padding(
                 padding: EdgeInsets.fromLTRB(
@@ -850,7 +895,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       itemCount: c.messages.length,
                       itemBuilder: (_, i) {
                         final message = c.messages[i];
-                        return _Bubble(
+                        final bubble = _Bubble(
                           message: message,
                           showAuthor: _startsRun(c.messages, i),
                           onReply: () => _replyTo(message),
@@ -862,6 +907,13 @@ class _ChatScreenState extends State<ChatScreen> {
                           onGone: () => _gone(message),
                           onReact: () => _messageActions(message),
                         );
+
+                        // Keyed on the message so that scrolling, which builds
+                        // and destroys these elements freely, does not read as
+                        // a fresh arrival.
+                        if (!message.at.isAfter(_openedAt)) return bubble;
+                        return RxEnter(
+                            key: ValueKey(message.at), child: bubble);
                       },
                     ),
               ),
@@ -903,6 +955,7 @@ class _Header extends StatelessWidget {
     required this.expanded,
     required this.resuming,
     required this.resumable,
+    required this.live,
   });
 
   final String title;
@@ -920,6 +973,11 @@ class _Header extends StatelessWidget {
   final bool expanded;
   final bool resuming;
 
+  /// Joined, and joined to the conversation this header sits above. Passed in
+  /// rather than read from the service, which cannot tell which conversation
+  /// this is.
+  final bool live;
+
   /// Whether a sealed session exists to come back from. Without one the
   /// transcript is readable and the conversation is not resumable, the two are
   /// different failures and the header should not call both "not connected".
@@ -928,7 +986,6 @@ class _Header extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = RotelyxThemeScope.of(context);
-    final live = rotelyx.state == RotelyxState.joined;
 
     return Container(
       // Less horizontal padding than the rest of the app, because this row
@@ -1051,10 +1108,19 @@ class _SafetyPanel extends StatelessWidget {
           SelectableText(number ?? 'not ready yet',
               style: Type.numeric.copyWith(color: t.text)),
           const SizedBox(height: 8),
+          // What it is for comes before how to use it. The panel used to open
+          // with the caveat, which only makes sense to somebody who already
+          // knew why they were looking at a row of digits.
           Text(
-            'Read this aloud to the other person. Comparing it here, over the '
-            'same connection, proves nothing, that is the one channel an '
-            'attacker in the middle would control.',
+            'This is how you know you are talking to the person you think you '
+            'are. Read it out on a call, or hold the phones side by side. Same '
+            'number on both means nobody is in between.',
+            style: Type.small.copyWith(color: t.muted),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Comparing it in this conversation proves nothing: that is the one '
+            'channel somebody in the middle would control.',
             style: Type.small.copyWith(color: t.faint),
           ),
           if (rotelyx.roster.length > 1) ...[
@@ -1351,8 +1417,9 @@ class _Empty extends StatelessWidget {
                 style: Type.label.copyWith(color: t.muted)),
             const SizedBox(height: 6),
             Text(
-              'Messages travel under tags that rotate every hour. Anyone who '
-              'knew the meeting phrase has lost the thread.',
+              'The address this conversation travels under changes every '
+              'hour, so anyone who knew the phrase you started with cannot '
+              'follow it any more.',
               textAlign: TextAlign.center,
               style: Type.small.copyWith(color: t.faint),
             ),
@@ -1471,43 +1538,85 @@ class _Composer extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       const Icon(Icons.local_fire_department,
-                          size: 20, color: Color(0xFFFF7A18)),
+                          size: 20, color: Tone.fire),
                       const SizedBox(width: 3),
                       Text(burnLabel(burnSeconds!),
                           style: Type.small.copyWith(
-                              color: const Color(0xFFFF7A18),
+                              color: Tone.fire,
                               fontSize: 11,
                               fontWeight: FontWeight.w700)),
                     ],
                   ),
           ),
 
+          // The field itself carries the mode, not only the flame beside it.
+          //
+          // Arming this changes what happens to something the other person
+          // receives, and it stays armed across messages. A twenty pixel icon
+          // in a row of icons is not enough warning for that: somebody who
+          // armed it four messages ago and forgot has no reason to look at the
+          // icon again, but they cannot avoid looking at the box they are
+          // typing into.
           Expanded(
-            child: TextField(
-              controller: controller,
-              minLines: 1,
-              maxLines: 5,
-              textInputAction: TextInputAction.send,
-              focusNode: focus,
-              onSubmitted: (_) => onSend(),
-              style: Type.body.copyWith(color: t.text),
-              decoration: InputDecoration(
-                hintText: 'Message',
-                hintStyle: Type.body.copyWith(color: t.faint),
-                filled: true,
-                fillColor: t.raised,
-                contentPadding: const EdgeInsets.symmetric(
-                    horizontal: Metrics.pad, vertical: 11),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(Metrics.pill),
-                  borderSide: BorderSide.none,
+            child: AnimatedContainer(
+              duration: Motion.enter,
+              curve: Motion.enterCurve,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(Metrics.pill),
+                boxShadow: burnSeconds == null
+                    ? null
+                    : [
+                        BoxShadow(
+                          color: Tone.fire.withOpacity(0.22),
+                          blurRadius: 14,
+                        ),
+                      ],
+              ),
+              child: TextField(
+                controller: controller,
+                minLines: 1,
+                maxLines: 5,
+                textInputAction: TextInputAction.send,
+                focusNode: focus,
+                onSubmitted: (_) => onSend(),
+                style: Type.body.copyWith(color: t.text),
+                decoration: InputDecoration(
+                  hintText: burnSeconds == null
+                      ? 'Message'
+                      : 'Burns ${burnLabel(burnSeconds!)} after it is read',
+                  hintStyle: Type.body.copyWith(
+                      color: burnSeconds == null ? t.faint : Tone.fire),
+                  filled: true,
+                  fillColor: burnSeconds == null
+                      ? t.raised
+                      : Color.alphaBlend(
+                          Tone.fire.withOpacity(0.10), t.raised),
+                  contentPadding: const EdgeInsets.symmetric(
+                      horizontal: Metrics.pad, vertical: 11),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(Metrics.pill),
+                    borderSide: BorderSide.none,
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(Metrics.pill),
+                    borderSide: burnSeconds == null
+                        ? BorderSide.none
+                        : BorderSide(color: Tone.fire.withOpacity(0.55)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(Metrics.pill),
+                    borderSide: BorderSide(
+                        color: burnSeconds == null
+                            ? Tone.accent.withOpacity(0.5)
+                            : Tone.fire),
+                  ),
                 ),
               ),
             ),
           ),
           const SizedBox(width: Metrics.gap),
           Material(
-            color: Tone.accent,
+            color: burnSeconds == null ? Tone.accent : Tone.fire,
             shape: const CircleBorder(),
             child: InkWell(
               customBorder: const CircleBorder(),

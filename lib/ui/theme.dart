@@ -42,7 +42,11 @@ abstract final class Tone {
   static const dLine = Color(0xFF2A2833);
   static const dText = Color(0xFFF2F1F5);
   static const dMuted = Color(0xFF9B98A8);
-  static const dFaint = Color(0xFF6A6779);
+  // Lifted from 0xFF6A6779, which measured 3.11:1 against a raised card and
+  // so failed AA for body text. This is 4.51:1 there and 5.23:1 on the
+  // backdrop, with the hue moved two degrees so it stays the violet grey the
+  // rest of the palette is built on rather than becoming a stock grey.
+  static const dFaint = Color(0xFF848197);
 
   // Light, derived
   static const lBackdrop = Color(0xFFFBFBFD);
@@ -54,6 +58,10 @@ abstract final class Tone {
   static const lFaint = Color(0xFF8B8899);
 
   // Signals. Used sparingly: a screen where everything is coloured says nothing.
+  /// The burn. Not a second accent: it belongs to one event and appears
+  /// nowhere else, which is what keeps it meaning something.
+  static const fire = Color(0xFFFF7A18);
+
   static const good = Color(0xFF34D399);
   static const warn = Color(0xFFFBBF24);
   static const bad = Color(0xFFF87171);
@@ -118,6 +126,29 @@ class RotelyxTheme {
   Color get theirs => raised;
   Color get theirsText => text;
 
+  /// Every Material default lifted one step in weight.
+  ///
+  /// `.apply` changes the family and the colour but keeps the weights the
+  /// Material baseline was drawn with, which are set for dark text on a light
+  /// page. This interface is the other way round.
+  static const _weights = TextTheme(
+    displayLarge: TextStyle(fontWeight: FontWeight.w700),
+    displayMedium: TextStyle(fontWeight: FontWeight.w700),
+    displaySmall: TextStyle(fontWeight: FontWeight.w700),
+    headlineLarge: TextStyle(fontWeight: FontWeight.w700),
+    headlineMedium: TextStyle(fontWeight: FontWeight.w700),
+    headlineSmall: TextStyle(fontWeight: FontWeight.w700),
+    titleLarge: TextStyle(fontWeight: FontWeight.w700),
+    titleMedium: TextStyle(fontWeight: FontWeight.w600),
+    titleSmall: TextStyle(fontWeight: FontWeight.w600),
+    bodyLarge: TextStyle(fontWeight: FontWeight.w500),
+    bodyMedium: TextStyle(fontWeight: FontWeight.w500),
+    bodySmall: TextStyle(fontWeight: FontWeight.w500),
+    labelLarge: TextStyle(fontWeight: FontWeight.w600),
+    labelMedium: TextStyle(fontWeight: FontWeight.w600),
+    labelSmall: TextStyle(fontWeight: FontWeight.w600),
+  );
+
   ThemeData get material {
     final base = isDark ? ThemeData.dark() : ThemeData.light();
 
@@ -125,7 +156,7 @@ class RotelyxTheme {
     // for an unresolved font family, so a TextStyle that names none is an
     // invisible label rather than a slightly wrong one.
     const family = 'RotelyxSans';
-    const fallback = <String>['RotelyxDevanagari', 'RotelyxArabic'];
+    const fallback = <String>['RotelyxWide', 'RotelyxDevanagari', 'RotelyxArabic'];
 
     return base.copyWith(
       scaffoldBackgroundColor: backdrop,
@@ -139,7 +170,8 @@ class RotelyxTheme {
       ),
       textTheme: base.textTheme
           .apply(fontFamily: family, fontFamilyFallback: fallback,
-              bodyColor: text, displayColor: text),
+              bodyColor: text, displayColor: text)
+          .merge(_weights),
       primaryTextTheme: base.primaryTextTheme
           .apply(fontFamily: family, fontFamilyFallback: fallback),
       textSelectionTheme: const TextSelectionThemeData(
@@ -151,30 +183,81 @@ class RotelyxTheme {
 }
 
 /// Type scale. Named for the job, not the size, so a change is one edit.
+///
+/// Manrope sets about seven percent narrower than the face it replaced, and
+/// this is light text on a near black ground, where the strokes bloom and run
+/// into each other. Both push the same way, so running text is tracked out
+/// rather than in. Only the two largest sizes are tracked negative, which is
+/// ordinary: tight fitting reads as deliberate at display size and as illegible
+/// at reading size.
 abstract final class Type {
   static const _f = 'RotelyxSans';
-  static const _fb = <String>['RotelyxDevanagari', 'RotelyxArabic'];
+  static const _fb = <String>['RotelyxWide', 'RotelyxDevanagari', 'RotelyxArabic'];
 
   static const display = TextStyle(
       fontFamily: _f, fontFamilyFallback: _fb,
-      fontSize: 28, fontWeight: FontWeight.w700, letterSpacing: -0.4);
+      fontSize: 29, fontWeight: FontWeight.w800, letterSpacing: -0.5,
+      height: 1.12);
 
   static const title = TextStyle(
       fontFamily: _f, fontFamilyFallback: _fb,
-      fontSize: 18, fontWeight: FontWeight.w600, letterSpacing: -0.2);
+      fontSize: 18, fontWeight: FontWeight.w700, letterSpacing: -0.2,
+      height: 1.25);
 
+  /// Medium rather than regular, because this is light text on a near black
+  /// ground. A stroke that looks correct as black on white thins out when the
+  /// polarity flips, and Manrope is a light face to begin with.
   static const body = TextStyle(
-      fontFamily: _f, fontFamilyFallback: _fb, fontSize: 15, height: 1.45);
+      fontFamily: _f, fontFamilyFallback: _fb,
+      fontSize: 15.5, fontWeight: FontWeight.w500, height: 1.45,
+      letterSpacing: 0.15);
 
   static const label = TextStyle(
       fontFamily: _f, fontFamilyFallback: _fb,
-      fontSize: 13, fontWeight: FontWeight.w600);
+      fontSize: 13.5, fontWeight: FontWeight.w600, letterSpacing: 0.1);
 
   static const small = TextStyle(
-      fontFamily: _f, fontFamilyFallback: _fb, fontSize: 12, height: 1.4);
+      fontFamily: _f, fontFamilyFallback: _fb,
+      fontSize: 12, fontWeight: FontWeight.w500, height: 1.4,
+      letterSpacing: 0.2);
 
   /// For the safety number and anything else read aloud digit by digit.
+  ///
+  /// Tabular figures so the digits sit in a fixed column: two people comparing
+  /// a number over a call need the same groups in the same places on both
+  /// screens.
   static const numeric = TextStyle(
       fontFamily: _f, fontFamilyFallback: _fb,
-      fontSize: 15, fontWeight: FontWeight.w700, letterSpacing: 2.0);
+      fontSize: 15, fontWeight: FontWeight.w700, letterSpacing: 2.0,
+      fontFeatures: [FontFeature.tabularFigures()]);
+}
+
+/// Motion. Every duration in the interface comes from here.
+///
+/// Nothing runs longer than 400 ms. A messenger is opened dozens of times a
+/// day, and a curve that reads as considered on the first open is the
+/// application feeling slow by the thirtieth.
+abstract final class Motion {
+  /// A bubble arriving, a screen replacing another.
+  static const enter = Duration(milliseconds: 300);
+  static const enterCurve = Curves.easeOutCubic;
+
+  /// A sheet rising from the thumb.
+  static const sheet = Duration(milliseconds: 350);
+  static const sheetCurve = Curves.easeOutCubic;
+
+  /// Press feedback, which has to land before a person can notice waiting.
+  static const press = Duration(milliseconds: 100);
+  static const pressCurve = Curves.easeIn;
+
+  /// Per item, on first paint only, never on an update.
+  static const stagger = Duration(milliseconds: 50);
+
+  /// A dialog taking focus.
+  static const dialog = Duration(milliseconds: 200);
+  static const dialogCurve = Curves.easeOutBack;
+
+  /// The one place a longer curve reads as deliberate rather than sluggish.
+  static const theme = Duration(milliseconds: 400);
+  static const themeCurve = Curves.easeInOut;
 }

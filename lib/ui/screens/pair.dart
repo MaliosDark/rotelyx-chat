@@ -262,9 +262,9 @@ class _PairScreenState extends State<PairScreen> {
                       style: Type.display.copyWith(color: t.text)),
                   const SizedBox(height: 6),
                   Text(
-                    'There is no directory and nobody to look up. You and the '
-                    'other person agree on a meeting place, and the '
-                    'conversation starts there.',
+                    'Nobody can be looked up here, so the two of you agree '
+                    'on where to meet first. Which way is easiest depends on '
+                    'where the other person is right now.',
                     style: Type.body.copyWith(color: t.muted),
                   ),
                   const SizedBox(height: Metrics.wide),
@@ -280,14 +280,17 @@ class _PairScreenState extends State<PairScreen> {
                     RxField(
                       controller: _name,
                       label: 'Your name',
-                      hint: 'Anything',
-                      help: 'A label the other side sees. It proves nothing on '
-                          'its own. The safety number is what verifies.',
+                      hint: 'Anything you like',
+                      help: 'Only a label, and anyone can pick any of them. It '
+                          'is not how you know who you are talking to.',
                     ),
                     const SizedBox(height: Metrics.pad),
                     _Tabs(
                       index: _tab,
-                      labels: const ['QR code', 'Phrase', 'Invitation'],
+                      // Named for where the other person is, because that is
+                      // the thing the user already knows and the mechanism is
+                      // the thing they are trying to work out.
+                      labels: const ['Together', 'On a call', 'By message'],
                       onTap: (i) => setState(() => _tab = i),
                     ),
                     const SizedBox(height: Metrics.pad),
@@ -305,9 +308,9 @@ class _PairScreenState extends State<PairScreen> {
 
                   const SizedBox(height: Metrics.wide),
                   const RxNote(
-                    'Rotelyx is unaudited and pre-release. It makes no security '
-                    'claims until an independent cryptographic review is '
-                    'complete.',
+                    'This is a pre-release build and nobody outside the '
+                    'project has audited it yet. The cryptography is public and '
+                    'the code is there to read.',
                     title: 'Before you rely on this',
                   ),
                 ],
@@ -333,7 +336,7 @@ class _PairScreenState extends State<PairScreen> {
               child: CircularProgressIndicator(
                   strokeWidth: 2, color: Tone.accent)),
           const SizedBox(width: Metrics.gap),
-          Text('Waiting for them to scan it',
+          Text('Waiting for them to point a camera at it',
               style: Type.label.copyWith(color: t.text)),
         ]),
         const SizedBox(height: Metrics.pad),
@@ -343,7 +346,7 @@ class _PairScreenState extends State<PairScreen> {
           style: Type.numeric.copyWith(color: t.muted, letterSpacing: 1.2),
         ),
         const SizedBox(height: 6),
-        Text('If they cannot scan, read this to them instead.',
+        Text('No camera? Read these words out to them instead.',
             textAlign: TextAlign.center,
             style: Type.small.copyWith(color: t.faint)),
         const SizedBox(height: Metrics.pad),
@@ -373,9 +376,10 @@ class _PairScreenState extends State<PairScreen> {
         ]),
         const SizedBox(height: Metrics.pad),
         const RxNote(
-          'Anyone who sees this code can reach the meeting place before your '
-          'contact does, and the handshake would complete with them instead. '
-          'Show it to one person, and compare the safety number afterwards.',
+          'Anyone who can see this screen could get there before your contact '
+          'does, and you would end up connected to them instead. Show it to '
+          'one person, and once you are connected read the safety number to '
+          'each other: if it matches, nobody got in between.',
           tone: Tone.warn,
           title: 'While this is on screen',
         ),
@@ -395,10 +399,11 @@ class _PairScreenState extends State<PairScreen> {
             onTap: _scanCode),
         const SizedBox(height: Metrics.pad),
         const RxNote(
-          'One of you shows, the other scans. It does not matter which. The '
-          'code is a meeting place, not a key, and it stops meaning anything '
-          'the moment the conversation exists.',
-          title: 'How this works',
+          'One of you shows the code and the other points a camera at it. It '
+          'does not matter which way round. The code is only a place to meet, '
+          'not a key, and it stops meaning anything the moment you are '
+          'connected.',
+          title: 'When you are in the same room',
         ),
       ],
     );
@@ -409,11 +414,12 @@ class _PairScreenState extends State<PairScreen> {
         children: [
           RxField(
             controller: _phrase,
-            label: 'Meeting phrase',
+            label: 'A phrase you both type',
             hint: 'At least 8 characters',
-            help: 'Agree this over a channel you already trust. Anyone who '
-                'learns it before the other person arrives can answer in their '
-                'place, so prefer the QR code when you are in the same room.',
+            help: 'Say it out loud on the call, then you both type it here. '
+                'Whoever types it first is who you end up talking to, so do '
+                'not use one somebody could guess, and do not send it in a '
+                'message.',
           ),
           const SizedBox(height: Metrics.pad),
           Row(children: [
@@ -465,12 +471,12 @@ class _PairScreenState extends State<PairScreen> {
           ),
         ),
         const SizedBox(height: Metrics.pad),
-        Text('Waiting for someone to accept this',
+        Text('Waiting for them to open it',
             style: Type.label.copyWith(color: t.text)),
         const SizedBox(height: 4),
         Text(
-            'About three thousand characters, which is why it cannot be a QR '
-            'code. Send it through whatever you already use.',
+            'Send it however you normally would. It is too long to be a QR '
+            'code, so it has to be copied and pasted.',
             textAlign: TextAlign.center,
             style: Type.small.copyWith(color: t.faint)),
         const SizedBox(height: Metrics.pad),
@@ -510,7 +516,7 @@ class _PairScreenState extends State<PairScreen> {
           Expanded(child: Divider(color: t.line)),
         ]),
         const SizedBox(height: Metrics.pad),
-        RxField(controller: _code, hint: 'Paste an invitation code', lines: 3),
+        RxField(controller: _code, hint: 'Paste what they sent you', lines: 3),
         const SizedBox(height: Metrics.gap),
         RxButton('Accept invitation',
             weight: Weight.secondary,
@@ -521,10 +527,12 @@ class _PairScreenState extends State<PairScreen> {
                 ))),
         const SizedBox(height: Metrics.pad),
         const RxNote(
-          'An invitation carries the keys themselves rather than an address, so '
-          'it works when you have no way to be in the same room. It is long '
-          'because a post-quantum public key is 1216 bytes.',
-          title: 'When to use this',
+          'Use this when you cannot be together and cannot speak. It is long '
+          'because it carries the keys themselves rather than a place to meet, '
+          'which is also why it works with no arrangement at all. Whoever uses '
+          'it first becomes the other side of the conversation, so send it to '
+          'one person.',
+          title: 'When you can only send a message',
         ),
       ],
     );
@@ -585,9 +593,8 @@ class _Waiting extends StatelessWidget {
 
     final text = switch (role) {
       PairingRole.host =>
-        'Waiting at the meeting place. Have the other person join with the '
-            'same phrase.',
-      PairingRole.guest => 'Knocking. Waiting for the other side to answer.',
+        'Waiting. Have the other person type the same phrase.',
+      PairingRole.guest => 'Knocking. Waiting for them to answer.',
       _ => 'Loading',
     };
 

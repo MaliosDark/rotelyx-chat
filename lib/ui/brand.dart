@@ -65,7 +65,13 @@ const _brandImages = <String>[
 Future<void> warmBrand(BuildContext context) async {
   for (final path in _brandImages) {
     try {
-      await precacheImage(AssetImage(path), context);
+      // `onError` as well as the catch. Without it `precacheImage` also reports
+      // through `FlutterError.onError`, so a brand image that will not decode
+      // prints a caught exception banner to the console even though nothing
+      // went wrong: the widgets fall back to the name and the application
+      // carries on. A console full of exceptions nobody should act on is how
+      // the one that matters gets missed.
+      await precacheImage(AssetImage(path), context, onError: (_, __) {});
     } on Object {
       // Handled by each widget's errorBuilder, which falls back to the name.
     }

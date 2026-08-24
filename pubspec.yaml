@@ -116,7 +116,31 @@ flutter:
   # Droid Sans Fallback was tried and removed: it has U+AC00 but not U+D55C, so
   # real Korean text still rendered as tofu while costing 3.9 MB.
   fonts:
+    # Manrope is the face the interface was drawn in.
+    #
+    # Five static instances cut from the variable original rather than the
+    # variable file itself. Manrope's weight axis defaults to 200, its very
+    # lightest, so shipping the variable file with no weight declared painted
+    # the whole application in hairline ExtraLight and made it genuinely hard
+    # to read. A declared weight per file is what lets Flutter resolve
+    # FontWeight.w600 to a face that is actually semibold, including inside
+    # Material widgets that never touch the Type scale below.
     - family: RotelyxSans
+      fonts:
+        - asset: assets/fonts/Manrope-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Manrope-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Manrope-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Manrope-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/Manrope-ExtraBold.ttf
+          weight: 800
+    # Manrope covers Latin, Greek and Cyrillic. These three carry everything it
+    # does not, and Flutter walks the list per glyph rather than per string, so
+    # a Hindi word inside an English sentence still renders.
+    - family: RotelyxWide
       fonts:
         - asset: assets/fonts/DejaVuSans.ttf
         - asset: assets/fonts/DejaVuSans-Bold.ttf

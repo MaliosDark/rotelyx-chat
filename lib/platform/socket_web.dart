@@ -39,6 +39,12 @@ Future<TextSocket> connectSocket(String url, {Duration timeout = const Duration(
     // a Blob for a binary frame, so it is read as a JSString rather than
     // stringified: `toString()` on a Blob yields "[object Blob]", which parses
     // as nothing and looks exactly like a malformed server.
+    // The same hazard the native side has: a frame can arrive after `close`
+    // has shut the controller, and adding to a closed one throws where nothing
+    // can catch it. A browser delivers the event even when nobody is listening
+    // any more.
+    if (wrapper._done || wrapper._text.isClosed) return;
+
     final raw = event.data;
     if (raw == null || !raw.isA<JSString>()) return;
     wrapper._text.add((raw as JSString).toDart);

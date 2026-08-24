@@ -10,7 +10,9 @@ import 'dart:js_interop';
 
 import 'package:web/web.dart' as web;
 
+import '../call_api.dart';
 import 'api.dart';
+import 'net_web.dart';
 
 @JS('rotelyx')
 external _Ns? get _ns;
@@ -343,9 +345,15 @@ RotelyxEngine createEngine() => const _WebEngine();
 // and nothing above has to ask which one it is compiled for.
 
 /// A browser cannot open a QUIC endpoint.
-Object? openEndpoint({required String identityHex, required String relay}) => null;
+///
+/// Typed the same as the native one rather than as `Object?`, because the
+/// caller assigns the result to a `RotelyxEndpoint?` and an untyped null does
+/// not fit. The type it names is the refusing one from `net_web.dart`.
+RotelyxEndpoint? openEndpoint(
+        {required String identityHex, required String relay}) =>
+    null;
 
 /// And has no codec to open a call on.
-Object? openNativeCall(Object session,
+RotelyxCall? openNativeCall(Object session,
         {int bytesPerFrame = 60, bool recoverLoss = false}) =>
     null;

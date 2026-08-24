@@ -2,7 +2,7 @@
 ///
 /// # Why this is a choice and not a login
 ///
-/// There is no account to sign in to. The passphrase does one thing: it derives
+/// There is no account to sign in to. The password does one thing: it derives
 /// the key that seals what this device writes down.
 ///
 /// Keeping history means writing readable message text to disk, encrypted, in a
@@ -10,6 +10,22 @@
 /// in memory for the moment it is on screen. That is a real change to what an
 /// attacker with the device gets, so it is opt in and it is explained here
 /// rather than buried in settings.
+///
+/// # Why it is two steps
+///
+/// It used to be one: a password field, with the other option as a quiet link
+/// underneath. That put the weight in the wrong place. The field looked like
+/// the task and the actual decision looked like a way to skip it, so somebody
+/// who did not know what a passphrase was met a form they could not answer
+/// before they had seen a single message.
+///
+/// The decision comes first now, in the words of the outcome rather than the
+/// mechanism: do these messages still exist tomorrow. The password appears
+/// only after the answer that needs one, where it is the consequence of a
+/// choice already made rather than a toll on the way in.
+///
+/// Nothing about what the password does changed. It is the same derivation and
+/// the same vault.
 library;
 
 import 'package:flutter/material.dart';
@@ -35,13 +51,17 @@ class _UnlockScreenState extends State<UnlockScreen> {
   bool _busy = false;
   String? _error;
 
-  /// Whether the passphrase in the field was generated rather than typed.
+  /// Whether the password in the field was generated rather than typed.
   ///
   /// Only a generated one has a number attached to it. Guessing at the strength
   /// of something a person invented would mean showing a figure that is not
   /// measured, and a wrong reassurance is worse than none.
   bool _generated = false;
   int _words = defaultWordCount;
+
+  /// True while the question is on screen, false once a password is being
+  /// chosen. Somebody coming back has already answered it.
+  late bool _asking = !store.hasVault;
 
   void _generate() {
     setState(() {
@@ -63,8 +83,8 @@ class _UnlockScreenState extends State<UnlockScreen> {
     final pass = _pass.text;
     if (pass.length < 8) {
       setState(() => _error =
-          'At least 8 characters. What this protects is every conversation on '
-          'this device.');
+          'Use at least 8 characters. This is what locks every conversation '
+          'on this device.');
       return;
     }
 
@@ -74,7 +94,7 @@ class _UnlockScreenState extends State<UnlockScreen> {
       if (_returning) {
         final ok = await store.unlock(pass);
         if (!ok) {
-          setState(() { _busy = false; _error = 'That passphrase does not open this vault.'; });
+          setState(() { _busy = false; _error = 'That password does not open what this device kept.'; });
           return;
         }
       } else {
@@ -98,80 +118,28 @@ class _UnlockScreenState extends State<UnlockScreen> {
             padding: const EdgeInsets.all(Metrics.wide),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 420),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const Center(child: RxWordmark(height: 104)),
-                  const SizedBox(height: Metrics.pad),
-                  Text(
-                    _returning
-                        ? 'Enter your passphrase to open what this device kept.'
-                        : 'Peer to peer, end to end encrypted. '
-                            'No account, no phone number, no directory.',
-                    style: Type.body.copyWith(color: t.muted),
-                  ),
-                  const SizedBox(height: Metrics.wide),
-
-                  RxField(
-                    controller: _pass,
-                    label: 'Passphrase',
-                    hint: _returning ? 'Your passphrase' : 'At least 8 characters',
-                    // A generated passphrase is shown. There is nobody to hide
-                    // it from at the moment it is made, and hiding the one
-                    // thing the user has to memorise is how it gets lost.
-                    obscure: _returning || !_generated,
-                    autofocus: true,
-                    onSubmit: (_) => _go(),
-                    onChanged: (_) {
-                      // Edited by hand, so the strength figure no longer
-                      // describes what is in the field.
-                      if (_generated) setState(() => _generated = false);
-                    },
-                    help: _returning
-                        ? null
-                        : 'Deriving the key takes about a second. That delay is '
-                            'the point: it is what makes a passphrase worth '
-                            'something.',
-                  ),
-
-                  if (!_returning) ...[
-                    const SizedBox(height: Metrics.gap),
-                    _Generator(
-                      words: _words,
-                      generated: _generated,
-                      onGenerate: _generate,
-                      onWords: (n) {
-                        setState(() => _words = n);
-                        if (_generated) _generate();
-                      },
+              child: AnimatedSize(
+                duration: Motion.enter,
+                curve: Motion.enterCurve,
+                alignment: Alignment.topCenter,
+                child: AnimatedSwitcher(
+                  duration: Motion.enter,
+                  switchInCurve: Motion.enterCurve,
+                  switchOutCurve: Motion.enterCurve,
+                  // Sliding rather than crossfading, so the second step reads as
+                  // somewhere you went and the back arrow reads as a way out.
+                  transitionBuilder: (child, animation) => FadeTransition(
+                    opacity: animation,
+                    child: SlideTransition(
+                      position: Tween<Offset>(
+                        begin: Offset(_asking ? -0.04 : 0.04, 0),
+                        end: Offset.zero,
+                      ).animate(animation),
+                      child: child,
                     ),
-                  ],
-
-                  if (_error != null) ...[
-                    const SizedBox(height: Metrics.pad),
-                    RxNote(_error!, tone: Tone.bad),
-                  ],
-
-                  const SizedBox(height: Metrics.pad),
-                  RxButton(_returning ? 'Unlock' : 'Create vault',
-                      busy: _busy, wide: true, onTap: _busy ? null : _go),
-
-                  if (!_returning) ...[
-                    const SizedBox(height: Metrics.gap),
-                    RxButton('Continue without keeping anything',
-                        weight: Weight.quiet,
-                        wide: true,
-                        onTap: _busy ? null : widget.onReady),
-                    const SizedBox(height: Metrics.wide),
-                    const RxNote(
-                      'Keeping history writes your messages to this device, '
-                      'encrypted under that passphrase. Without it the app still '
-                      'works and simply forgets when you close it, which is '
-                      'the stronger position and an inconvenient default.',
-                      title: 'What the passphrase changes',
-                    ),
-                  ],
-                ],
+                  ),
+                  child: _asking ? _choice(t) : _password(t),
+                ),
               ),
             ),
           ),
@@ -179,9 +147,151 @@ class _UnlockScreenState extends State<UnlockScreen> {
       ),
     );
   }
+
+  /// Step one: the question, in the words of what happens rather than of how.
+  Widget _choice(RotelyxTheme t) {
+    return Column(
+      key: const ValueKey('choice'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Center(child: RxWordmark(height: 104)),
+        const SizedBox(height: Metrics.pad),
+        Text(
+          'Private messages. No account, no phone number, and no directory to '
+          'be listed in.',
+          style: Type.body.copyWith(color: t.muted),
+        ),
+        const SizedBox(height: Metrics.wide),
+
+        RxChoice(
+          icon: Icons.lock_outline,
+          title: 'Keep my chats',
+          body: 'They stay on this phone between sessions, behind a password '
+              'that is never sent anywhere.',
+          onTap: () => setState(() => _asking = false),
+        ),
+        const SizedBox(height: Metrics.gap),
+        // Named rather than described, because it is a mode a person turns on
+        // and off and a name is what they will look for again. The body has to
+        // do two jobs: say what closing means, since "when I close" on its own
+        // does not say what is being closed, and bound what the name promises.
+        // Ghost mode elsewhere means other people cannot see you. Here it means
+        // this phone writes nothing down, and their copy is untouched.
+        RxChoice(
+          icon: Icons.auto_delete_outlined,
+          title: 'Ghost mode',
+          body: 'Nothing is saved on this phone. Quit the app and it is gone '
+              'from here, and you are asked again next time. The other person '
+              'still keeps their own copy.',
+          tone: t.muted,
+          onTap: widget.onReady,
+        ),
+
+        const SizedBox(height: Metrics.pad),
+        Text(
+          'Your messages are end to end encrypted either way. This only '
+          'decides what stays on this phone.',
+          textAlign: TextAlign.center,
+          style: Type.small.copyWith(color: t.faint),
+        ),
+      ],
+    );
+  }
+
+  /// Step two, and the whole screen for somebody coming back.
+  Widget _password(RotelyxTheme t) {
+    return Column(
+      key: const ValueKey('password'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (_returning) ...[
+          const Center(child: RxWordmark(height: 104)),
+          const SizedBox(height: Metrics.pad),
+          Text('Welcome back. Your password opens what this device kept.',
+              style: Type.body.copyWith(color: t.muted)),
+        ] else ...[
+          Align(
+            alignment: Alignment.centerLeft,
+            child: GestureDetector(
+              onTap: _busy ? null : () => setState(() => _asking = true),
+              behavior: HitTestBehavior.opaque,
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: Metrics.pad, right: 40),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.arrow_back, size: 18, color: t.muted),
+                    const SizedBox(width: 6),
+                    Text('Back', style: Type.label.copyWith(color: t.muted)),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const Text('Pick a password', style: Type.display),
+          const SizedBox(height: Metrics.gap),
+          Text(
+            'It locks the chats this device keeps. Long beats complicated: '
+            'four ordinary words are harder to break than one clever word.',
+            style: Type.body.copyWith(color: t.muted),
+          ),
+        ],
+        const SizedBox(height: Metrics.wide),
+
+        RxField(
+          controller: _pass,
+          hint: _returning ? 'Your password' : 'Your new password',
+          // A generated password is shown. There is nobody to hide it from at
+          // the moment it is made, and hiding the one thing the user has to
+          // memorise is how it gets lost.
+          obscure: _returning || !_generated,
+          autofocus: true,
+          onSubmit: (_) => _go(),
+          onChanged: (_) {
+            // Edited by hand, so the strength figure no longer describes what
+            // is in the field.
+            if (_generated) setState(() => _generated = false);
+          },
+        ),
+
+        if (!_returning) ...[
+          const SizedBox(height: Metrics.gap),
+          _Generator(
+            words: _words,
+            generated: _generated,
+            onGenerate: _generate,
+            onWords: (n) {
+              setState(() => _words = n);
+              if (_generated) _generate();
+            },
+          ),
+        ],
+
+        if (_error != null) ...[
+          const SizedBox(height: Metrics.pad),
+          RxNote(_error!, tone: Tone.bad),
+        ],
+
+        const SizedBox(height: Metrics.pad),
+        RxButton(_returning ? 'Unlock' : 'Continue',
+            busy: _busy, wide: true, onTap: _busy ? null : _go),
+
+        if (!_returning) ...[
+          const SizedBox(height: Metrics.wide),
+          const RxNote(
+            'There is no account behind this password and no server holds a '
+            'copy, so nobody can reset it for you. Forget it and the chats on '
+            'this phone are gone.',
+            title: 'Write it somewhere safe',
+            tone: Tone.warn,
+          ),
+        ],
+      ],
+    );
+  }
 }
 
-/// Offering to think of a passphrase, and saying what it is worth.
+/// Offering to think of a password, and saying what it is worth.
 ///
 /// # Why the strength is a number rather than a colour
 ///
@@ -222,7 +332,7 @@ class _Generator extends StatelessWidget {
           children: [
             Expanded(
               child: RxButton(
-                generated ? 'Another one' : 'Think of one for me',
+                generated ? 'Another one' : 'Make one up for me',
                 weight: Weight.secondary,
                 icon: Icons.casino_outlined,
                 onTap: onGenerate,
@@ -262,12 +372,10 @@ class _Generator extends StatelessWidget {
           ),
           const SizedBox(height: Metrics.gap),
           const RxNote(
-            'Written down nowhere. If this is the passphrase you keep, memorise '
-            'it now: there is no account to recover it from and no copy on any '
-            'server, which is the same property that makes the conversations '
-            'worth having.',
-            title: 'Before you go on',
-            tone: Tone.warn,
+            'Copy it down before you continue. The words come from a public '
+            'list, which is fine: the secret is which ones came out, not which '
+            'ones exist.',
+            title: 'This one is not stored anywhere',
           ),
         ],
       ],

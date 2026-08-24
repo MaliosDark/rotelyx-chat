@@ -29,6 +29,16 @@ class _IoSocketText implements TextSocket {
   _IoSocketText(this._socket) {
     _socket.listen(
       (dynamic frame) {
+        // A frame can arrive after this object has been closed. `close` shuts
+        // the controller, but the socket goes on draining whatever was already
+        // in flight, and adding to a closed controller throws where nothing can
+        // catch it: the failure surfaces as an unhandled asynchronous error
+        // with no stack pointing at the code that caused it.
+        //
+        // Reached by opening a second conversation, which closes the mailbox
+        // the first one was using while frames are still on their way.
+        if (_done || _text.isClosed) return;
+
         // Text only, for the same reason as the browser implementation: a
         // binary frame from the mailbox would be a defect, not a case to cover.
         if (frame is String) _text.add(frame);

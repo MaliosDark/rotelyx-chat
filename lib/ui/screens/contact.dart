@@ -215,7 +215,7 @@ class _ContactSheetState extends State<ContactSheet> {
               _Toggle(
                 title: 'Tell them when you have read a message',
                 subtitle: c.receipts
-                    ? 'One extra envelope per conversation you open'
+                    ? 'Costs one extra message each time you open this'
                     : 'Off. They see delivered, never read',
                 icon: Icons.done_all,
                 value: c.receipts,
@@ -223,12 +223,13 @@ class _ContactSheetState extends State<ContactSheet> {
               ),
               const SizedBox(height: 6),
               const RxNote(
-                'A read receipt is a message, because there is no side channel '
-                'and there should not be one. That means the operator counts an '
-                'envelope every time you open this conversation, and can see '
-                'when you read even though not what. It is off by default for '
-                'that reason and not because it is hard.',
-                title: 'What a receipt costs',
+                'Telling them you read it means sending them something, '
+                'because there is no back channel here and there should not be '
+                'one. So whoever runs the server sees a message go out every '
+                'time you open this conversation. They still cannot read a '
+                'word of it, but they can tell when you looked. That is why '
+                'this is off unless you turn it on.',
+                title: 'What a read receipt costs'
               ),
 
               const SizedBox(height: Metrics.gap),
@@ -236,7 +237,7 @@ class _ContactSheetState extends State<ContactSheet> {
               _Toggle(
                 title: 'Ask for a PIN to open it',
                 subtitle: store.isLocked(c.id)
-                    ? 'Sealed under that PIN as well as your passphrase'
+                    ? 'Sealed under that PIN as well as your password'
                     : 'Off. It opens with the rest of your history',
                 icon: Icons.lock_outline,
                 value: store.isLocked(c.id),
@@ -257,7 +258,7 @@ class _ContactSheetState extends State<ContactSheet> {
               const SizedBox(height: 6),
               const RxNote(
                 'This one seals rather than hides. The conversation is '
-                'encrypted under its PIN as well as your passphrase, so it '
+                'encrypted under its PIN as well as your password, so it '
                 'stays unreadable even to this application with your vault '
                 'open. Forgetting the PIN loses this conversation and nothing '
                 'else, and nothing here can recover it.\n\n'

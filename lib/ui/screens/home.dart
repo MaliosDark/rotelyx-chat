@@ -123,6 +123,11 @@ class _HomeScreenState extends State<HomeScreen> {
       onOpenContact: (id) =>
           ContactSheet.open(context, id, onChanged: _reload),
       onPair: widget.onPair,
+      // Opening it is all this does. The conversation is founded by
+      // `resume`, which the chat screen already calls, so there is nothing to
+      // create here and nothing to wait for.
+      onNoteToSelf: () =>
+          setState(() => _openId = RotelyxService.selfConversationId),
       onSettings: widget.onSettings,
     );
 
@@ -163,6 +168,7 @@ class _ConversationList extends StatelessWidget {
     required this.onOpen,
     required this.onOpenContact,
     required this.onPair,
+    required this.onNoteToSelf,
     required this.onSettings,
   });
 
@@ -173,6 +179,7 @@ class _ConversationList extends StatelessWidget {
   final ValueChanged<String> onOpen;
   final ValueChanged<String> onOpenContact;
   final VoidCallback onPair;
+  final VoidCallback onNoteToSelf;
   final VoidCallback onSettings;
 
   @override
@@ -225,17 +232,21 @@ class _ConversationList extends StatelessWidget {
             const SizedBox(height: Metrics.gap),
             Expanded(
               child: conversations.isEmpty
-                  ? _NoConversations(onPair: onPair)
+                  ? _NoConversations(onPair: onPair, onNoteToSelf: onNoteToSelf)
                   : PullForSettings(
                       onReach: onSettings,
                       child: ListView.builder(
                       padding: const EdgeInsets.symmetric(horizontal: Metrics.gap),
                       itemCount: conversations.length,
-                      itemBuilder: (_, i) => _ConversationTile(
-                        conversation: conversations[i],
-                        selected: conversations[i].id == openId,
-                        onTap: () => onOpen(conversations[i].id),
-                        onOpenContact: () => onOpenContact(conversations[i].id),
+                      itemBuilder: (_, i) => RxEnter(
+                        index: i,
+                        child: _ConversationTile(
+                          conversation: conversations[i],
+                          selected: conversations[i].id == openId,
+                          onTap: () => onOpen(conversations[i].id),
+                          onOpenContact: () =>
+                              onOpenContact(conversations[i].id),
+                        ),
                       ),
                       ),
                     ),
@@ -421,8 +432,15 @@ class _ConversationTile extends StatelessWidget {
 }
 
 class _NoConversations extends StatelessWidget {
-  const _NoConversations({required this.onPair});
+  const _NoConversations({required this.onPair, required this.onNoteToSelf});
   final VoidCallback onPair;
+
+  /// Opens the conversation with yourself.
+  ///
+  /// Here because this is the screen somebody with nobody to write to gets
+  /// stuck on, and it is the one place in the app that can be used before a
+  /// second person exists.
+  final VoidCallback onNoteToSelf;
 
   @override
   Widget build(BuildContext context) {
@@ -445,6 +463,13 @@ class _NoConversations extends StatelessWidget {
               'someone an invitation.',
               textAlign: TextAlign.center,
               style: Type.small.copyWith(color: t.faint),
+            ),
+            const SizedBox(height: Metrics.wide),
+            RxButton(
+              'Write a note to myself',
+              icon: Icons.edit_note,
+              weight: Weight.secondary,
+              onTap: onNoteToSelf,
             ),
           ],
         ),
@@ -472,8 +497,8 @@ class _NothingOpen extends StatelessWidget {
               const Center(child: RxWordmark(height: 104)),
               const SizedBox(height: Metrics.gap),
               Text(
-                'Messages are sealed with MLS and a hybrid post-quantum key '
-                'schedule. No account, no phone number, no directory.',
+                'Nothing here is tied to you. No account, no phone number, '
+                'and no directory to be listed in.',
                 textAlign: TextAlign.center,
                 style: Type.body.copyWith(color: t.muted),
               ),
@@ -483,8 +508,11 @@ class _NothingOpen extends StatelessWidget {
                 runSpacing: Metrics.gap,
                 alignment: WrapAlignment.center,
                 children: [
-                  const RxChip('X-Wing · ML-KEM-768', icon: Icons.shield_outlined),
-                  const RxChip('MLS', icon: Icons.lock_outline),
+                  // The precise names live in settings, one fold down. Here
+                  // they would be the first thing an empty screen says to
+                  // somebody who has not sent a message yet.
+                  const RxChip('Post-quantum', icon: Icons.shield_outlined),
+                  const RxChip('End to end encrypted', icon: Icons.lock_outline),
                   RxChip(host, icon: Icons.inbox_outlined),
                 ],
               ),

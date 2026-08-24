@@ -29,8 +29,8 @@ library;
 import 'dart:async';
 
 import '../platform/call_audio.dart';
-import 'engine/call_native.dart';
-import 'engine/net_native.dart';
+import 'call_api.dart';
+import 'engine/net_backend.dart';
 
 /// What a running call is doing, for the interface to show.
 class CallHealth {

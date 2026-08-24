@@ -28,7 +28,7 @@ import '../platform/call_audio.dart';
 import 'call_loop.dart';
 import 'call_state.dart';
 import 'engine/backend.dart';
-import 'engine/net_native.dart';
+import 'engine/net_backend.dart';
 import 'ephemeral.dart' show newBurnId;
 import 'rotelyx_config.dart';
 import 'rotelyx_service.dart';
@@ -74,6 +74,16 @@ class Calls {
   /// Place a call in this conversation. Returns why not, or null when ringing.
   Future<String?> place(StoredConversation conversation) async {
     if (_state.isBusy) return 'You are already on a call.';
+
+    // The ring is sent through whatever session is live, and this is handed the
+    // conversation the user is looking at. When those are not the same the call
+    // is offered to the wrong person, so settle it before anything goes out.
+    if (rotelyx.conversationId != conversation.id) {
+      if (!await rotelyx.resume(conversation.id)) {
+        return '${conversation.displayTitle} could not be reopened.';
+      }
+    }
+
     if (!audioIsBuilt) return 'Calls are not built for this platform yet.';
     if (!await permitMicrophone()) {
       return 'The microphone permission was refused.';

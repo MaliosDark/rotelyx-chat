@@ -129,6 +129,29 @@ class RotelyxService {
   int get epoch => _session?.epoch ?? 0;
   int get memberCount => _session?.memberCount ?? 0;
 
+  /// The other half of a conversation with yourself.
+  ///
+  /// # Why a note to self needs two of anything
+  ///
+  /// It reads like it should be a group of one, and it cannot be. The blind
+  /// mailbox derives its tag key from the group, and the engine has no tag key
+  /// until a second member exists: `session.sealForGroup` on a solo group fails
+  /// with "the conversation has no second member yet". A group of one has no
+  /// address, so nothing can be deposited and nothing can be polled.
+  ///
+  /// So both members are this device. It founds a group, invites itself, and
+  /// joins. To the mailbox that is two people and nothing about it is special
+  /// cased, which is the property worth having: a note written here exercises
+  /// the same MLS group, the same rotating tags and the same delivery as a
+  /// message to somebody else. `test/note_to_self_test.dart` holds the proof.
+  ///
+  /// This half only ever listens. Sending stays exactly as it was, from
+  /// [_session], so no existing path changes shape.
+  WasmSession? _selfPeer;
+
+  /// Whether the open conversation is the one with yourself.
+  bool get isNoteToSelf => _selfPeer != null;
+
   /// Replace the live session, releasing whatever it replaces.
   ///
   /// A browser collects a discarded session; the native engine keeps it in a
@@ -138,6 +161,14 @@ class RotelyxService {
     final previous = _session;
     if (identical(previous, next)) return;
     _session = next;
+    previous?.dispose();
+  }
+
+  /// Release the second half. Same contract as [_useSession].
+  void _usePeer(WasmSession? next) {
+    final previous = _selfPeer;
+    if (identical(previous, next)) return;
+    _selfPeer = next;
     previous?.dispose();
   }
 
@@ -217,6 +248,27 @@ class RotelyxService {
   /// control message from a newer version is not a sentence, and putting it in
   /// the conversation as one is how a future feature turns into a line of
   /// gibberish in somebody's history.
+  /// Open an envelope with the second half, purely to know it arrived.
+  ///
+  /// Nothing is emitted. The note is already on screen, written locally the
+  /// moment it was sent, which is also why this keeps working with the mailbox
+  /// unreachable. What this adds is the knowledge that the round trip really
+  /// happened, rather than a message that only ever existed on this disk.
+  void _peerConfirm(String envelopeB64) {
+    final peer = _selfPeer;
+    if (peer == null) return;
+
+    try {
+      final payload = peer.openMine(envelopeB64, _config.lookback);
+      // Decrypting advances the peer's ratchet, which has to happen in order or
+      // the next one will not open. The plaintext itself is discarded.
+      peer.receive(payload);
+    } on Object {
+      // Not for this half either, or out of window. Nothing to do and nothing
+      // worth telling anybody.
+    }
+  }
+
   void _onSignal(Signal signal) {
     switch (signal.kind) {
       case SignalKind.burnRead:
@@ -985,6 +1037,13 @@ class RotelyxService {
     } on Object {
       // Not addressed to us in this window. Ignore rather than react, because
       // reacting is itself a signal.
+      //
+      // Except in a note to self, where the envelope was deposited under the
+      // other half's tag and so is genuinely not addressed to this one. It
+      // arriving at all is the confirmation that the note went to the mailbox
+      // and came back, so it is opened for that and then dropped: the copy on
+      // screen was written when it was sent.
+      _peerConfirm(envelopeB64);
       return;
     }
 
@@ -1096,8 +1155,20 @@ class RotelyxService {
     final session = _session;
     if (session == null) return;
 
-    final now =
-        session.myPollingTags(_config.lookback).toSet();
+    final now = session.myPollingTags(_config.lookback).toSet();
+
+    // In a note to self the deposit lands under the other half's tag, so this
+    // device has to be listening on both or its own note never comes back.
+    final peer = _selfPeer;
+    if (peer != null) {
+      try {
+        now.addAll(peer.myPollingTags(_config.lookback));
+      } on Object {
+        // A half that cannot name its tags yet contributes none. The primary
+        // set is still correct, so this is not worth failing over.
+      }
+    }
+
     final fresh = now.difference(_listening).toList();
     if (fresh.isNotEmpty) {
       _mailbox?.subscribe(fresh);
@@ -1177,6 +1248,89 @@ class RotelyxService {
         .join();
   }
 
+  /// The conversation with yourself, which has a fixed id rather than a minted
+  /// one so that every part of the app can name it without being told.
+  static const selfConversationId = 'self';
+
+  /// Open the conversation with yourself, founding it if this is the first time.
+  Future<bool> startNoteToSelf() => resume(selfConversationId);
+
+  /// Where the second half of a note to self is kept.
+  ///
+  /// A derived id rather than a new column, because `saveSession` already takes
+  /// any string and this needs no change to the store to sit beside its own
+  /// conversation and be removed with it.
+  static String _peerId(String conversationId) => '$conversationId.peer';
+
+  /// Open the conversation with yourself, founding it the first time.
+  ///
+  /// The handshake happens entirely in this process: no meeting code, no
+  /// rendezvous tag, nobody to wait for. Both key packages are to hand, so they
+  /// are exchanged directly the way `test/note_to_self_test.dart` does it.
+  Future<bool> _foundNoteToSelf(String conversationId) async {
+    final key = store.key;
+
+    final a = RotelyxWasm.newSession(_displayName);
+    final b = RotelyxWasm.newSession(_displayName);
+
+    try {
+      a.found();
+      final invitation = a.invite(b.keyPackage());
+      b.join(invitation.welcome, invitation.ratchetTree);
+
+      // The post-quantum layer, settled before anything is sent, exactly as a
+      // pairing with another person settles it.
+      b.openPq(a.encapsulateTo(b.hybridPublicKey()));
+      b.receive(a.commitPq());
+    } on Object catch (e) {
+      a.dispose();
+      b.dispose();
+      _moveTo(RotelyxState.failed,
+          error: 'the conversation with yourself could not be started: $e');
+      return false;
+    }
+
+    _useSession(a);
+    _usePeer(b);
+    _persistId = conversationId;
+    _role = PairingRole.host;
+    _listening.clear();
+
+    // The row in the list, written on first open rather than at install, so a
+    // device nobody has used yet does not show a conversation nobody started.
+    if (store.load(conversationId) == null) {
+      store.save(StoredConversation(
+        id: conversationId,
+        title: 'Notes to myself',
+        session: null,
+        messages: [],
+        lastActivity: DateTime.now(),
+      ));
+    }
+
+    // Sealed now rather than on the first note, so that quitting before writing
+    // anything does not leave a founded group with no way back to it.
+    if (key != null) {
+      store.saveSession(conversationId, a);
+      store.saveSession(_peerId(conversationId), b);
+    }
+
+    try {
+      await _openMailbox();
+    } on Object {
+      // No mailbox is not fatal here. Notes are written locally as they are
+      // sent, so the conversation works offline and starts travelling once
+      // there is somewhere to travel to.
+      _moveTo(RotelyxState.joined);
+      return true;
+    }
+
+    _moveTo(RotelyxState.joined);
+    _resubscribe();
+    _watchTagRotation();
+    return true;
+  }
+
   /// Bring a stored conversation back to life.
   ///
   /// This is what makes the app usable rather than a demo: without it, every
@@ -1191,6 +1345,15 @@ class RotelyxService {
   Future<bool> resume(String conversationId) async {
     final key = store.key;
     final blob = store.sessionBlob(conversationId);
+
+    // The conversation with yourself is founded on first open rather than
+    // paired into existence, so there is nothing sealed the first time and that
+    // is not a failure. Handled here so that every caller of `resume`, and
+    // there are three, needs to know nothing about it.
+    if (blob == null && conversationId == selfConversationId) {
+      return _foundNoteToSelf(conversationId);
+    }
+
     if (key == null || blob == null) return false;
 
     try {
@@ -1199,6 +1362,21 @@ class RotelyxService {
       _moveTo(RotelyxState.failed,
           error: 'this conversation could not be reopened: $e');
       return false;
+    }
+
+    // A note to self sealed two halves. Both come back or neither does: with
+    // only the sending half the group still works, but its own notes are
+    // deposited under a tag nothing on this device is listening to.
+    _usePeer(null);
+    final peerBlob = store.sessionBlob(_peerId(conversationId));
+    if (peerBlob != null) {
+      try {
+        _usePeer(RotelyxWasm.unsealSession(peerBlob, key));
+      } on Object catch (e) {
+        _moveTo(RotelyxState.failed,
+            error: 'this conversation could not be reopened: $e');
+        return false;
+      }
     }
 
     _persistId = conversationId;
@@ -1242,6 +1420,7 @@ class RotelyxService {
     _mailboxListeners.clear();
     await _mailbox?.close();
     _useSession(null);
+    _usePeer(null);
     await _messages.close();
     await _stateChanges.close();
   }

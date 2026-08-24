@@ -14,7 +14,7 @@
 /// a phone that opens everything.
 library;
 
-import 'dart:io' show Platform;
+import 'os.dart' as os;
 
 import 'package:flutter/services.dart';
 
@@ -26,7 +26,7 @@ const MethodChannel _channel = MethodChannel('rotelyx/biometrics');
 /// enrolled. Checked before the switch is drawn, because a switch that turns
 /// itself off after being pressed is worse than one that was never there.
 Future<bool> biometricsAvailable() async {
-  if (!Platform.isAndroid) return false;
+  if (!os.isAndroid) return false;
   try {
     return await _channel.invokeMethod<bool>('available') ?? false;
   } on PlatformException {
@@ -41,7 +41,7 @@ Future<bool> biometricsAvailable() async {
 /// False is not an error and does not need a message: it means "type the PIN",
 /// which is a working path and the one the prompt itself offers.
 Future<bool> askBiometric() async {
-  if (!Platform.isAndroid) return false;
+  if (!os.isAndroid) return false;
   try {
     return await _channel.invokeMethod<bool>('prompt') ?? false;
   } on PlatformException {

@@ -268,8 +268,68 @@ script.
     `ios/Podfile` and the Xcode setting or the archive fails at link time.
   * Screenshots for every device size the listing claims, at the exact pixel
     dimensions App Store Connect asks for.
-  * Review notes explaining that pairing needs two devices, with a working
-    meeting code, or review stalls at a screen with a QR code and no way in.
+  * Review notes. Without them review stalls at a screen with a QR code and
+    nobody on the other side of it, which is guideline 2.1 and the largest
+    single category of rejection there is. Two things answer it, and they answer
+    different halves:
+
+    **A note to self** makes the application usable on one device with nothing
+    arranged. It is a real conversation, sealed and delivered through the
+    mailbox like any other, so a reviewer can compose, send, watch a message
+    burn, and try the settings. What it cannot do is show them that delivery
+    between two people works, because from the outside it is indistinguishable
+    from a local notepad.
+
+    **`tool/review_peer.dart`** answers that half. It is a second party,
+    somewhere else, that replies. Mint a phrase for the submission, run
+
+    ```
+    LD_LIBRARY_PATH=build/native dart run tool/review_peer.dart "<phrase>"
+    ```
+
+    and put in the review notes: open the app, choose **New conversation**, the
+    **On a call** tab, type that phrase, and send anything. A reply comes back.
+
+    Check it answers before submitting, with the same phrase in another
+    terminal:
+
+    ```
+    LD_LIBRARY_PATH=build/native dart run tool/review_peer_check.dart "<phrase>"
+    ```
+
+    The phrase is a door, and anybody who reads the review notes can walk
+    through it. Use one minted for a single submission, run the peer for that
+    window, and stop it when review is done.
+
+## Three Android traps, each found by looking rather than by a build failing
+
+**Target API level has a date on it.** Google Play stopped accepting new
+applications and updates targeting below Android 16 on **31 August 2026**, and
+an extension can be requested until 1 November. `compileSdkVersion` and
+`targetSdkVersion` are 36. The build is clean and the application has been run
+on a device at API 36: edge-to-edge, which Android 16 stops making optional,
+lands correctly because every screen already sits inside a `SafeArea`.
+
+**A dependency's native library counts too.** `check-alignment.sh` used to read
+`android/app/src/main/jniLibs`, which holds only what this project builds, and
+it passed while the package was not shippable: CameraX 1.3.4 shipped
+`libimage_processing_util_jni.so` aligned to four kilobytes. Play looks at the
+upload, so the script now does the same, and CameraX is pinned at 1.4.2 where
+that library is aligned to sixteen.
+
+**An architecture can arrive without an engine.** The package carried an `x86`
+folder holding CameraX and nothing else, no `libflutter.so` and no
+`librotelyx_mobile.so`, because a dependency built for an architecture Flutter
+dropped years ago. A device that picked that folder would install an
+application whose engine is not inside it. `abiFilters` now pins the three that
+are real.
+
+Run this before every upload, against the artifact and not the source tree:
+
+```
+flutter build apk --release
+tool/native/check-alignment.sh
+```
 
 ---
 
@@ -279,5 +339,6 @@ script.
 |---|---|
 | iOS notifications | Needs the mailbox to send a push and an extension to receive it. `docs/PUSH.md` |
 | The Play foreground service declaration | Console form and a screen recording, once there is a console |
+| An upload key | `android/key.properties` is absent, so a release build signs with the debug key and Play refuses it. Generated once, by whoever owns the account: a lost upload key means going through Google support to publish again |
 | Export self-classification | A report to BIS, before the first iOS distribution |
 | `PrivacyInfo.xcprivacy` in the Xcode target | One drag, in Xcode, once |

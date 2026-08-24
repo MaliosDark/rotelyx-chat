@@ -294,3 +294,172 @@ class RotelyxThemeScope extends InheritedWidget {
   bool updateShouldNotify(RotelyxThemeScope oldWidget) =>
       oldWidget.theme != theme;
 }
+
+/// A decision offered as two or three cards rather than as a form.
+///
+/// # Why this exists
+///
+/// A choice with real consequences was being made through a text field and a
+/// quiet link underneath it, which puts the weight on the wrong thing: the
+/// field looked like the task and the decision looked like a way to skip it.
+/// A card states the outcome first and the mechanism second, which is the order
+/// a person actually thinks in.
+class RxChoice extends StatefulWidget {
+  const RxChoice({
+    super.key,
+    required this.title,
+    required this.body,
+    required this.icon,
+    required this.onTap,
+    this.tone,
+  });
+
+  final String title;
+  final String body;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  /// Defaults to the accent. Set it where a choice deserves to read as the
+  /// quieter of the two.
+  final Color? tone;
+
+  @override
+  State<RxChoice> createState() => _RxChoiceState();
+}
+
+class _RxChoiceState extends State<RxChoice> {
+  bool _down = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = RotelyxThemeScope.of(context);
+    final c = widget.tone ?? Tone.accent;
+
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _down = true),
+      onTapUp: (_) => setState(() => _down = false),
+      onTapCancel: () => setState(() => _down = false),
+      onTap: widget.onTap,
+      child: AnimatedScale(
+        scale: _down ? 0.985 : 1,
+        duration: Motion.press,
+        curve: Motion.pressCurve,
+        child: AnimatedContainer(
+          duration: Motion.press,
+          curve: Motion.pressCurve,
+          padding: const EdgeInsets.all(Metrics.pad),
+          decoration: BoxDecoration(
+            color: _down ? c.withOpacity(0.08) : t.raised,
+            borderRadius: BorderRadius.circular(Metrics.radius),
+            border: Border.all(
+                color: _down ? c.withOpacity(0.5) : t.line),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: c.withOpacity(0.14),
+                  borderRadius: BorderRadius.circular(11),
+                ),
+                child: Icon(widget.icon, size: 19, color: c),
+              ),
+              const SizedBox(width: Metrics.pad),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(widget.title, style: Type.title.copyWith(fontSize: 16)),
+                    const SizedBox(height: 3),
+                    Text(widget.body,
+                        style: Type.small.copyWith(color: t.muted)),
+                  ],
+                ),
+              ),
+              const SizedBox(width: Metrics.gap),
+              Icon(Icons.chevron_right, size: 20, color: t.faint),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Fades and lifts its child into place, once.
+///
+/// # Why once matters more than the animation
+///
+/// A list that staggers every time it rebuilds is not alive, it is broken: a
+/// message arriving would replay the whole screen, and on a conversation list
+/// that repaints on every receipt the effect is a permanent shimmer. So the
+/// controller runs on the first build of this element and never again, and the
+/// element is what Flutter reuses as the list scrolls.
+///
+/// [index] only delays the start. Past [maxStagger] items the delay stops
+/// growing, because a list of forty should not take two seconds to finish
+/// arriving.
+class RxEnter extends StatefulWidget {
+  const RxEnter({super.key, required this.child, this.index = 0});
+
+  final Widget child;
+  final int index;
+
+  /// Beyond this the delay is capped. Eight rows is about one screen.
+  static const maxStagger = 8;
+
+  @override
+  State<RxEnter> createState() => _RxEnterState();
+}
+
+class _RxEnterState extends State<RxEnter> with SingleTickerProviderStateMixin {
+  late final _controller = AnimationController(
+    vsync: this,
+    duration: Motion.enter,
+  );
+
+  @override
+  void initState() {
+    super.initState();
+
+    final steps = widget.index.clamp(0, RxEnter.maxStagger);
+    final delay = Motion.stagger * steps;
+
+    if (delay == Duration.zero) {
+      _controller.forward();
+    } else {
+      Future<void>.delayed(delay, () {
+        if (mounted) _controller.forward();
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Reduced motion is a system setting somebody turned on for a reason, and
+    // an entrance is exactly the kind of thing they turned it off for.
+    if (MediaQuery.of(context).disableAnimations) return widget.child;
+
+    final curved =
+        CurvedAnimation(parent: _controller, curve: Motion.enterCurve);
+
+    return FadeTransition(
+      opacity: curved,
+      child: SlideTransition(
+        position: Tween<Offset>(
+          begin: const Offset(0, 0.06),
+          end: Offset.zero,
+        ).animate(curved),
+        child: widget.child,
+      ),
+    );
+  }
+}

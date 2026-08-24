@@ -5,15 +5,16 @@
 /// milliseconds and it is what the codec was built around.
 library;
 
-import 'dart:io' show Platform;
 import 'dart:typed_data';
 
 import 'package:flutter/services.dart';
 
+import 'os.dart' as os;
+
 const MethodChannel _channel = MethodChannel('rotelyx/call-audio');
 
 /// Whether this platform has the audio devices wired up.
-bool get audioIsBuilt => Platform.isAndroid || Platform.isIOS;
+bool get audioIsBuilt => os.isMobile;
 
 /// Ask for the microphone. False when it was refused.
 Future<bool> permitMicrophone() async {
