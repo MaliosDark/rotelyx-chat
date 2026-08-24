@@ -323,6 +323,31 @@ class _NativeSession implements RotelyxSession {
   @override
   String? receive(String messageB64) {
     final result = _op('session.receive', {'message': messageB64});
+
+    // The bridge answers with which of three things arrived, as an object:
+    // `{"kind":"message","text":...}`, `{"kind":"membership",...}` or
+    // `{"kind":"nothing"}`. See `session.receive` in `rotelyx-mobile`, which
+    // parses the core's JSON before handing it over.
+    //
+    // This read `result is String ? result : null`, from when the core returned
+    // the plaintext or nothing at all. Against the object that test is false
+    // for every message, so every message became null, and null means "a commit,
+    // the group moved" to the caller. Every inbound message on Android was
+    // dropped in silence. Nothing showed it: the conversation established, the
+    // safety numbers matched, outbound messages arrived at the other end, and
+    // this side simply never displayed anything it was sent.
+    if (result is Map) {
+      final kind = result['kind'];
+      if (kind == 'message') {
+        final text = result['text'];
+        return text is String ? text : null;
+      }
+      // Membership and nothing both mean the group moved rather than that
+      // somebody said something, which is what null means to the caller.
+      return null;
+    }
+
+    // The older contract, in case an older bridge is loaded.
     return result is String ? result : null;
   }
 

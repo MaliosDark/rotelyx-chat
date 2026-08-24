@@ -229,6 +229,8 @@ class RotelyxService {
         _theyChangedPicture(signal.picture);
       case SignalKind.retract:
         _theyWithdrew(signal.retractedAt);
+      case SignalKind.edited:
+        _theyEdited(signal.editedAt, signal.editedText);
       case SignalKind.call:
         // Ringing, answering, hanging up. Passed straight out rather than
         // acted on here: whether a call may start is a question about what is
@@ -355,6 +357,43 @@ class RotelyxService {
       messages.removeWhere((m) => !m.mine && m.at.isAtSameMomentAs(at));
       return messages.length != before;
     });
+  }
+
+  /// Replace what one of their messages said.
+  ///
+  /// Theirs only. An edit naming one of ours would let anybody in a group
+  /// rewrite anybody's words, which is worse than deleting them.
+  void _theyEdited(DateTime at, String text) {
+    if (text.trim().isEmpty) return;
+
+    _rewrite((messages) {
+      for (var i = 0; i < messages.length; i++) {
+        final m = messages[i];
+        if (m.mine || !m.at.isAtSameMomentAs(at)) continue;
+        messages[i] = m.copyWith(text: text, edited: true);
+        return true;
+      }
+      return false;
+    });
+  }
+
+  /// Change one of ours, on both sides.
+  ///
+  /// The old text is replaced rather than kept. See `Signal.edited`.
+  bool edit(StoredMessage message, String text) {
+    if (!message.mine || text.trim().isEmpty) return false;
+    if (!signal(Signal.edited(message.at, text))) return false;
+
+    _rewrite((messages) {
+      for (var i = 0; i < messages.length; i++) {
+        final m = messages[i];
+        if (!m.mine || !m.at.isAtSameMomentAs(message.at)) continue;
+        messages[i] = m.copyWith(text: text, edited: true);
+        return true;
+      }
+      return false;
+    });
+    return true;
   }
 
   /// Withdraw one of ours, from both sides.

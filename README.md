@@ -37,7 +37,7 @@ sealed into padded envelopes and left in a blind mailbox.
 | Client source | about 15,900 lines under `lib/`, 72 files |
 | Runtime dependencies | 4: `web`, `ffi`, `get_storage`, `qr_flutter` |
 | Targets | web and Android build here; iOS, Linux, macOS and Windows are scaffolded |
-| Tests | 141, all passing |
+| Tests | 146, all passing |
 | Outbound addresses | 2, both ours |
 | Third-party services | none |
 
@@ -48,8 +48,9 @@ recipient reads them; encrypted local history; attachments up to 5 MB; unread
 counts; a read tick that is never inferred; contact names, pictures, pinning and
 muting; notifications with the sender's name and picture and no push service
 involved; a PIN for the application and a separate one that seals a single
-conversation; withdrawing a message from both sides; copying and exporting a
-conversation; safety numbers; light and dark themes.
+conversation, with a fingerprint as a shortcut to typing it; editing,
+withdrawing and forwarding a message; copying and exporting a conversation;
+safety numbers; light and dark themes.
 
 **Calls:** built and relayed, keyed from the same MLS group as the messages.
 Each part is tested; they have not yet been run together on two phones.
@@ -273,8 +274,14 @@ permission was granted on both and that the relay is the production one.
 
 ## Not built yet
 
-- **Calls in a browser.** QUIC datagrams are native only, so a tab cannot carry
-  one. Text still works there; a call does not.
+- **Calls in a browser.** Possible now and not built. WebTransport reached
+  Baseline in March 2026, Safari included, and it carries unreliable datagrams:
+  encrypted, congestion-controlled UDP. It is client to server only, with no
+  browser-to-browser path, which for Rotelyx changes nothing because a call is
+  relayed by construction anyway. Three pieces: the relay needs a WebTransport
+  listener beside its QUIC one, `rotelyx-wasm` needs the codec it does not
+  currently carry, and the audio has to run in an `AudioWorklet`, which
+  `wasm-pack` has no target for and which has to be instantiated by hand.
 - **iOS, built but never compiled.** The camera, the file picker and the audio
   devices are written in `ios/Runner/` and added to the Xcode target, in the
   same shapes Android answers on, so nothing above them knows which platform
@@ -284,14 +291,16 @@ permission was granted on both and that the relay is the production one.
   mailbox frames, and a notification service extension. What remains is the
   mailbox sending the push and the Xcode steps in `docs/PUSH.md`. Android needs
   none of it and uses none of it.
-- **Direct peer to peer in a browser.** `rotelyx-wasm` is the message layer.
-  Transport is native only, so every browser message goes through the mailbox.
+- **Direct peer to peer in a browser.** Not a gap that can be closed. No
+  browser API offers a QUIC connection to another browser: WebTransport is
+  client to server by design, having dropped the whole NAT traversal apparatus
+  on purpose. Browser messages go through the mailbox, which is where they were
+  always going.
 - **A desktop window.** The four platform folders exist and the native engine
   builds for them. A Linux build needs `ninja-build`, `clang`, `libgtk-3-dev`
   and `pkg-config`; Windows needs Visual Studio's C++ workload; macOS needs
   Xcode. The layout has also never been drawn for a large screen beyond what
   the existing breakpoint does.
-- **Editing a message, forwarding one, and biometric unlock.**
 
 ## Running it
 

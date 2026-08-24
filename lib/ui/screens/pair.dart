@@ -125,10 +125,23 @@ class _PairScreenState extends State<PairScreen> {
     super.dispose();
   }
 
+  /// The record this pairing created, so it is created once.
+  ///
+  /// `joined` is not a moment, it is a state, and the stream says so more than
+  /// once: again when the post-quantum commit lands, again on every membership
+  /// change, again whenever delivery moves. Without this guard each of those
+  /// made another conversation with another id, the newest one took the
+  /// messages, and the ones before it sat in the list empty forever. One scan
+  /// produced two entries, which is exactly what it looked like.
+  String? _persisted;
+
   /// Create the conversation record the moment the group exists, so a crash a
   /// second later still leaves something to reopen.
   void _persist() {
+    if (_persisted != null) return;
+
     final id = DateTime.now().microsecondsSinceEpoch.toString();
+    _persisted = id;
 
     // The other side's name, which the handshake carried and nothing was
     // reading. This used to be the meeting phrase, which is wrong twice over: a

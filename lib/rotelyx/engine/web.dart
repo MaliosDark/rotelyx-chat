@@ -5,6 +5,7 @@
 library;
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:js_interop';
 
 import 'package:web/web.dart' as web;
@@ -189,7 +190,33 @@ class _WebSession implements RotelyxSession {
   @override
   String send(String text) => inner.send(text);
   @override
-  String? receive(String messageB64) => inner.receive(messageB64);
+  String? receive(String messageB64) {
+    // The core answers with JSON saying which of three things arrived, not with
+    // the plaintext. Passed straight through, a message reached the screen as
+    // `{"kind":"message","text":"hola"}`, and a rekey reached it as
+    // `{"kind":"nothing"}`. The native engine had the mirror image of this bug
+    // and dropped everything instead; both come from the same change to the
+    // core that neither binding followed.
+    final answer = inner.receive(messageB64);
+    if (answer == null) return null;
+
+    final Object? decoded;
+    try {
+      decoded = jsonDecode(answer);
+    } on FormatException {
+      // An older bridge, which returned the plaintext itself.
+      return answer;
+    }
+    if (decoded is! Map) return answer;
+
+    if (decoded['kind'] == 'message') {
+      final text = decoded['text'];
+      return text is String ? text : null;
+    }
+    // Membership and nothing both mean the group moved rather than that
+    // somebody said something, which is what null means to the caller.
+    return null;
+  }
 
   // The bridge supplies the time bucket for all of these. See `api.dart`.
   @override

@@ -12,8 +12,8 @@
          Two more will be needed and are deliberately absent until the features
          that use them exist, because a permission list is something users read:
 
-           CAMERA         for scanning a QR code, once lib/qr/camera_native.dart
-                          is more than a stub
+           CAMERA         for scanning a QR code, asked for when the scanner
+                            opens and not before
            RECORD_AUDIO   for calls, together with MODIFY_AUDIO_SETTINGS
 
          See docs/NATIVE.md. -->

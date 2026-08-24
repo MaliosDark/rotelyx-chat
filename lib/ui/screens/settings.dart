@@ -7,6 +7,7 @@ library;
 
 import 'package:flutter/material.dart';
 
+import '../../platform/biometrics.dart';
 import '../../rotelyx/alerts.dart';
 import '../../rotelyx/lock.dart';
 import '../../rotelyx/push.dart';
@@ -49,11 +50,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
   /// Whether the background connection is being held.
   bool _connected = false;
 
+  /// Whether this device has a fingerprint enrolled.
+  bool _canBiometric = false;
+
   @override
   void initState() {
     super.initState();
     alerts.showContentOnLockScreen = store.showPreviews;
     _connected = store.stayConnected;
+    biometricsAvailable().then((can) {
+      if (mounted) setState(() => _canBiometric = can);
+    });
     alerts.permitted().then((yes) {
       if (mounted) setState(() => _notify = yes);
     });
@@ -198,6 +205,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             : 'Off. Anyone holding this phone can open it',
                         style: Type.small.copyWith(color: t.faint)),
                   ),
+                  if (lock.isSet && _canBiometric)
+                    SwitchListTile(
+                      value: store.useBiometric,
+                      onChanged: (want) =>
+                          setState(() => store.useBiometric = want),
+                      activeColor: Tone.accent,
+                      contentPadding: EdgeInsets.zero,
+                      secondary: Icon(Icons.fingerprint,
+                          size: 20,
+                          color: store.useBiometric ? Tone.accent : t.muted),
+                      title: Text('Use your fingerprint instead of typing it',
+                          style: Type.body.copyWith(color: t.text)),
+                      subtitle: Text(
+                          'A shortcut to the PIN, not a replacement for it',
+                          style: Type.small.copyWith(color: t.faint)),
+                    ),
                   if (lock.isSet)
                     TextButton(
                       onPressed: () async {

@@ -72,6 +72,12 @@ class CallLoop {
   var _busy = false;
   var _stopped = false;
 
+  /// Whether a frame has been asked for and has not arrived yet.
+  ///
+  /// One at a time, so the encoder is fed in the order the microphone filled
+  /// them. See `_outbound`.
+  var _takingFrame = false;
+
   var _sent = 0;
   var _received = 0;
   var _dropped = 0;
@@ -111,10 +117,28 @@ class CallLoop {
   }
 
   void _outbound() {
-    // Unawaited on purpose: see the class comment. The frame arrives on a later
-    // tick if it is not ready now, which is what the queue on the device side
-    // is for.
-    unawaited(takeFrame().then((pcm) {
+    // One request in flight at a time.
+    //
+    // A platform channel does not promise its replies arrive in the order they
+    // were asked for, and this fired a new request every twenty milliseconds
+    // without waiting for the last. So frames reached the encoder shuffled, and
+    // an encoder with a forty millisecond window over a twenty millisecond hop
+    // builds every frame on the one before it: the wrong previous frame makes
+    // the overlap wrong.
+    //
+    // What that sounds like is a robotic voice rather than silence or
+    // distortion, and it survives every check there is. The frames are whole,
+    // they authenticate, they decode, and the far side counts every one of
+    // them. Measured on a pure tone it came back at 0.25 correlation where a
+    // tone is 0.99: each twenty millisecond piece intact and none of them in
+    // the right place.
+    //
+    // `_busy` did not prevent this. It is set and cleared inside one
+    // synchronous tick, so it guards the tick and not the request.
+    if (_takingFrame) return;
+    _takingFrame = true;
+
+    unawaited(takeFrame().whenComplete(() => _takingFrame = false).then((pcm) {
       if (pcm == null || _stopped) return;
 
       // Muted means not encoding at all. A muted microphone still produces

@@ -14,7 +14,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../platform/biometrics.dart';
 import '../../rotelyx/lock.dart';
+import '../../rotelyx/rotelyx_store.dart';
 import '../theme.dart';
 import '../widgets.dart';
 import '../brand.dart';
@@ -34,9 +36,22 @@ class _PinScreenState extends State<PinScreen> {
   String? _problem;
   Timer? _tick;
 
+  bool _offerBiometric = false;
+
   @override
   void initState() {
     super.initState();
+
+    // Offered as soon as the screen appears, because somebody who switched it
+    // on wants their thumb to be the whole interaction rather than a second
+    // step after looking at a keypad.
+    if (store.useBiometric) {
+      biometricsAvailable().then((can) {
+        if (!mounted || !can) return;
+        setState(() => _offerBiometric = true);
+        _tryBiometric();
+      });
+    }
     // While locked out, the countdown has to move on its own. Without this it
     // says the same number until somebody presses a key, which reads as frozen.
     _tick = Timer.periodic(const Duration(seconds: 1), (_) {
@@ -48,6 +63,11 @@ class _PinScreenState extends State<PinScreen> {
   void dispose() {
     _tick?.cancel();
     super.dispose();
+  }
+
+  Future<void> _tryBiometric() async {
+    if (lock.lockedOutFor > 0) return;
+    if (await askBiometric() && mounted) widget.onOpened();
   }
 
   void _press(String digit) {
@@ -140,6 +160,15 @@ class _PinScreenState extends State<PinScreen> {
                   opacity: waiting > 0 ? 0.35 : 1,
                   child: _Keypad(onDigit: _press, onBack: _back),
                 ),
+                if (_offerBiometric && waiting == 0) ...[
+                  const SizedBox(height: 6),
+                  TextButton.icon(
+                    onPressed: _tryBiometric,
+                    icon: Icon(Icons.fingerprint, size: 20, color: t.muted),
+                    label: Text('Use your fingerprint',
+                        style: Type.body.copyWith(color: t.muted)),
+                  ),
+                ],
               ],
             ),
           ),

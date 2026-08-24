@@ -51,6 +51,7 @@ class StoredMessage {
     this.inMailbox = true,
     this.seen = false,
     this.seenBy = const [],
+    this.edited = false,
     this.reactions = const {},
     this.burnAt,
   });
@@ -75,6 +76,13 @@ class StoredMessage {
   /// In a group this means **everybody** in [seenBy] has said so, which is what
   /// a double tick is taken to mean. Anything less is [seenBy] on its own.
   final bool seen;
+
+  /// Whether this was changed after it was sent.
+  ///
+  /// Shown, always. The previous text is not kept anywhere, which is the point
+  /// of an edit here, so this mark is the only thing that says it happened, and
+  /// removing it would let somebody quietly rewrite what they said.
+  final bool edited;
 
   /// Who has said they read it, by the label they chose.
   ///
@@ -114,20 +122,23 @@ class StoredMessage {
   /// A copy with fields replaced. The class is immutable, so an update to a
   /// message is a new message in its place.
   StoredMessage copyWith({
+    String? text,
     bool? inMailbox,
     bool? seen,
     List<String>? seenBy,
+    bool? edited,
     Map<String, List<String>>? reactions,
     DateTime? burnAt,
   }) =>
       StoredMessage(
-        text: text,
+        text: text ?? this.text,
         mine: mine,
         at: at,
         author: author,
         inMailbox: inMailbox ?? this.inMailbox,
         seen: seen ?? this.seen,
         seenBy: seenBy ?? this.seenBy,
+        edited: edited ?? this.edited,
         reactions: reactions ?? this.reactions,
         burnAt: burnAt ?? this.burnAt,
       );
@@ -140,6 +151,7 @@ class StoredMessage {
         if (mine && !inMailbox) 'p': true,
         if (seen) 's': true,
         if (seenBy.isNotEmpty) 'sb': seenBy,
+        if (edited) 'ed': true,
         if (reactions.isNotEmpty) 'r': reactions,
         if (burnAt != null) 'b': burnAt!.millisecondsSinceEpoch,
       };
@@ -152,6 +164,7 @@ class StoredMessage {
         inMailbox: j['p'] != true,
         seen: j['s'] == true,
         seenBy: (j['sb'] as List? ?? const []).cast<String>(),
+        edited: j['ed'] == true,
         reactions: (j['r'] as Map?)?.map((k, v) =>
                 MapEntry('$k', (v as List).map((e) => '$e').toList())) ??
             const {},
@@ -271,6 +284,7 @@ class RotelyxStore {
   static const _kConnected = 'rotelyx.connected';
   static const _kWakeSecret = 'rotelyx.wake-secret';
   static const _kTransport = 'rotelyx.transport-identity';
+  static const _kBiometric = 'rotelyx.biometric';
   static const _kIndex = 'rotelyx.index';
   static String _kSession(String id) => 'rotelyx.session.$id';
   static String _kLog(String id) => 'rotelyx.log.$id';
@@ -340,6 +354,15 @@ class RotelyxStore {
       _box.write(key, value);
     }
   }
+
+  /// Whether a fingerprint may stand in for the application PIN.
+  ///
+  /// Off by default, and outside the vault like the other settings, because it
+  /// is consulted on the PIN screen itself. It holds no secret: it is one
+  /// boolean saying whether to offer the prompt.
+  bool get useBiometric => _box.read(_kBiometric) as bool? ?? false;
+
+  set useBiometric(bool value) => _box.write(_kBiometric, value);
 
   /// This device's long-term name on the call transport.
   ///

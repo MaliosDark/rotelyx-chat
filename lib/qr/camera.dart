@@ -5,9 +5,10 @@
 /// platform channel, and the frames have to arrive as a byte buffer rather than
 /// as a video element for the same decoder to read them.
 ///
-/// That work is real and is not done. The scanner screen has always had a typed
-/// fallback beside the viewfinder for exactly this class of reason, so on a
-/// phone the code can still be entered while the camera cannot yet be opened.
+/// That work is done: `camera_native.dart` drives CameraX through a platform
+/// channel and hands the same decoder a luma plane. The scanner screen still
+/// keeps a typed fallback beside the viewfinder, because a camera can always be
+/// refused, held by another application, or too dark to read a code in.
 library;
 
 export 'camera_native.dart' if (dart.library.js_interop) 'camera_web.dart';

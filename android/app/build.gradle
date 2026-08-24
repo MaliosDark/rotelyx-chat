@@ -156,5 +156,12 @@ dependencies {
     // defines the same interface.
     compileOnly 'com.google.guava:guava:28.1-android'
     implementation 'androidx.concurrent:concurrent-futures:1.1.0'
+
+    // A fingerprint instead of typing the PIN. See Biometrics.kt, which is
+    // clear that it is a shortcut to the PIN rather than a replacement for it.
+    //
+    // `BiometricPrompt` needs a FragmentActivity, which is why MainActivity
+    // extends FlutterFragmentActivity below rather than FlutterActivity.
+    implementation 'androidx.biometric:biometric:1.1.0'
 }
 

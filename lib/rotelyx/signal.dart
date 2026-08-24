@@ -51,6 +51,9 @@ enum SignalKind {
 
   /// A message was withdrawn by whoever sent it.
   retract,
+
+  /// A message was changed by whoever sent it.
+  edited,
 }
 
 /// What a [SignalKind.call] is saying.
@@ -195,6 +198,35 @@ class Signal {
   /// Which message, by its author's timestamp.
   DateTime get retractedAt => DateTime.fromMillisecondsSinceEpoch(
       int.tryParse(fields.isEmpty ? '' : fields.first) ?? 0);
+
+  // --- edited ------------------------------------------------------------------
+
+  /// Replace what a message said.
+  ///
+  /// # Why the old text is not kept
+  ///
+  /// Other messengers keep an edit history and show "edited" with the previous
+  /// version behind a tap. That is a reasonable choice for a product whose
+  /// argument is accountability. It is the wrong one here: it means a message
+  /// somebody deliberately changed is still on both devices in its first form,
+  /// and the person who edited it believes it is not.
+  ///
+  /// So the old text is replaced rather than appended to. The bubble is marked
+  /// as edited, because hiding that would let somebody quietly rewrite what
+  /// they said, and the mark is the whole of what is kept.
+  ///
+  /// Only the author may edit, checked on receipt rather than trusted.
+  factory Signal.edited(DateTime at, String text) => Signal(
+        kind: SignalKind.edited,
+        fields: [at.millisecondsSinceEpoch.toString(), text],
+      );
+
+  DateTime get editedAt => DateTime.fromMillisecondsSinceEpoch(
+      int.tryParse(fields.isEmpty ? '' : fields.first) ?? 0);
+
+  /// The replacement. Anything after the second separator, so a body that
+  /// contains one is not truncated.
+  String get editedText => fields.length > 1 ? fields.sublist(1).join(_sep) : '';
 
   // --- call -------------------------------------------------------------------
 

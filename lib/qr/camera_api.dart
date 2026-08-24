@@ -5,9 +5,11 @@
 /// enum whichever platform it is running on.
 library;
 
+import 'package:flutter/foundation.dart' show kIsWeb;
+
 /// Why the camera could not be opened, in terms a user can act on.
 enum CameraProblem {
-  /// The user said no, or said no once before and the browser remembers.
+  /// The user said no, or said no once before and the platform remembers.
   refused,
 
   /// The device has no camera, or another application holds it.
@@ -31,9 +33,11 @@ class CameraDenied implements Exception {
   final String detail;
 
   String get message => switch (problem) {
-        CameraProblem.refused =>
-          'The browser is not allowing the camera. Open the padlock beside the '
-              'address and set camera access to allow, then try again.',
+        CameraProblem.refused => kIsWeb
+            ? 'The browser is not allowing the camera. Open the padlock beside '
+                'the address and set camera access to allow, then try again.'
+            : 'Rotelyx has not been given the camera. Grant it in the system '
+                'settings for Rotelyx, under permissions, then try again.',
         CameraProblem.missing =>
           'No camera is available. Another program may be holding it.',
         CameraProblem.insecure =>

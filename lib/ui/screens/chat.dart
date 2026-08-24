@@ -459,6 +459,26 @@ class _ChatScreenState extends State<ChatScreen> {
                   );
                 },
               ),
+            if (message.mine && body.isNotEmpty)
+              ListTile(
+                leading: Icon(Icons.edit_outlined, size: 20, color: t.muted),
+                title: Text('Edit', style: Type.body.copyWith(color: t.text)),
+                subtitle: Text('The old text is not kept anywhere',
+                    style: Type.small.copyWith(color: t.faint)),
+                onTap: () {
+                  Navigator.of(sheet).pop();
+                  unawaited(_edit(message, body));
+                },
+              ),
+            if (body.isNotEmpty)
+              ListTile(
+                leading: Icon(Icons.forward_outlined, size: 20, color: t.muted),
+                title: Text('Forward', style: Type.body.copyWith(color: t.text)),
+                onTap: () {
+                  Navigator.of(sheet).pop();
+                  unawaited(_forward(body));
+                },
+              ),
             if (message.mine)
               ListTile(
                 leading: const Icon(Icons.delete_outline,
@@ -478,6 +498,164 @@ class _ChatScreenState extends State<ChatScreen> {
         ),
       ),
     );
+  }
+
+  /// Change one of ours, on both sides.
+  Future<void> _edit(StoredMessage message, String body) async {
+    final t = RotelyxThemeScope.of(context);
+    final field = TextEditingController(text: body);
+
+    final changed = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: t.surface,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (sheet) => SafeArea(
+        child: Padding(
+          padding: EdgeInsets.only(
+            left: Metrics.gap,
+            right: Metrics.gap,
+            top: Metrics.gap,
+            bottom: MediaQuery.of(sheet).viewInsets.bottom + Metrics.gap,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Edit', style: Type.title.copyWith(color: t.text)),
+              const SizedBox(height: 6),
+              Text(
+                'The old text is replaced rather than kept, so nothing holds '
+                'what you said before. The bubble is marked as edited.',
+                style: Type.small.copyWith(color: t.faint),
+              ),
+              const SizedBox(height: Metrics.gap),
+              TextField(
+                controller: field,
+                autofocus: true,
+                maxLines: null,
+                style: Type.body.copyWith(color: t.text),
+                decoration: InputDecoration(
+                  filled: true,
+                  fillColor: t.raised,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(Metrics.radius),
+                    borderSide: BorderSide.none,
+                  ),
+                  contentPadding: const EdgeInsets.all(14),
+                ),
+              ),
+              const SizedBox(height: Metrics.gap),
+              RxButton('Save',
+                  onTap: () => Navigator.of(sheet).pop(field.text.trim())),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    field.dispose();
+    if (changed == null || changed.isEmpty || changed == body) return;
+    if (!rotelyx.edit(message, changed)) return;
+
+    if (!mounted) return;
+    setState(() => _conversation = store.load(widget.conversationId));
+    widget.onChanged?.call();
+  }
+
+  /// Send this text to another conversation.
+  ///
+  /// Sent rather than relayed: the message is composed fresh in the other
+  /// conversation, under that conversation's own keys. Nothing about where it
+  /// came from travels with it, which is the point. A forward that carried its
+  /// origin would tell the recipient who else you talk to.
+  Future<void> _forward(String body) async {
+    final t = RotelyxThemeScope.of(context);
+    final elsewhere = store
+        .loadAll()
+        .where((c) => c.id != widget.conversationId)
+        .toList();
+
+    if (elsewhere.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('There is nowhere else to send it')),
+      );
+      return;
+    }
+
+    final chosen = await showModalBottomSheet<StoredConversation>(
+      context: context,
+      backgroundColor: t.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (sheet) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(Metrics.gap),
+              child: Text('Forward to',
+                  style: Type.title.copyWith(color: t.text)),
+            ),
+            Flexible(
+              child: ListView(
+                shrinkWrap: true,
+                children: [
+                  for (final c in elsewhere)
+                    ListTile(
+                      leading: RxAvatar(c.displayTitle, size: 34),
+                      title: Text(c.displayTitle,
+                          style: Type.body.copyWith(color: t.text)),
+                      // A locked conversation is not offered. Sending into one
+                      // would mean opening it, and forwarding is not a reason
+                      // to take a lock off.
+                      enabled: !store.isLocked(c.id),
+                      subtitle: store.isLocked(c.id)
+                          ? Text('Locked',
+                              style: Type.small.copyWith(color: t.faint))
+                          : null,
+                      onTap: () => Navigator.of(sheet).pop(c),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+
+    if (chosen == null || !mounted) return;
+
+    // The other conversation has to be the live session to send into it.
+    if (rotelyx.conversationId != chosen.id) {
+      final resumed = await rotelyx.resume(chosen.id);
+      if (!resumed) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('${chosen.displayTitle} could not be reopened')),
+        );
+        return;
+      }
+    }
+
+    final sent = rotelyx.send(body);
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(sent
+            ? 'Sent to ${chosen.displayTitle}'
+            : 'That conversation is not connected')));
+
+    // Back to where we were, or the next message typed here goes there.
+    if (rotelyx.conversationId != widget.conversationId) {
+      await rotelyx.resume(widget.conversationId);
+    }
   }
 
   /// Withdraw one of ours from both sides.
@@ -1100,6 +1278,15 @@ class _Bubble extends StatelessWidget {
                             color:
                                 (mine ? t.mineText : t.faint).withOpacity(0.65)),
                       ),
+                      if (message.edited) ...[
+                        const SizedBox(width: 4),
+                        Text('edited',
+                            style: Type.small.copyWith(
+                                fontSize: 9,
+                                fontStyle: FontStyle.italic,
+                                color: (mine ? t.mineText : t.faint)
+                                    .withOpacity(0.6))),
+                      ],
                       if (message.burnAt != null ||
                           Ephemeral.isEphemeral(message.text)) ...[
                         const SizedBox(width: 5),
