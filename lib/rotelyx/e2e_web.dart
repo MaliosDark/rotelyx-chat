@@ -42,11 +42,32 @@ const e2eEnabled = bool.fromEnvironment('e2e');
 @JS('window')
 external JSObject get _window;
 
+/// Whether this page is somewhere a driver could plausibly be running.
+///
+/// The compile-time flag is one flag on one command line, and what it opens is
+/// total: anything running in the page can drive the account, read the inbox
+/// and pair with a stranger. An audit called the containment real and the blast
+/// radius total, which is the shape that wants a second condition rather than
+/// more care.
+///
+/// So the hook also refuses to install anywhere but a loopback origin. A build
+/// that shipped with the flag by mistake still publishes nothing on a real
+/// host, and the driver, which runs against a local server, is unaffected.
+bool get _onADriverOrigin {
+  final host = _location.getProperty('hostname'.toJS)?.toString() ?? '';
+  return host == 'localhost' || host == '127.0.0.1' || host == '[::1]';
+}
+
+@JS('location')
+external JSObject get _location;
+
 /// Publish the service as `window.__rotelyx`.
 ///
-/// Does nothing unless the build was given `--dart-define=e2e=true`.
+/// Does nothing unless the build was given `--dart-define=e2e=true` **and** the
+/// page is on a loopback origin.
 void installE2eHook() {
   if (!e2eEnabled) return;
+  if (!_onADriverOrigin) return;
 
   final received = <String>[];
   rotelyx.messages.listen((m) {

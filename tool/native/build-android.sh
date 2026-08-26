@@ -48,8 +48,17 @@ SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/home/serafin/Dinter/_devtools/android/
 # The NDK names its compilers after it, so the two cannot drift silently.
 API=24
 
-PROFILE=release
-CARGO_FLAGS=(--release)
+# The `mobile` profile, not `release`.
+#
+# They are the same build except that `mobile` unwinds on panic. `release`
+# aborts, which is right for a program we own and wrong for a library loaded
+# into somebody else's process: the FFI entry point wraps the engine in
+# `catch_unwind` and promises that a malformed input crashes a call rather than
+# the application, and under `panic = "abort"` there was nothing to catch and
+# the whole application went. An audit found the guard inert in every shipping
+# build.
+PROFILE=mobile
+CARGO_FLAGS=(--profile mobile)
 if [ "${1:-}" = "--debug" ]; then
   PROFILE=debug
   CARGO_FLAGS=()

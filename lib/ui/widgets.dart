@@ -463,3 +463,81 @@ class _RxEnterState extends State<RxEnter> with SingleTickerProviderStateMixin {
     );
   }
 }
+
+/// Say what a permission is for, before the system asks for it.
+///
+/// # Why this is a sheet and not a line in settings
+///
+/// The system dialog is two words and a package name. It cannot say that the
+/// camera is only for reading a code, that no photograph is kept, or that
+/// refusing it leaves two other ways to start a conversation. Those are the
+/// things that decide the answer, and they have to be on screen at the moment
+/// the question is asked rather than filed somewhere nobody visits.
+///
+/// It is also the only place they are worth saying. A list of permissions in
+/// settings is read by nobody who has not already granted them.
+///
+/// Returns false when the person declines here, and then nothing is asked at
+/// all: the system prompt on Android can only be refused once, so spending it
+/// on somebody who has not been told why is spending it badly.
+Future<bool> explainPermission(
+  BuildContext context, {
+  required IconData icon,
+  required String title,
+  required String body,
+  required String allow,
+}) async {
+  final t = RotelyxThemeScope.of(context);
+
+  final agreed = await showModalBottomSheet<bool>(
+    context: context,
+    backgroundColor: t.surface,
+    isScrollControlled: true,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(Metrics.radius)),
+    ),
+    builder: (sheet) => Padding(
+      padding: EdgeInsets.only(
+        left: Metrics.wide,
+        right: Metrics.wide,
+        top: Metrics.wide,
+        bottom: Metrics.wide + MediaQuery.of(sheet).viewPadding.bottom,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: Tone.accent.withOpacity(0.14),
+                  borderRadius: BorderRadius.circular(11),
+                ),
+                child: Icon(icon, size: 19, color: Tone.accent),
+              ),
+              const SizedBox(width: Metrics.pad),
+              Expanded(
+                child: Text(title, style: Type.title.copyWith(color: t.text)),
+              ),
+            ],
+          ),
+          const SizedBox(height: Metrics.pad),
+          Text(body, style: Type.body.copyWith(color: t.muted)),
+          const SizedBox(height: Metrics.wide),
+          RxButton(allow,
+              wide: true, onTap: () => Navigator.pop(sheet, true)),
+          const SizedBox(height: Metrics.gap),
+          RxButton('Not now',
+              weight: Weight.quiet,
+              wide: true,
+              onTap: () => Navigator.pop(sheet, false)),
+        ],
+      ),
+    ),
+  );
+
+  return agreed ?? false;
+}

@@ -79,6 +79,17 @@ abstract interface class RotelyxSession {
   String encapsulateTo(String hybridPublicKeyB64);
   void openPq(String ciphertextB64);
   String commitPq();
+
+  /// Move a conversation read back from storage to a fresh epoch.
+  ///
+  /// A file is a copy, and a copy that resumes sending is sending at
+  /// generations the other side has already spent: a receiver deletes each
+  /// generation's secret as it uses it, so those messages are refused and
+  /// nothing reports it. The engine marks a restored session and refuses to
+  /// send until this has run.
+  ///
+  /// Returns the commit, which has to be delivered before anything else.
+  String rekeyAfterRestore();
   List<String> beginGroupPq(List<String> hybridPublicKeys);
   void openGroupPq(String wrappedB64);
 

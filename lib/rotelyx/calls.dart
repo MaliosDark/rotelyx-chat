@@ -211,7 +211,10 @@ class Calls {
         return 'the connection did not arrive';
       }
 
-      final codec = openNativeCall(session);
+      // The identifier this call was rung with. Both ends hold it, because
+      // one side minted it and the other echoed it back, and it is what keeps
+      // this call's media keys off the previous call's nonces.
+      final codec = openNativeCall(session, call: _state.id);
       if (codec == null) {
         connection.close();
         hangUp(CallEnded.lost);

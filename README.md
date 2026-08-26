@@ -37,9 +37,17 @@ sealed into padded envelopes and left in a blind mailbox.
 | Client source | about 15,900 lines under `lib/`, 72 files |
 | Runtime dependencies | 4: `web`, `ffi`, `get_storage`, `qr_flutter` |
 | Targets | web and Android build here; iOS, Linux, macOS and Windows are scaffolded |
-| Tests | 146, all passing |
+| Tests | 186. 184 pass; the two that do not are the same fault, below |
 | Outbound addresses | 2, both ours |
 | Third-party services | none |
+
+**Broken, and it is the next thing to fix.** A conversation read back from
+storage refuses to send. The engine now requires `rekeyAfterRestore` before a
+restored session sends anything, because a session read off disk believes it is
+at a generation the group may already have spent, and the phone has no way to
+call it: `session.rekeyAfterRestore` is not one of the operations the C ABI
+exposes. Two tests fail on exactly this, `native_engine_test.dart` and
+`note_to_self_test.dart`. Ghost mode is unaffected, since nothing is read back.
 
 **Working:** pairing by QR, phrase or invitation, with the camera reading the
 code on a phone; one-to-one and group conversations; replies; reactions;
@@ -52,8 +60,9 @@ conversation, with a fingerprint as a shortcut to typing it; editing,
 withdrawing and forwarding a message; copying and exporting a conversation;
 safety numbers; light and dark themes.
 
-**Calls:** built and relayed, keyed from the same MLS group as the messages.
-Each part is tested; they have not yet been run together on two phones.
+**Calls:** working, keyed from the same MLS group as the messages and carried
+over our own relay with our own codec. A phone and a desktop client have called
+each other with audio crossing in both directions. Two phones have not.
 
 Pairing and messaging are verified end to end through the real client against the
 production mailbox, not through a stand-in: `tool/e2e/drive-dart.py`, 9 of 9.
@@ -244,9 +253,9 @@ on reload, which is the stronger position and an inconvenient default.
 `docs/PERSISTENCE.md` records what the protocol repository had to expose for
 this to be possible.
 
-## Built, and not yet proven on two phones
+## Calls, and what has actually run
 
-Calls are built end to end and each part is tested on its own:
+Each part is tested on its own:
 
 | | |
 |---|---|
@@ -254,8 +263,25 @@ Calls are built end to end and each part is tested on its own:
 | A datagram across a real relay, between two endpoints | `test/transport_test.dart` |
 | Ringing and answering, against signals that arrive out of order | `test/call_state_test.dart` |
 
-What has not happened is the three running together on two devices, which is
-where this kind of thing fails. To try it, you need two Android phones:
+And the three have now run together, between this application on a phone and
+the desktop client in the protocol repository, over the production relay. Audio
+crosses in both directions. Four faults stood in the way and none of them was
+visible from either end: a QUIC stream opened and never written to, an address
+published before the relay had registered the endpoint behind it, the two
+clients encoding different frame formats, and this side reading its capture
+buffer from the start of the platform channel's whole reply rather than from
+the start of the window onto it, which sent the reply's header out as audio.
+
+That last one is the reason `lib/platform/call_audio.dart` assembles samples
+from the bytes by hand rather than viewing them. It is also why nothing
+reported the problem: a frame that arrives and cannot be decoded is concealed
+rather than counted, which is right for packet loss and hides a corrupted
+payload completely. One call ran with eleven usable frames out of three
+thousand and every layer said it was healthy. `CallEnded` carries the concealed
+count now.
+
+Two phones calling each other has still not happened. To try it, you need two
+Android phones:
 
 ```bash
 tool/native/build-android.sh
@@ -271,6 +297,26 @@ second one.
 
 If it does not connect, the two things to check first are that the microphone
 permission was granted on both and that the relay is the production one.
+
+## Decided against, with the reason
+
+**Certificate pinning on the mailbox link.** An audit raised it and the impact
+it named is the right one: metadata only, because message content is sealed
+before it reaches a socket and the mailbox holds a tag and a padded blob either
+way. What pinning would add is that a certificate authority tricked into issuing
+for the mailbox host still learns nothing new.
+
+It is not built, and not because nobody got to it. **Anybody may run their own
+mailbox**, which is the property the whole design is built on, and a pinned
+certificate is a certificate we chose. Pinning the leaf breaks every installed
+client on renewal. Pinning the intermediate pins a public authority, which any
+attacker able to mis-issue can also obtain from. Pinning ours and refusing
+everyone else's turns "you can run your own" back into "you can run ours".
+
+What is enforced instead is in `mailboxes.dart`: the scheme must be `wss://`,
+`ws://` is refused in code with the reason attached, and the web build's content
+security policy names one host. A future version that ships a pin should ship it
+as something a self-hoster can set, not as something compiled in.
 
 ## Not built yet
 

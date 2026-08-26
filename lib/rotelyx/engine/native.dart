@@ -245,13 +245,15 @@ RotelyxEndpoint? openEndpoint({
 /// Throws [CallRefused] when the library has them and says no, because that
 /// carries a reason somebody can act on.
 RotelyxCall? openNativeCall(RotelyxSession session,
-    {int bytesPerFrame = callBytesPerFrame, bool recoverLoss = false}) {
+    {required String call,
+    int bytesPerFrame = callBytesPerFrame,
+    bool recoverLoss = false}) {
   final symbols = _Library.media;
   if (symbols == null) return null;
   if (session is! _NativeSession) return null;
 
   return NativeCall.open(symbols, session.handle,
-      bytesPerFrame: bytesPerFrame, recoverLoss: recoverLoss);
+      call: call, bytesPerFrame: bytesPerFrame, recoverLoss: recoverLoss);
 }
 
 class _NativeSession implements RotelyxSession {
@@ -308,6 +310,9 @@ class _NativeSession implements RotelyxSession {
 
   @override
   String commitPq() => _string(_op('session.commitPq'));
+
+  @override
+  String rekeyAfterRestore() => _string(_op('session.rekeyAfterRestore'));
 
   @override
   List<String> beginGroupPq(List<String> hybridPublicKeys) =>

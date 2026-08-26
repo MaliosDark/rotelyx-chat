@@ -35,6 +35,8 @@
 /// avoid at the other end.
 library;
 
+import 'lock.dart' show maxAttempts, lockoutSeconds;
+import 'rotelyx_store.dart';
 import 'rotelyx_wasm.dart';
 
 /// Conversation PINs given during this run, by conversation id.
@@ -54,19 +56,63 @@ String _input(String pin) => 'rotelyx.chat-lock.v1:$pin';
 /// Whether this conversation has been opened during this run.
 bool isOpen(String conversationId) => _opened.containsKey(conversationId);
 
+/// Where a conversation's failed attempts and its lockout are kept.
+///
+/// Per conversation, so guessing at one does not stop the others answering.
+String _failedKey(String id) => 'rotelyx.chat-lock.failed:$id';
+String _untilKey(String id) => 'rotelyx.chat-lock.until:$id';
+
+/// Seconds until this conversation will answer again, or zero.
+///
+/// A conversation lock had no lockout at all while the application PIN has one,
+/// so a conversation was the softer of the two doors into the same device and
+/// could be guessed at without limit. An audit found the asymmetry; this is the
+/// same rule applied to both.
+int lockedOutFor(String conversationId) {
+  final until = store.unsealed(_untilKey(conversationId));
+  if (until is! int) return 0;
+
+  final left = until - DateTime.now().millisecondsSinceEpoch;
+  if (left <= 0) {
+    store.writeUnsealed(_untilKey(conversationId), null);
+    store.writeUnsealed(_failedKey(conversationId), null);
+    return 0;
+  }
+  return (left / 1000).ceil();
+}
+
+/// How many wrong attempts remain before this conversation stops answering.
+int attemptsLeft(String conversationId) =>
+    maxAttempts - (store.unsealed(_failedKey(conversationId)) as int? ?? 0);
+
 /// Try a PIN. True when it opens the conversation.
 ///
 /// The check is opening the blob: a wrong key fails the AEAD tag rather than
 /// being compared against anything.
+///
+/// Returns false while this conversation is locked out, without trying, so a
+/// caller that ignores [lockedOutFor] still cannot spend attempts.
 bool open(String conversationId, String pin, String probe) {
+  if (lockedOutFor(conversationId) > 0) return false;
+
   WasmKey? key;
   try {
     key = RotelyxWasm.unlockKey(_input(pin), probe);
     RotelyxWasm.openBlob(key, probe);
     _opened[conversationId] = key;
+    store.writeUnsealed(_failedKey(conversationId), null);
+    store.writeUnsealed(_untilKey(conversationId), null);
     return true;
   } on Object {
     key?.dispose();
+
+    final failed =
+        (store.unsealed(_failedKey(conversationId)) as int? ?? 0) + 1;
+    store.writeUnsealed(_failedKey(conversationId), failed);
+    if (failed >= maxAttempts) {
+      store.writeUnsealed(_untilKey(conversationId),
+          DateTime.now().millisecondsSinceEpoch + lockoutSeconds * 1000);
+    }
     return false;
   }
 }

@@ -22,6 +22,11 @@ import 'package:rotelyx_chat/rotelyx/call_api.dart';
 import 'package:rotelyx_chat/rotelyx/engine/api.dart';
 import 'package:rotelyx_chat/rotelyx/engine/native.dart';
 
+/// The identifier a call is keyed with. Fixed here because these tests are not
+/// about the binding; `two calls in one epoch` below is the one that varies it.
+const aTestCall = 'a-test-call-0001';
+
+
 /// Two sessions in one group, which is what a call needs.
 ({RotelyxSession host, RotelyxSession guest}) paired(RotelyxEngine engine) {
   final host = engine.newSession('Ana');
@@ -69,7 +74,7 @@ void main() {
     // A library built before calls existed returns null rather than throwing,
     // and this asserts we are not silently on that path.
     final pair = paired(engine);
-    final call = openNativeCall(pair.host);
+    final call = openNativeCall(pair.host, call: aTestCall);
 
     expect(call, isNotNull,
         reason: 'this build of librotelyx_mobile has no call symbols');
@@ -78,7 +83,7 @@ void main() {
 
   test('a call opens on a paired session and closes', () {
     final pair = paired(engine);
-    final call = openNativeCall(pair.host)!;
+    final call = openNativeCall(pair.host, call: aTestCall)!;
 
     final stats = call.stats();
     expect(stats, isNotNull);
@@ -92,7 +97,7 @@ void main() {
 
   test('the first frame produces nothing, and the rest produce datagrams', () {
     final pair = paired(engine);
-    final call = openNativeCall(pair.host)!;
+    final call = openNativeCall(pair.host, call: aTestCall)!;
 
     final frames = tone(frames: 5);
     final produced = [for (final f in frames) call.capture(f)];
@@ -110,13 +115,64 @@ void main() {
     call.close();
   });
 
+  test('two calls in one epoch do not repeat a keystream', () {
+    // The regression test for the worst defect the media layer has had. The
+    // group secret and the sender index are fixed for an MLS epoch, ordinary
+    // messages do not advance an epoch, and the frame counter restarts at zero
+    // every time a call opens. So before the call identifier was bound in,
+    // hanging up and dialling again encrypted the second call's first frame
+    // under the first call's first key and nonce.
+    final pair = paired(engine);
+    final frames = tone(frames: 4).toList();
+
+    List<Uint8List> speak(String call) {
+      final c = openNativeCall(pair.host, call: call)!;
+      final out = <Uint8List>[];
+      for (final f in frames) {
+        final d = c.capture(f);
+        if (d != null) out.add(d);
+      }
+      c.close();
+      return out;
+    }
+
+    final first = speak('call-one-00000001');
+    final second = speak('call-two-00000002');
+
+    expect(first, isNotEmpty);
+    expect(first.length, second.length);
+
+    for (var i = 0; i < first.length; i++) {
+      expect(first[i], isNot(equals(second[i])),
+          reason: 'frame $i was identical across two calls, which is nonce reuse');
+    }
+
+    // And the second call's listener must make nothing of the first call's
+    // audio: a frame keyed for another call does not authenticate, so nothing
+    // it delivers ever reaches the speaker.
+    final listening = openNativeCall(pair.guest, call: 'call-two-00000002')!;
+    for (final d in first) {
+      listening.deliver(d);
+    }
+    final played = listening.playback();
+    expect(played, isNotNull);
+    expect(played!.every((sample) => sample == 0), isTrue,
+        reason: 'audio from another call reached the speaker');
+    listening.close();
+  });
+
+  test('a call refuses an identifier too short to key it', () {
+    final pair = paired(engine);
+    expect(() => openNativeCall(pair.host, call: 'tiny'), throwsA(anything));
+  });
+
   test('audio crosses from one member to the other', () {
     // The whole point, end to end: Ana speaks, the datagrams are handed to
     // Beto, and Beto has audio to play. The keys come from MLS, so this only
     // works because the two are in the same group.
     final pair = paired(engine);
-    final ana = openNativeCall(pair.host)!;
-    final beto = openNativeCall(pair.guest)!;
+    final ana = openNativeCall(pair.host, call: aTestCall)!;
+    final beto = openNativeCall(pair.guest, call: aTestCall)!;
 
     var delivered = 0;
     for (final frame in tone(frames: 20)) {
@@ -154,7 +210,7 @@ void main() {
     // and a length. A wrong length does not throw, it reads somebody else's
     // memory, and the symptom appears somewhere unrelated much later.
     final pair = paired(engine);
-    final call = openNativeCall(pair.host)!;
+    final call = openNativeCall(pair.host, call: aTestCall)!;
 
     expect(() => call.capture(Int16List(callFrameSamples - 1)),
         throwsA(isA<ArgumentError>()));
@@ -166,7 +222,7 @@ void main() {
 
   test('a datagram that is too large is dropped, not passed on', () {
     final pair = paired(engine);
-    final call = openNativeCall(pair.host)!;
+    final call = openNativeCall(pair.host, call: aTestCall)!;
 
     // Nothing should happen, and specifically nothing should be written past
     // the end of a buffer sized for the maximum.
@@ -187,7 +243,7 @@ void main() {
     // is no audio, which is the kind of decision that gets made differently in
     // two places.
     final pair = paired(engine);
-    final call = openNativeCall(pair.host)!;
+    final call = openNativeCall(pair.host, call: aTestCall)!;
 
     final pcm = call.playback();
     expect(pcm, isNotNull);
@@ -199,7 +255,7 @@ void main() {
 
   test('a closed call answers nothing rather than crashing', () {
     final pair = paired(engine);
-    final call = openNativeCall(pair.host)!;
+    final call = openNativeCall(pair.host, call: aTestCall)!;
     call.close();
 
     expect(call.capture(Int16List(callFrameSamples)), isNull);

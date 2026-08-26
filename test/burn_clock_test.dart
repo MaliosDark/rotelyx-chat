@@ -110,4 +110,47 @@ void main() {
     expect(started.messages[0].burnAt, isNotNull);
     expect(started.acknowledge, isEmpty);
   });
+
+  test('a note to yourself burns, because you are the one reading it', () {
+    // The ordinary rule gives the wrong answer here. A message of ours starts
+    // expiring when they read it, and in a conversation with yourself there is
+    // no they: both members are this device. Without the exception a note set
+    // to burn sits with a dash where the countdown should be, forever, which
+    // is indistinguishable from the feature not working.
+    final messages = [
+      StoredMessage(
+        text: Ephemeral.wrap(seconds: 10, body: 'a note to myself').encode(),
+        mine: true,
+        at: DateTime.now(),
+      ),
+    ];
+
+    final ordinary = onRead(messages);
+    expect(ordinary.changed, isFalse,
+        reason: 'in a normal conversation our own message waits for them');
+
+    final self = onRead(messages, ownMessagesToo: true);
+    expect(self.changed, isTrue);
+    expect(self.messages.first.burnAt, isNotNull);
+  });
+
+  test('and the exception does not leak into an ordinary conversation', () {
+    // The flag is the whole risk: switched on somewhere it does not belong, it
+    // would start every sender's clock the moment they sent, which is the
+    // property this design exists to avoid.
+    final theirs = StoredMessage(
+      text: Ephemeral.wrap(seconds: 10, body: 'theirs').encode(),
+      mine: false,
+      at: DateTime.now(),
+    );
+    final mine = StoredMessage(
+      text: Ephemeral.wrap(seconds: 10, body: 'mine').encode(),
+      mine: true,
+      at: DateTime.now(),
+    );
+
+    final read = onRead([theirs, mine]);
+    expect(read.messages[0].burnAt, isNotNull, reason: 'theirs starts');
+    expect(read.messages[1].burnAt, isNull, reason: 'ours waits for them');
+  });
 }

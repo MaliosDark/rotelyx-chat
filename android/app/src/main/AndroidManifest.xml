@@ -95,6 +95,29 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+
+            <!--
+                Invitation links.
+
+                `autoVerify` makes this an App Link rather than a plain deep
+                link: Android fetches https://rotelyx.com/.well-known/assetlinks.json
+                once at install, and from then on a tap opens the application
+                directly with no browser and no request to the site. Somebody
+                without the application installed reaches the page instead,
+                which is who the page is for.
+
+                The invitation is in the fragment, and a fragment is never sent
+                to a server. So the link is safe to send through anything: the
+                host it names cannot read what it carries.
+            -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="https"
+                      android:host="rotelyx.com"
+                      android:pathPrefix="/i"/>
+            </intent-filter>
         </activity>
         <service
             android:name=".ConnectionService"

@@ -47,6 +47,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../rotelyx/meeting_code.dart';
+import '../../platform/share.dart';
+import '../../rotelyx/invite_link.dart';
+import '../../rotelyx/mailboxes.dart';
 import '../../rotelyx/rotelyx_service.dart';
 import '../../rotelyx/rotelyx_store.dart';
 import '../../rotelyx/rotelyx_wasm.dart';
@@ -56,10 +59,23 @@ import '../widgets.dart';
 import 'scan.dart';
 
 class PairScreen extends StatefulWidget {
-  const PairScreen({super.key, required this.onDone, required this.onCancel});
+  const PairScreen({
+    super.key,
+    required this.onDone,
+    required this.onCancel,
+    this.arriving,
+  });
 
   final ValueChanged<String> onDone;
   final VoidCallback onCancel;
+
+  /// An invitation this screen was opened by, rather than one typed into it.
+  ///
+  /// Filled in and shown on the tab it belongs to, but not accepted on its own:
+  /// the name field above it is still blank, and accepting before somebody has
+  /// said who they are would introduce them as "anon" with no way to correct
+  /// it afterwards.
+  final String? arriving;
 
   @override
   State<PairScreen> createState() => _PairScreenState();
@@ -90,12 +106,43 @@ class _PairScreenState extends State<PairScreen> {
   /// The meeting code being shown as a QR, when this device is the one showing.
   String? _meeting;
 
+  /// The mailbox the pasted invitation names, or null.
+  ///
+  /// Null covers three cases that all mean the same thing to this screen: the
+  /// field is empty, what is in it is not an invitation yet, or it is one from
+  /// a build made before invitations carried a mailbox. None of them is worth
+  /// telling anybody about while they are still typing.
+  String? get _arrivingMailbox {
+    final code = codeFromLink(_code.text);
+    if (code == null || code.isEmpty) return null;
+    return mailboxFromCode(code);
+  }
+
   PairingRole? _role;
+
+  /// How long a new invitation will be good for.
+  ///
+  /// An hour by default, which is what one person sending one to another
+  /// person needs. Longer exists for a group: somebody opening a conversation
+  /// that people join over a week cannot hand out an invitation that dies at
+  /// lunchtime.
+  Duration _invitationLife = RotelyxService.invitationLifetime;
+
+
 
   @override
   void initState() {
     super.initState();
     _name.text = store.load('me')?.title ?? '';
+
+    // Opened by a link rather than by the button. Fill the field and show the
+    // tab it belongs to; accepting is still the person's to do, because the
+    // name above it is blank and going ahead now introduces them as "anon".
+    final arriving = widget.arriving;
+    if (arriving != null && arriving.isNotEmpty) {
+      _code.text = arriving;
+      _tab = 2;
+    }
 
     if (_fixtureQr) _meeting = newMeetingCode();
     if (_fixtureScan) {
@@ -214,6 +261,22 @@ class _PairScreenState extends State<PairScreen> {
       setState(() => _error = 'Choose a name others will see.');
       return;
     }
+
+    // What the camera is for, before the system asks. The system prompt says
+    // "Allow Rotelyx to take pictures" and nothing else, which is not the
+    // question a person is actually being asked here.
+    final ready = await explainPermission(
+      context,
+      icon: Icons.photo_camera_outlined,
+      title: 'Point the camera at their code',
+      body: 'The camera is used to read the code on their screen and nothing '
+          'else. No photograph is taken or kept, and nothing leaves this '
+          'phone: the picture is looked at for a code and thrown away.\n\n'
+          'If you would rather not, the other two ways of starting a '
+          'conversation need no camera.',
+      allow: 'Open the camera',
+    );
+    if (!ready || !mounted) return;
 
     final code = await ScanScreen.open(context);
     if (code == null || !mounted) return;
@@ -475,20 +538,50 @@ class _PairScreenState extends State<PairScreen> {
             style: Type.label.copyWith(color: t.text)),
         const SizedBox(height: 4),
         Text(
-            'Send it however you normally would. It is too long to be a QR '
-            'code, so it has to be copied and pasted.',
+            () {
+              final at = expiryOfCode(code);
+              if (at == null) {
+                return 'This one has no time limit. Whoever opens it first '
+                    'becomes the other side of the conversation.';
+              }
+              final left = at.difference(DateTime.now());
+              final when = left.inHours >= 24
+                  ? '${left.inDays} day${left.inDays == 1 ? '' : 's'}'
+                  : left.inHours >= 1
+                      ? '${left.inHours} hour${left.inHours == 1 ? '' : 's'}'
+                      : '${left.inMinutes} minutes';
+              return 'Good for $when. Whoever opens it first becomes the '
+                  'other side of the conversation.';
+            }(),
             textAlign: TextAlign.center,
             style: Type.small.copyWith(color: t.faint)),
         const SizedBox(height: Metrics.pad),
-        RxButton('Copy invitation',
-            weight: Weight.secondary,
-            icon: Icons.copy,
+        RxButton('Send invitation',
+            icon: Icons.ios_share,
             wide: true,
             onTap: () async {
-              await Clipboard.setData(ClipboardData(text: code));
+              final link = inviteLink(code);
+              final shared = await shareText(link,
+                  title: 'Invite someone to Rotelyx',
+                  subject: 'A private conversation');
+              if (shared || !mounted) return;
+
+              await Clipboard.setData(ClipboardData(text: link));
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Invitation copied')));
+                    const SnackBar(content: Text('Link copied')));
+              }
+            }),
+        const SizedBox(height: Metrics.gap),
+        RxButton('Copy the link',
+            weight: Weight.secondary,
+            icon: Icons.link,
+            wide: true,
+            onTap: () async {
+              await Clipboard.setData(ClipboardData(text: inviteLink(code)));
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Link copied')));
               }
             }),
       ]);
@@ -497,12 +590,62 @@ class _PairScreenState extends State<PairScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        Text('Good for', style: Type.small.copyWith(color: t.faint)),
+        const SizedBox(height: Metrics.gap),
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: [
+            for (final (life, label) in const [
+              (Duration(hours: 1), '1 hour'),
+              (Duration(hours: 24), '1 day'),
+              (Duration(days: 7), '1 week'),
+              (Duration.zero, 'No limit'),
+            ])
+              GestureDetector(
+                onTap: () => setState(() => _invitationLife = life),
+                child: AnimatedContainer(
+                  duration: Motion.press,
+                  curve: Motion.pressCurve,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 13, vertical: 7),
+                  decoration: BoxDecoration(
+                    color: life == _invitationLife ? Tone.accent : t.raised,
+                    borderRadius: BorderRadius.circular(Metrics.pill),
+                    border: Border.all(
+                        color: life == _invitationLife
+                            ? Tone.accent
+                            : t.line),
+                  ),
+                  child: Text(label,
+                      style: Type.small.copyWith(
+                          color: life == _invitationLife
+                              ? Colors.white
+                              : t.muted,
+                          fontWeight: FontWeight.w700)),
+                ),
+              ),
+          ],
+        ),
+        if (_invitationLife == Duration.zero) ...[
+          const SizedBox(height: Metrics.gap),
+          const RxNote(
+            'An invitation carries the keys themselves, so one with no limit '
+            'is a key sitting in whatever you sent it through. Anybody who '
+            'finds it later can still use it. Worth it for a group people join '
+            'over weeks, and not worth it for one person.',
+            tone: Tone.warn,
+          ),
+        ],
+        const SizedBox(height: Metrics.pad),
         RxButton('Create an invitation',
             icon: Icons.mail_outline,
             wide: true,
             onTap: () => _attempt(() async {
-                  final c =
-                      await rotelyx.createInvitation(displayName: _name.text.trim());
+                  final c = await rotelyx.createInvitation(
+                    displayName: _name.text.trim(),
+                    validFor: _invitationLife,
+                  );
                   if (mounted) setState(() => _invitation = c);
                 })),
         const SizedBox(height: Metrics.pad),
@@ -516,22 +659,40 @@ class _PairScreenState extends State<PairScreen> {
           Expanded(child: Divider(color: t.line)),
         ]),
         const SizedBox(height: Metrics.pad),
-        RxField(controller: _code, hint: 'Paste what they sent you', lines: 3),
+        RxField(
+            controller: _code,
+            hint: 'Paste the link they sent you',
+            lines: 3,
+            onChanged: (_) => setState(() {}),
+          ),
+          if (_arrivingMailbox != null) ...[
+            const SizedBox(height: Metrics.gap),
+            _MailboxNotice(url: _arrivingMailbox!),
+          ],
         const SizedBox(height: Metrics.gap),
         RxButton('Accept invitation',
             weight: Weight.secondary,
             wide: true,
-            onTap: () => _attempt(() => rotelyx.acceptInvitation(
-                  code: _code.text,
-                  displayName: _name.text.trim(),
-                ))),
+            onTap: () => _attempt(() async {
+                  // A link or a bare code. People paste what they were given.
+                  final code = codeFromLink(_code.text);
+                  if (code == null || code.isEmpty) {
+                    throw const FormatException(
+                        'that invitation could not be opened. It may have been '
+                        'used already, or expired.');
+                  }
+                  return rotelyx.acceptInvitation(
+                    code: code,
+                    displayName: _name.text.trim(),
+                  );
+                })),
         const SizedBox(height: Metrics.pad),
         const RxNote(
-          'Use this when you cannot be together and cannot speak. It is long '
-          'because it carries the keys themselves rather than a place to meet, '
-          'which is also why it works with no arrangement at all. Whoever uses '
-          'it first becomes the other side of the conversation, so send it to '
-          'one person.',
+          'Use this when you cannot be together and cannot speak. The link '
+          'carries the keys themselves rather than a place to meet, which is '
+          'why it works with nothing arranged beforehand. The part after the '
+          'hash is never sent to any server, including ours: it travels only '
+          'inside the message you send.',
           title: 'When you can only send a message',
         ),
       ],
@@ -613,5 +774,37 @@ class _Waiting extends StatelessWidget {
       RxButton('Cancel', weight: Weight.quiet, onTap: onCancel),
       const SizedBox(height: Metrics.wide),
     ]);
+  }
+}
+
+/// Where an invitation is about to take you.
+///
+/// # Why this is on screen at all
+///
+/// An invitation carries the mailbox it was made on, and anybody can run one.
+/// So an invitation can send you to a host its sender chose. It cannot read a
+/// word of what you say, everything is sealed before it gets there, but it sees
+/// your address and when you connect.
+///
+/// Refusing unfamiliar ones would end self hosting, which is the argument this
+/// application is built on. Saying nothing would make it a silent risk. So it
+/// is named, before the button rather than after it, and marked when it is not
+/// one of ours.
+class _MailboxNotice extends StatelessWidget {
+  const _MailboxNotice({required this.url});
+
+  final String url;
+
+  @override
+  Widget build(BuildContext context) {
+    final described = describeMailbox(url);
+
+    return RxNote(
+      '${described.title}\n${described.detail}',
+      title: described.familiar
+          ? 'Connects through'
+          : 'Connects through a mailbox you do not know',
+      tone: described.familiar ? null : Tone.warn,
+    );
   }
 }

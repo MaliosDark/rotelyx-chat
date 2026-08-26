@@ -19,13 +19,27 @@ import 'package:flutter_test/flutter_test.dart';
 /// Every entry needs a reason, because an allowlist nobody justifies becomes a
 /// list of things somebody once wanted to allow.
 const allowedHosts = <String, String>{
-  'mail-rotelyx.ideoa.co':
+  'm1.telyx.me':
       'the blind mailbox: store and forward, never learns the sender, never '
           'sees plaintext',
   '127.0.0.1': 'the mailbox running locally during development',
-  'relay-rotelyx.ideoa.co':
-      'named only in a comment in rotelyx_config.dart explaining why the '
-          'browser build does NOT use it, the relay is for native clients',
+  'amber.telyx.me':
+      'the relay calls are carried over. QUIC, so a browser cannot reach it: '
+          'named in rotelyx_config.dart and in a comment there explaining why '
+          'the web build does NOT use it',
+  'your-server.example':
+      'not contacted. Placeholder text in the field where somebody types their '
+          'own mailbox, and `.example` is reserved by RFC 2606 precisely so it '
+          'can never resolve to anybody',
+  'example.com':
+      'not contacted. It appears once, inside the sentence shown when somebody '
+          'types an address that is not one, as the shape of an address',
+  'rotelyx.com':
+      'where invitation links point. The application never requests it: the '
+          'link is built for somebody to send and the code rides in the '
+          'fragment, which is not sent to any server. A phone with the '
+          'application installed opens it directly through an App Link and '
+          'makes no request at all',
 };
 
 /// Files that are not ours to police.

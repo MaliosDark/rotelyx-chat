@@ -1,6 +1,7 @@
 package com.ideoalabs.rotelyx
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.app.ActivityCompat
@@ -18,6 +19,7 @@ class MainActivity : FlutterFragmentActivity() {
     private var files: FilePicker? = null
     private var audio: CallAudio? = null
     private var biometrics: Biometrics? = null
+    private var links: Links? = null
 
     /// `permit` calls that asked the user something and have not heard back,
     /// by request code. Dart is awaiting every one of these.
@@ -27,6 +29,17 @@ class MainActivity : FlutterFragmentActivity() {
         private const val NOTIFICATIONS = 1
         private const val CAMERA = 2
         private const val MICROPHONE = 3
+    }
+
+    /// A link tapped while this is already running.
+    ///
+    /// `singleTop` in the manifest is what routes it here instead of starting
+    /// a second copy of the activity, and `setIntent` keeps `getIntent` honest
+    /// for anything that reads it afterwards.
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        links?.deliver(intent)
     }
 
     override fun configureFlutterEngine(engine: FlutterEngine) {
@@ -56,6 +69,19 @@ class MainActivity : FlutterFragmentActivity() {
                 }
             }
 
+        val linkChannel = MethodChannel(engine.dartExecutor.binaryMessenger, Links.CHANNEL)
+        val incoming = Links(linkChannel)
+        links = incoming
+        // The intent that started this process, before anything asks for it.
+        incoming.remember(intent)
+        linkChannel.setMethodCallHandler { call, result ->
+            if (call.method == "initial") incoming.take(result) else result.notImplemented()
+        }
+
+        val sharing = Sharing(applicationContext)
+        MethodChannel(engine.dartExecutor.binaryMessenger, Sharing.CHANNEL)
+            .setMethodCallHandler(sharing::handle)
+
         val fingerprint = Biometrics(this)
         biometrics = fingerprint
         MethodChannel(engine.dartExecutor.binaryMessenger, Biometrics.CHANNEL)
@@ -81,8 +107,28 @@ class MainActivity : FlutterFragmentActivity() {
             .setMethodCallHandler { call, result ->
                 when (call.method) {
                     "request" -> {
-                        requestPermission()
-                        result.success(notifications.permitted())
+                        // Through `permit`, and waited for, like the camera and
+                        // the microphone.
+                        //
+                        // It used to call `requestPermissions` and then read the
+                        // answer back on the next line, which reads it while the
+                        // dialog is still on screen. The reply was therefore
+                        // always whatever was true before the person was asked,
+                        // so granting notifications flipped the switch back and
+                        // told them notifications were off. The camera path
+                        // carries a comment warning about exactly this.
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            permit(
+                                Manifest.permission.POST_NOTIFICATIONS,
+                                NOTIFICATIONS,
+                                result,
+                            )
+                        } else {
+                            // Before Android 13 there is no permission to ask
+                            // for: posting is allowed unless the user switched
+                            // the channel off, which `permitted` reads.
+                            result.success(notifications.permitted())
+                        }
                     }
                     "connect" -> {
                         ConnectionService.start(applicationContext)
@@ -158,17 +204,4 @@ class MainActivity : FlutterFragmentActivity() {
         )
     }
 
-    private fun requestPermission() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
-
-        val granted = ActivityCompat.checkSelfPermission(
-            this, Manifest.permission.POST_NOTIFICATIONS
-        ) == PackageManager.PERMISSION_GRANTED
-
-        if (!granted) {
-            ActivityCompat.requestPermissions(
-                this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), NOTIFICATIONS
-            )
-        }
-    }
 }

@@ -78,6 +78,23 @@ class RotelyxService {
 
   final RotelyxConfig _config;
 
+  /// The mailbox for the conversation being opened, when an invitation named
+  /// one other than this build's own.
+  ///
+  /// Set from the code rather than from settings, because the person who made
+  /// the invitation is already waiting somewhere and the one accepting has to
+  /// go there. Cleared when a conversation ends so the next one starts from the
+  /// configured host again.
+  String? _mailboxOverride;
+
+  /// Where this service will connect.
+  ///
+  /// Three answers, in order. An invitation names one and that wins, because
+  /// the person who sent it is already waiting there. Otherwise whatever this
+  /// device was set to. Otherwise the one this build ships with.
+  String get mailboxUrl =>
+      _mailboxOverride ?? store.mailboxChoice ?? _config.mailbox;
+
   WasmSession? _session;
   MailboxClient? _mailbox;
   String? _meetingTag;
@@ -531,7 +548,13 @@ class RotelyxService {
     final conversation = store.load(conversationId);
     if (conversation == null) return false;
 
-    final started = onRead(conversation.messages);
+    // In a conversation with yourself, opening it is the reading: both
+    // members are this device, so there is nobody else whose reading could
+    // start the clock.
+    final started = onRead(
+      conversation.messages,
+      ownMessagesToo: conversationId == selfConversationId,
+    );
     if (!started.changed) return false;
 
     conversation.messages
@@ -718,7 +741,27 @@ class RotelyxService {
   /// phrase, so unlike [pairByPhrase] there is nothing to guess, but the code
   /// still authenticates nobody, and the safety number is still the only check
   /// that matters.
-  Future<String> createInvitation({required String displayName}) async {
+  /// How long a new invitation is good for, unless told otherwise.
+  ///
+  /// An hour. An invitation carries the keys themselves, so one that never
+  /// expires is a key sitting in somebody's message history: a link sent three
+  /// months ago still worked, and whoever found it in that conversation could
+  /// use it and become the other side.
+  ///
+  /// An hour is what a person needs to send one and have it opened. Anything
+  /// longer is convenience bought with a door left open.
+  static const invitationLifetime = Duration(hours: 1);
+
+  /// Clocks disagree, and rejecting an invitation because the sender's phone is
+  /// two minutes fast would be a failure nobody could diagnose from either
+  /// screen. Wide enough to cover ordinary drift, far short of making the
+  /// expiry meaningless.
+  static const invitationSkew = Duration(minutes: 5);
+
+  Future<String> createInvitation({
+    required String displayName,
+    Duration validFor = invitationLifetime,
+  }) async {
     _displayName = displayName;
     _role = PairingRole.guest;
 
@@ -733,6 +776,17 @@ class RotelyxService {
     return base64Encode(utf8.encode(jsonEncode({
       'v': 1,
       'name': displayName,
+      // Where to meet. Absent from the first version of this code, when there
+      // was one mailbox and both sides were compiled against it. With more than
+      // one, an invitation that does not say leaves two people waiting in places
+      // the other never visits, with nothing on either screen to explain it.
+      'mailbox': mailboxUrl,
+      // When it stops working. Zero means never, which is what a code from
+      // before this field carried and what somebody can still choose for a
+      // group whose members join over days.
+      'expires': validFor == Duration.zero
+          ? 0
+          : DateTime.now().add(validFor).millisecondsSinceEpoch,
       'tag': _meetingTag,
       'keyPackage': session.keyPackage(),
       'hybridPublicKey': session.hybridPublicKey(),
@@ -766,6 +820,26 @@ class RotelyxService {
       _moveTo(RotelyxState.failed, error: 'that invitation code is missing fields');
       return;
     }
+
+    // Expired, and said so rather than left to fail as silence. Without this
+    // the pairing simply waits at a place nobody is any more, and neither
+    // person has anything on screen that explains it.
+    final expires = invite['expires'];
+    if (expires is int && expires > 0) {
+      final deadline = DateTime.fromMillisecondsSinceEpoch(expires)
+          .add(invitationSkew);
+      if (DateTime.now().isAfter(deadline)) {
+        _moveTo(RotelyxState.failed,
+            error: 'that invitation has expired. Ask them for a new one.');
+        return;
+      }
+    }
+
+    // Go where they are waiting. A code from a build with one mailbox carries
+    // no host, and for those the configured one is the right answer and the
+    // only one there was.
+    final host = invite['mailbox'];
+    _mailboxOverride = host is String && host.isNotEmpty ? host : null;
 
     _meetingTag = tag;
 
@@ -831,7 +905,7 @@ class RotelyxService {
     _mailbox = null;
     _listening.clear();
 
-    final mailbox = MailboxClient(_config.mailbox);
+    final mailbox = MailboxClient(mailboxUrl);
     _mailbox = mailbox;
 
     _mailboxListeners.add(mailbox.envelopes.listen(_onEnvelope));

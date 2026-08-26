@@ -31,8 +31,8 @@ import '../call_api.dart';
 
 export '../call_api.dart';
 
-typedef OpenNative = Int64 Function(Uint64, Int32, Int32);
-typedef OpenDart = int Function(int, int, int);
+typedef OpenNative = Int64 Function(Uint64, Int32, Int32, Pointer<Uint8>, Int32);
+typedef OpenDart = int Function(int, int, int, Pointer<Uint8>, int);
 
 typedef CaptureNative = Int32 Function(
     Int64, Pointer<Int16>, Int32, Pointer<Uint8>, Int32);
@@ -89,6 +89,7 @@ String openFailure(int code) => switch (code) {
       -2 => 'there is no conversation to call through yet',
       -3 => 'this device is not in the conversation it is calling from',
       -4 => 'too many people are already speaking',
+      -5 => 'this call has no identifier to key it with',
       _ => 'the call could not be opened ($code)',
     };
 
@@ -109,15 +110,31 @@ class NativeCall implements RotelyxCall {
   bool _closed = false;
 
   /// Open a call on [session], or throw with the reason.
+  ///
+  /// [call] is the identifier both ends agreed on for this call and no other,
+  /// which is what the media keys are bound to. Without it they would be a
+  /// function of the MLS epoch alone, the frame counter would restart at zero,
+  /// and a second call inside one epoch would encrypt under the first call's
+  /// key and nonce from its first frame onwards. The engine refuses anything
+  /// shorter than eight bytes rather than key a call weakly.
   static NativeCall open(
     CallSymbols lib,
     int session, {
+    required String call,
     int bytesPerFrame = callBytesPerFrame,
     bool recoverLoss = false,
   }) {
-    final handle = lib.open(session, bytesPerFrame, recoverLoss ? 1 : 0);
-    if (handle < 0) throw CallRefused(openFailure(handle));
-    return NativeCall._(lib, handle);
+    final bytes = utf8.encode(call);
+    final buffer = calloc<Uint8>(bytes.length);
+    try {
+      buffer.asTypedList(bytes.length).setAll(0, bytes);
+      final handle =
+          lib.open(session, bytesPerFrame, recoverLoss ? 1 : 0, buffer, bytes.length);
+      if (handle < 0) throw CallRefused(openFailure(handle));
+      return NativeCall._(lib, handle);
+    } finally {
+      calloc.free(buffer);
+    }
   }
 
   @override

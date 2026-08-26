@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Someone invited you to Rotelyx</title>
+
+<!--
+  This page is identical for every invitation, and that is the point.
+
+  What distinguishes one invitation from another is everything after the hash,
+  and a fragment is never sent to a server. So this page is served without
+  knowing which invitation brought somebody here, and the preview a messenger
+  draws is the same card whoever sent it.
+
+  There is deliberately no sender name and no sender photograph in these tags.
+  Putting them here would mean uploading them, so that the messenger carrying
+  the link could fetch them, which would give this server a name and a face for
+  every invitation. It would also copy that photograph into the cache of
+  whatever app the link travelled through. An application whose argument is
+  that nobody learns anything cannot hand a face to Meta on the way past.
+-->
+<meta name="description" content="A private conversation. No account, no phone number, and no directory to be listed in.">
+
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Rotelyx">
+<meta property="og:title" content="Someone invited you to a private conversation">
+<meta property="og:description" content="Open this on a phone with Rotelyx and the conversation starts. No account, no phone number, nobody to look you up.">
+<meta property="og:image" content="https://rotelyx.com/assets/preview.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:url" content="https://rotelyx.com/i">
+
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Someone invited you to a private conversation">
+<meta name="twitter:description" content="Open this on a phone with Rotelyx and the conversation starts.">
+<meta name="twitter:image" content="https://rotelyx.com/assets/preview.png">
+
+<meta name="theme-color" content="#0B0A0F">
+<link rel="icon" href="assets/favicon.png">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&display=swap">
+
+<style>
+:root{
+  --bg:#0B0A0F; --ink:#F2F1F5; --dim:#9B98A8; --dim2:#848197;
+  --rule:rgba(255,255,255,.09); --accent:#6A31EE; --accent-soft:#8B5CF6;
+  --glass:rgba(255,255,255,.045); --glass-hi:rgba(255,255,255,.10);
+  --sans:"Manrope",ui-sans-serif,system-ui,-apple-system,sans-serif;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;min-height:100vh;background:var(--bg);color:var(--ink);
+  font:500 16px/1.6 var(--sans);letter-spacing:-.005em;
+  -webkit-font-smoothing:antialiased;
+  display:grid;place-items:center;padding:24px;position:relative;
+}
+body::before{
+  content:"";position:fixed;inset:-20vmax;z-index:-1;pointer-events:none;
+  background:
+    radial-gradient(40vmax 40vmax at 18% -4%, rgba(106,49,238,.30), transparent 62%),
+    radial-gradient(36vmax 36vmax at 88% 16%, rgba(139,92,246,.16), transparent 60%);
+}
+.card{
+  width:100%;max-width:440px;padding:36px 32px;border-radius:20px;text-align:center;
+  background:var(--glass);border:1px solid var(--rule);
+  -webkit-backdrop-filter:blur(22px) saturate(170%);
+  backdrop-filter:blur(22px) saturate(170%);
+  box-shadow:inset 0 1px 0 var(--glass-hi),0 20px 44px -26px rgba(0,0,0,.9);
+}
+img.mark{width:180px;max-width:70%;margin:0 auto 26px;display:block}
+h1{margin:0 0 14px;font-size:1.6rem;line-height:1.15;letter-spacing:-.03em;font-weight:800;text-wrap:balance}
+p{margin:0 0 22px;color:var(--dim);font-size:.98rem}
+.btn{
+  display:block;text-decoration:none;padding:14px 22px;border-radius:13px;
+  font-weight:700;color:#fff;
+  background:linear-gradient(180deg,#7C46F0,#5A24D6);
+  border:1px solid rgba(255,255,255,.14);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.25),0 12px 30px -16px rgba(106,49,238,.95);
+}
+.note{margin:22px 0 0;font-size:.84rem;color:var(--dim2);line-height:1.5}
+a.plain{color:var(--dim);text-decoration:none;border-bottom:1px solid var(--rule)}
+a.plain:hover{color:var(--ink)}
+</style>
+</head>
+<body>
+
+<div class="card">
+  <img class="mark" src="assets/logo-dark.png" alt="Rotelyx">
+  <h1>Someone invited you to a private conversation</h1>
+  <p>
+    Install Rotelyx, then open this link again. The conversation starts by
+    itself. There is no account to make and no phone number to give.
+  </p>
+  <a class="btn" href="https://play.google.com/store/apps/details?id=com.ideoalabs.rotelyx">Get Rotelyx</a>
+  <p class="note">
+    If you already have it, this link opens the app rather than this page.
+    <br><br>
+    The invitation itself never reached this website. It travels in the part of
+    the address after the hash, which a browser keeps to itself and never sends
+    to a server. <a class="plain" href="/">What Rotelyx is</a>
+  </p>
+</div>
+
+<!--
+  There is no script on this page, and that is a decision rather than an
+  omission.
+
+  The invitation is in `location.hash`. Anything here that read it, an
+  analytics call, an error reporter, a preview, a redirect that carried it
+  along, would take the one property that makes this link safe to send through
+  somebody else's messenger and give it away. The safest code is the code that
+  is not here.
+-->
+</body>
+</html>

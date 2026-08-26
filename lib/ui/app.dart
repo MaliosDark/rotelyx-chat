@@ -9,6 +9,8 @@ library;
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import '../platform/incoming_link.dart';
+import '../rotelyx/invite_link.dart';
 
 import '../rotelyx/alerts.dart';
 import '../rotelyx/call_state.dart';
@@ -52,10 +54,15 @@ class _RotelyxAppState extends State<RotelyxApp> with WidgetsBindingObserver {
   RotelyxTheme get _theme => _dark ? RotelyxTheme.dark : RotelyxTheme.light;
 
   StreamSubscription<CallState>? _callChanges;
+  StreamSubscription<String>? _linkArrivals;
+
+  /// An invitation that arrived from outside, waiting for the pairing screen.
+  String? _arriving;
 
   @override
   void dispose() {
     unawaited(_callChanges?.cancel());
+    unawaited(_linkArrivals?.cancel());
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -108,6 +115,26 @@ class _RotelyxAppState extends State<RotelyxApp> with WidgetsBindingObserver {
   /// putting the phone down and walking off does not leave it open.
   static const _grace = Duration(seconds: 30);
 
+  /// Take somebody to the pairing screen with an invitation already in it.
+  ///
+  /// It is not accepted here. The name field is still blank, and accepting on
+  /// arrival would introduce this person to the other one as "anon" with no
+  /// chance to say otherwise. The screen fills the field and waits.
+  ///
+  /// Nothing happens while the application is locked. A PIN that can be walked
+  /// past by sending somebody a link is not a PIN, so the link is held and the
+  /// unlock screen keeps the floor.
+  void _openInvitation(String link) {
+    final code = codeFromLink(link);
+    if (code == null || code.isEmpty) return;
+    if (!mounted) return;
+
+    setState(() {
+      _arriving = code;
+      if (!_locked) _surface = _Surface.pair;
+    });
+  }
+
   @override
   void initState() {
     super.initState();
@@ -122,6 +149,13 @@ class _RotelyxAppState extends State<RotelyxApp> with WidgetsBindingObserver {
     // whether to interrupt somebody. The other half is which conversation is
     // open, and the conversation screen reports that.
     WidgetsBinding.instance.addObserver(this);
+
+    // Invitation links, from both directions: the one this launch was started
+    // by, and any tapped while it is running. See platform/incoming_link.dart.
+    _linkArrivals = incomingLinks.listen(_openInvitation);
+    initialLink().then((link) {
+      if (link != null) _openInvitation(link);
+    });
     alerts.start();
 
     // A call has to appear over whatever is showing, including a locked screen
@@ -170,6 +204,29 @@ class _RotelyxAppState extends State<RotelyxApp> with WidgetsBindingObserver {
       title: 'Rotelyx',
       debugShowCheckedModeBanner: false,
       theme: _theme.material,
+
+      // Touching anywhere that is not a field puts the keyboard away.
+      //
+      // # Why it is here and not on each screen
+      //
+      // Two screens had their own version of this and five did not, so whether
+      // it worked depended on which one you were looking at. Here it wraps
+      // every route, including the sheets and dialogs pushed above the home
+      // one, which is why it is `builder` rather than a widget inside `home`.
+      //
+      // `translucent` so it sees the tap without swallowing it: a button under
+      // this still gets pressed, because the deeper recogniser wins the arena.
+      // `opaque` would put a sheet of glass over the whole application.
+      //
+      // `FocusManager.instance` rather than `FocusScope.of(context)` because
+      // this context is above every route, and the focus that needs dropping
+      // belongs to whichever route is on top.
+      builder: (context, child) => GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+        child: child,
+      ),
+
       home: RotelyxThemeScope(
         theme: _theme,
         child: Scaffold(
@@ -219,7 +276,8 @@ class _RotelyxAppState extends State<RotelyxApp> with WidgetsBindingObserver {
 
       case _Surface.pair:
         return PairScreen(
-          key: const ValueKey('pair'),
+          key: ValueKey('pair:${_arriving ?? ''}'),
+          arriving: _arriving,
           onCancel: () => setState(() => _surface = _Surface.home),
           onDone: (_) => setState(() {
             // A new conversation changes the list, and the list is built once

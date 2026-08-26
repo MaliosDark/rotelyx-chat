@@ -30,8 +30,10 @@ PROTOCOL="${ROTELYX_PROTOCOL:-/home/serafin/comms-real-e2e}"
 PROFILE=debug
 CARGO_FLAGS=()
 if [ "${1:-}" = "--release" ]; then
-  PROFILE=release
-  CARGO_FLAGS+=(--release)
+  # `mobile` rather than `release`, so what is tested here unwinds the way the
+  # shipped library does. See tool/native/build-android.sh.
+  PROFILE=mobile
+  CARGO_FLAGS+=(--profile mobile)
 fi
 
 if [ ! -d "$PROTOCOL/crates/rotelyx-mobile" ]; then

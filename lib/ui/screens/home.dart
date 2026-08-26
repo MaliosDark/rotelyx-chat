@@ -198,7 +198,6 @@ class _ConversationList extends StatelessWidget {
                 children: [
                   const RxLockup(height: 21),
                   const SizedBox(width: Metrics.gap),
-                  const RxChip('post-quantum', tone: Tone.accent),
                   const Spacer(),
                   IconButton(
                     onPressed: onSettings,

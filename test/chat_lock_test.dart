@@ -15,6 +15,8 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_storage/get_storage.dart';
+import 'package:rotelyx_chat/rotelyx/chat_lock.dart' as chat_lock;
+import 'package:rotelyx_chat/rotelyx/lock.dart' show maxAttempts;
 import 'package:rotelyx_chat/rotelyx/rotelyx_store.dart';
 
 StoredConversation conversation(String id, String text) => StoredConversation(
@@ -38,6 +40,47 @@ void main() {
     );
     await GetStorage.init();
     await store.create('a passphrase nobody will guess');
+  });
+
+  test('guessing at a conversation PIN runs out of attempts', () async {
+    // The application PIN has always stopped answering after ten wrong tries;
+    // a conversation PIN did not, which made a conversation the softer of the
+    // two doors into the same device. An audit found the asymmetry. This is the
+    // assertion that it is gone.
+    store.save(conversation('guessed', 'the secret'));
+    store.lockChat('guessed', '4821');
+    chat_lock.close('guessed');
+
+    expect(chat_lock.attemptsLeft('guessed'), maxAttempts);
+
+    for (var i = 1; i <= maxAttempts; i++) {
+      expect(store.openChat('guessed', '0000'), isFalse);
+      expect(chat_lock.attemptsLeft('guessed'), maxAttempts - i);
+    }
+
+    expect(chat_lock.lockedOutFor('guessed'), greaterThan(0),
+        reason: 'ten wrong PINs and the conversation still answers');
+
+    // And the right PIN does not get through the lockout either, or the
+    // lockout would be advice rather than a limit.
+    expect(store.openChat('guessed', '4821'), isFalse);
+  });
+
+  test('one conversation locking out does not silence another', () async {
+    store.save(conversation('mine', 'a'));
+    store.save(conversation('theirs', 'b'));
+    store.lockChat('mine', '1111');
+    store.lockChat('theirs', '2222');
+    chat_lock.close('mine');
+    chat_lock.close('theirs');
+
+    for (var i = 0; i < maxAttempts; i++) {
+      store.openChat('mine', '0000');
+    }
+
+    expect(chat_lock.lockedOutFor('mine'), greaterThan(0));
+    expect(chat_lock.lockedOutFor('theirs'), 0);
+    expect(store.openChat('theirs', '2222'), isTrue);
   });
 
   test('a locked conversation is not readable without its PIN', () {

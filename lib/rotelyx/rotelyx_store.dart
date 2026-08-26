@@ -282,6 +282,7 @@ class RotelyxStore {
   static const _kProbe = 'rotelyx.probe';
   static const _kPreviews = 'rotelyx.previews';
   static const _kConnected = 'rotelyx.connected';
+  static const _kMailbox = 'rotelyx.mailbox';
   static const _kWakeSecret = 'rotelyx.wake-secret';
   static const _kTransport = 'rotelyx.transport-identity';
   static const _kBiometric = 'rotelyx.biometric';
@@ -332,6 +333,28 @@ class RotelyxStore {
   bool get stayConnected => _box.read(_kConnected) as bool? ?? false;
 
   set stayConnected(bool value) => _box.write(_kConnected, value);
+
+  /// The mailbox this device uses, when it is not the one shipped as default.
+  ///
+  /// Outside the vault for the same reason as the two above: the application
+  /// has to know where to connect before anybody has typed a password, and a
+  /// mailbox address is not a secret. It is the address of a machine that will
+  /// see this device connect, which is a fact about infrastructure and not
+  /// about any conversation.
+  ///
+  /// Null means the shipped default, rather than a copy of it written down.
+  /// Storing the default would freeze it: a device set up today would go on
+  /// using an address long after it moved, because it kept a copy on the day
+  /// it was installed.
+  String? get mailboxChoice => _box.read(_kMailbox) as String?;
+
+  set mailboxChoice(String? value) {
+    if (value == null || value.isEmpty) {
+      _box.remove(_kMailbox);
+    } else {
+      _box.write(_kMailbox, value);
+    }
+  }
 
   /// Read something that has to be legible before the vault is open.
   ///

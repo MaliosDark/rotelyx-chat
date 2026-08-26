@@ -48,14 +48,27 @@ import 'package:flutter/material.dart';
 
 /// How long a message takes to burn.
 ///
-/// A second and a half: long enough to watch, short enough not to be in the way
-/// of a conversation. `--dart-define=slowBurn=true` stretches it to twelve
-/// seconds, which exists only so a still photograph can be taken of the middle
-/// of it. `adb exec-out screencap` takes about a second, so at the real speed
-/// every frame lands either side of the flame.
-const Duration _burnDuration = bool.fromEnvironment('slowBurn')
-    ? Duration(seconds: 12)
-    : Duration(milliseconds: 1450);
+/// Twelve seconds, which is a deliberate exception to everything else in this
+/// interface. Every other duration here is between one and four tenths of a
+/// second, because a messenger is opened dozens of times a day and motion that
+/// reads as considered on the first open is the application feeling slow by the
+/// thirtieth.
+///
+/// This one is not that. It happens rarely, to one message, and only because
+/// somebody chose it. It is the single thing this application does that no
+/// competitor does, and watching it happen is the point rather than an
+/// ornament on the way to somewhere else. A second and a half was over before
+/// it registered.
+///
+/// It was originally that: `--dart-define=slowBurn=true` existed only to stretch
+/// it long enough that a still photograph could be taken of the middle. The
+/// photograph is what settled the argument.
+///
+/// `--dart-define=quickBurn=true` gives back the old speed, for anybody who
+/// finds it in the way.
+const Duration _burnDuration = bool.fromEnvironment('quickBurn')
+    ? Duration(milliseconds: 1450)
+    : Duration(seconds: 12);
 
 /// Loads the program once for the whole application.
 ///

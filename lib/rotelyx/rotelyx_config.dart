@@ -17,8 +17,8 @@ class RotelyxConfig {
   /// Ideoa Labs production. The mailbox is store-and-forward for peers that are
   /// not both online; it never learns the sender and never sees plaintext.
   static const production = RotelyxConfig(
-    mailbox: 'wss://mail-rotelyx.ideoa.co/mailbox',
-    relay: 'https://relay-rotelyx.ideoa.co',
+    mailbox: 'wss://m1.telyx.me/mailbox',
+    relay: 'https://amber.telyx.me',
     lookback: 2,
   );
 
@@ -50,7 +50,7 @@ class RotelyxConfig {
 /// The configuration this build uses.
 const rotelyxConfig = RotelyxConfig.production;
 
-/// The relay at `relay-rotelyx.ideoa.co` is **not** referenced here on purpose.
+/// The relay at `amber.telyx.me` is **not** referenced here on purpose.
 ///
 /// It forwards QUIC ciphertext for the native clients. The browser build has no
 /// QUIC stack: `rotelyx-wasm` is layers 2 and 3 only, the message layer, so

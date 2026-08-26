@@ -300,6 +300,22 @@ class _ChatScreenState extends State<ChatScreen> {
     final c = _conversation;
     if (c == null) return;
 
+    // The microphone, before the system asks for it. A messenger asking for a
+    // microphone is a reasonable thing to hesitate over, and the system prompt
+    // gives nothing to weigh.
+    final ready = await explainPermission(
+      context,
+      icon: Icons.mic_none_outlined,
+      title: 'Calling ${c.displayTitle}',
+      body: 'The microphone is used while a call is running and at no other '
+          'time. Audio goes straight into the call encrypted and is never '
+          'written to this phone or sent anywhere else.\n\n'
+          'The call is carried through a relay on purpose, so the other person '
+          'never learns your address.',
+      allow: 'Start the call',
+    );
+    if (!ready || !mounted) return;
+
     final refused = await calls.place(c);
     if (refused == null || !mounted) return;
 
@@ -881,6 +897,10 @@ class _ChatScreenState extends State<ChatScreen> {
                 child: c.messages.isEmpty
                   ? GestureDetector(
                       behavior: HitTestBehavior.opaque,
+                      // Kept although `app.dart` now does this for every
+                      // screen: the empty transcript is a large target and an
+                      // opaque one here means the tap does not have to travel
+                      // to the root to be understood.
                       onTap: () => FocusScope.of(context).unfocus(),
                       child: _Empty(),
                     )

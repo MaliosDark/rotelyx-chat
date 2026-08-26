@@ -8,6 +8,7 @@ library;
 import 'package:flutter/material.dart';
 
 import '../../platform/biometrics.dart';
+import '../../rotelyx/mailboxes.dart';
 import '../../rotelyx/alerts.dart';
 import '../../rotelyx/lock.dart';
 import '../../rotelyx/push.dart';
@@ -117,8 +118,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
                             content: Text(
-                                'Android is refusing notifications for this '
-                                'app. Turn them on in system settings.'),
+                                'Notifications are switched off for this app. '
+                                'Turn them on in your phone settings.'),
                           ),
                         );
                         return;
@@ -165,19 +166,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           !_connected
                               ? 'Off: messages arrive when you open the app'
                               : rotelyx.canBeWoken
-                                  ? 'Apple wakes this device on a fixed '
+                                  ? 'The system wakes this device on a fixed '
                                       'schedule and learns only that, never '
-                                      'when a message arrived'
+                                      'that a message arrived'
                                   : 'Shows a permanent notice and uses battery',
                           style: Type.small.copyWith(color: t.faint)),
                     ),
 
                   const SizedBox(height: Metrics.gap),
                   const RxNote(
-                    'Nothing is registered with Google or Apple. This app holds '
-                    'its own connection to the mailbox, so a message is '
-                    'decrypted here before you are told about it, and no push '
-                    'service learns that one arrived.',
+                    'No outside notification service is involved. This app '
+                    'keeps its own connection to the mailbox, so a message is '
+                    'decrypted on this phone before you are told about it, and '
+                    'nothing beyond this device learns that one arrived.',
                     title: 'Who tells you',
                   ),
 
@@ -259,6 +260,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
 
                   const SizedBox(height: Metrics.pad),
+                  const _Section('Where your messages wait'),
+                  _MailboxPicker(onChanged: () => setState(() {})),
+
+                  const SizedBox(height: Metrics.pad),
                   const _Section('Under the hood'),
                   _Fold(
                     title: 'How your messages are protected',
@@ -271,9 +276,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       _Row('Largest group',
                           ready ? '${RotelyxWasm.maxMembers}' : 'not loaded'),
                       _Row('Mailbox', Uri.parse(rotelyxConfig.mailbox).host),
-                      // Users deserve to know whether Google is in the path of
-                      // a notification, so the transport is named rather than
-                      // assumed.
+                      // Whether anything outside this device sits in the path
+                      // of a notification, named rather than assumed.
                       _Row('Wake service', pushTransport.name),
                       const SizedBox(height: Metrics.gap),
                       const RxNote(
@@ -586,6 +590,217 @@ class _Row extends StatelessWidget {
                 style: Type.body.copyWith(color: t.text)),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Choosing which mailbox this device uses.
+///
+/// # Why this exists
+///
+/// If the mailbox can only ever be ours, then "we cannot see who you talk to"
+/// is a promise somebody has to take on faith. If it can be theirs, it is a
+/// property they can check. A messenger that will not let anybody host their
+/// own is asking for exactly the trust it claims not to need.
+class _MailboxPicker extends StatefulWidget {
+  const _MailboxPicker({required this.onChanged});
+
+  final VoidCallback onChanged;
+
+  @override
+  State<_MailboxPicker> createState() => _MailboxPickerState();
+}
+
+class _MailboxPickerState extends State<_MailboxPicker> {
+  final _custom = TextEditingController();
+  String? _problem;
+  bool _adding = false;
+
+  String get _current => store.mailboxChoice ?? defaultMailbox.url;
+
+  @override
+  void dispose() {
+    _custom.dispose();
+    super.dispose();
+  }
+
+  void _use(String? url) {
+    setState(() {
+      store.mailboxChoice = url;
+      _adding = false;
+      _problem = null;
+      _custom.clear();
+    });
+    widget.onChanged();
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(url == null
+          ? 'Back to ${defaultMailbox.name}'
+          : 'Now using ${describeMailbox(url).title}'),
+    ));
+  }
+
+  void _addCustom() {
+    final problem = mailboxProblem(_custom.text);
+    if (problem != null) {
+      setState(() => _problem = problem);
+      return;
+    }
+    _use(_custom.text.trim());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = RotelyxThemeScope.of(context);
+    final current = _current;
+    final custom = knownMailbox(current) == null;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final m in knownMailboxes)
+          Padding(
+            padding: const EdgeInsets.only(bottom: Metrics.gap),
+            child: _MailboxRow(
+              title: m.name,
+              detail: m.host,
+              chosen: !custom && m.url == current,
+              onTap: () => _use(m.url == defaultMailbox.url ? null : m.url),
+            ),
+          ),
+
+        if (custom)
+          Padding(
+            padding: const EdgeInsets.only(bottom: Metrics.gap),
+            child: _MailboxRow(
+              title: describeMailbox(current).title,
+              detail: 'Yours',
+              chosen: true,
+              onTap: () {},
+              onRemove: () => _use(null),
+            ),
+          ),
+
+        if (_adding) ...[
+          const SizedBox(height: 4),
+          RxField(
+            controller: _custom,
+            hint: 'wss://your-server.example/mailbox',
+            autofocus: true,
+            onSubmit: (_) => _addCustom(),
+            onChanged: (_) {
+              if (_problem != null) setState(() => _problem = null);
+            },
+          ),
+          if (_problem != null) ...[
+            const SizedBox(height: Metrics.gap),
+            RxNote(_problem!, tone: Tone.bad),
+          ],
+          const SizedBox(height: Metrics.gap),
+          Row(children: [
+            Expanded(
+              child: RxButton('Use this one', wide: true, onTap: _addCustom),
+            ),
+            const SizedBox(width: Metrics.gap),
+            Expanded(
+              child: RxButton('Cancel',
+                  weight: Weight.quiet,
+                  wide: true,
+                  onTap: () => setState(() {
+                        _adding = false;
+                        _problem = null;
+                      })),
+            ),
+          ]),
+        ] else
+          RxButton('Use my own server',
+              weight: Weight.secondary,
+              icon: Icons.dns_outlined,
+              wide: true,
+              onTap: () => setState(() => _adding = true)),
+
+        const SizedBox(height: Metrics.pad),
+        RxNote(
+          'A mailbox holds your messages until the other person collects them. '
+          'It never sees what they say: everything is sealed before it gets '
+          'there. What it does see is that this phone connected, from what '
+          'address, and when. Run your own and that is nobody but you.',
+          title: 'What a mailbox knows',
+          tone: custom ? Tone.warn : null,
+        ),
+        if (custom) ...[
+          const SizedBox(height: Metrics.gap),
+          Text(
+            'Conversations already started keep the mailbox they began on. '
+            'This applies to the next one.',
+            style: Type.small.copyWith(color: t.faint),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// One mailbox in the list.
+class _MailboxRow extends StatelessWidget {
+  const _MailboxRow({
+    required this.title,
+    required this.detail,
+    required this.chosen,
+    required this.onTap,
+    this.onRemove,
+  });
+
+  final String title;
+  final String detail;
+  final bool chosen;
+  final VoidCallback onTap;
+  final VoidCallback? onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = RotelyxThemeScope.of(context);
+
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: Motion.press,
+        curve: Motion.pressCurve,
+        padding: const EdgeInsets.all(Metrics.pad),
+        decoration: BoxDecoration(
+          color: chosen ? Tone.accent.withOpacity(0.10) : t.raised,
+          borderRadius: BorderRadius.circular(Metrics.radius),
+          border: Border.all(color: chosen ? Tone.accent : t.line),
+        ),
+        child: Row(
+          children: [
+            Icon(chosen ? Icons.radio_button_checked : Icons.radio_button_off,
+                size: 19, color: chosen ? Tone.accent : t.faint),
+            const SizedBox(width: Metrics.pad),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: Type.label.copyWith(color: t.text)),
+                  const SizedBox(height: 2),
+                  Text(detail, style: Type.small.copyWith(color: t.faint)),
+                ],
+              ),
+            ),
+            if (onRemove != null)
+              GestureDetector(
+                onTap: onRemove,
+                behavior: HitTestBehavior.opaque,
+                child: Padding(
+                  padding: const EdgeInsets.only(left: Metrics.gap),
+                  child: Icon(Icons.close, size: 18, color: t.muted),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }

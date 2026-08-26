@@ -182,6 +182,17 @@ void main() {
       // The identical safety number is the whole claim: the restored session is
       // the same member of the same group, not a lookalike.
       expect(restored.safetyNumber(), equals(before));
+
+      // And it cannot speak until it has moved to a fresh epoch. A file is a
+      // copy, and a copy that resumes sending is sending at generations the
+      // other side has already spent, so those messages are refused with
+      // nothing to say why. The engine refuses first instead.
+      expect(() => restored.send('before rekeying'),
+          throwsA(isA<RotelyxEngineError>()));
+
+      // The commit goes first, exactly as any other commit would.
+      guest.receive(restored.rekeyAfterRestore());
+
       expect(guest.receive(restored.send('sent after a restart')),
           equals('sent after a restart'));
     });

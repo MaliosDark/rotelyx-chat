@@ -64,7 +64,23 @@ class BurnStart {
 /// Starts a clock on everything they sent that has a timer and does not have a
 /// deadline yet, and collects what to acknowledge. Our own messages are left
 /// alone: theirs is the reading that counts, and we have not had it yet.
-BurnStart onRead(List<StoredMessage> messages, {DateTime? now}) {
+BurnStart onRead(
+  List<StoredMessage> messages, {
+  DateTime? now,
+
+  /// Start the clock on our own messages as well.
+  ///
+  /// False everywhere except a conversation with yourself, where it has to be
+  /// true and the ordinary rule gives the wrong answer. Normally a message of
+  /// ours starts expiring when *they* read it, which is why `mine` is skipped
+  /// below. In a note to self there is no they: both members are this device,
+  /// so the person opening it is the recipient and opening it is the reading.
+  ///
+  /// Without this a note you set to burn never burns. It sits with a dash where
+  /// the countdown should be, for as long as the conversation exists, which
+  /// looks exactly like the feature being broken.
+  bool ownMessagesToo = false,
+}) {
   final at = now ?? DateTime.now();
   final out = List<StoredMessage>.of(messages);
   final acknowledge = <String>[];
@@ -72,7 +88,7 @@ BurnStart onRead(List<StoredMessage> messages, {DateTime? now}) {
 
   for (var i = 0; i < out.length; i++) {
     final m = out[i];
-    if (m.mine || m.burnAt != null) continue;
+    if ((m.mine && !ownMessagesToo) || m.burnAt != null) continue;
 
     final ephemeral = Ephemeral.decode(m.text);
     if (ephemeral == null) continue;

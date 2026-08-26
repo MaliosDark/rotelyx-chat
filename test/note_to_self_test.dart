@@ -135,6 +135,11 @@ void main() {
     expect(a2.memberCount, 2);
     expect(b2.memberCount, 2);
 
+    // Both halves are copies, so the one that speaks has to move to a fresh
+    // epoch first and the other has to be told. Same rule as any restored
+    // conversation; a note to self is two members and gets no exemption.
+    b2.receive(a2.rekeyAfterRestore());
+
     const written = 'this note was written before the restart';
     final envelopes = a2.sealForGroup(a2.send(written));
     expect(b2.receive(b2.openMine(envelopes.first, 2)), written);
