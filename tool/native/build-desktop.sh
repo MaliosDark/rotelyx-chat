@@ -28,7 +28,10 @@ set -euo pipefail
 
 APP="$(cd "$(dirname "$0")/../.." && pwd)"
 PROTOCOL="${ROTELYX_PROTOCOL:-$HOME/comms-real-e2e}"
-PROFILE="release"
+# `mobile` rather than `release`: this is the same C ABI library the phones
+# load, and `release` aborts on panic, which makes the guard at that boundary
+# do nothing. The name is historical; what it means is "unwinds".
+PROFILE="mobile"
 [ "${1:-}" = "--debug" ] && PROFILE="debug"
 
 if [ ! -d "$PROTOCOL/crates/rotelyx-mobile" ]; then
@@ -76,7 +79,7 @@ REMAP=(
 )
 
 FLAGS=()
-[ "$PROFILE" = "release" ] && FLAGS+=(--release)
+[ "$PROFILE" = "mobile" ] && FLAGS+=(--profile mobile)
 
 RUSTFLAGS="${REMAP[*]}" \
   cargo build --manifest-path "$PROTOCOL/Cargo.toml" -p rotelyx-mobile "${FLAGS[@]}"

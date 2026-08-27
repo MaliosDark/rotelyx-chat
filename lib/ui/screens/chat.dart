@@ -256,6 +256,52 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
+  /// Stop, and explain what changed and what to do about it.
+  Future<void> _numberChanged() async {
+    final t = RotelyxThemeScope.of(context);
+    final current = rotelyx.safetyNumber ?? '';
+
+    final accepted = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: t.surface,
+        title: const Text('The safety number changed'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'You compared this number before and it is different now. That '
+              'happens when somebody adds a device to this conversation, and it '
+              'also happens when somebody has placed themselves in the middle '
+              'of it. Nothing here can tell those apart.',
+            ),
+            const SizedBox(height: Metrics.pad),
+            const Text('Read this out to them before you send anything else:'),
+            const SizedBox(height: 6),
+            SelectableText(current, style: Type.numeric.copyWith(color: t.text)),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Not now'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('It matches, carry on'),
+          ),
+        ],
+      ),
+    );
+
+    if (accepted == true && mounted) {
+      store.acceptChangedNumber(widget.conversationId, current);
+      setState(() => _conversation = store.load(widget.conversationId));
+    }
+  }
+
   void _send() {
     final text = _input.text.trim();
     if (text.isEmpty) return;
@@ -263,6 +309,22 @@ class _ChatScreenState extends State<ChatScreen> {
     if (!_live) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('This conversation is not connected.')));
+      return;
+    }
+
+    // A conversation whose safety number changed since it was compared does not
+    // send until somebody has looked.
+    //
+    // This is the one place the application stops a person from doing what they
+    // asked. The reason it is worth it: the number now changes when a member or
+    // a device is added, and the case being caught is a device added quietly to
+    // a conversation somebody already trusted. A banner would be read as
+    // decoration by the third time it appeared. A conversation that has simply
+    // never been compared is *not* stopped, because blocking a first message
+    // teaches people to click through the thing that matters.
+    if (store.verificationOf(widget.conversationId, rotelyx.safetyNumber) ==
+        Verification.changed) {
+      _numberChanged();
       return;
     }
 
@@ -874,7 +936,7 @@ class _ChatScreenState extends State<ChatScreen> {
               curve: Motion.sheetCurve,
               alignment: Alignment.topCenter,
               child: _showSafety
-                  ? _SafetyPanel()
+                  ? _SafetyPanel(conversationId: widget.conversationId)
                   : const SizedBox(width: double.infinity),
             ),
             if (!_resuming &&
@@ -1107,11 +1169,20 @@ class _Header extends StatelessWidget {
   }
 }
 
-class _SafetyPanel extends StatelessWidget {
+class _SafetyPanel extends StatefulWidget {
+  const _SafetyPanel({required this.conversationId});
+  final String conversationId;
+
+  @override
+  State<_SafetyPanel> createState() => _SafetyPanelState();
+}
+
+class _SafetyPanelState extends State<_SafetyPanel> {
   @override
   Widget build(BuildContext context) {
     final t = RotelyxThemeScope.of(context);
     final number = rotelyx.safetyNumber;
+    final state = store.verificationOf(widget.conversationId, number);
 
     return Container(
       width: double.infinity,
@@ -1123,11 +1194,40 @@ class _SafetyPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Safety number', style: Type.label.copyWith(color: t.muted)),
+          Row(
+            children: [
+              Text('Safety number', style: Type.label.copyWith(color: t.muted)),
+              const Spacer(),
+              // Said plainly, in all three states. A conversation nobody has
+              // compared should look different from one that has been, or the
+              // comparison is a thing people believe they did.
+              if (state == Verification.matches)
+                Text('compared', style: Type.small.copyWith(color: Tone.good))
+              else if (state == Verification.changed)
+                Text('changed since you compared it',
+                    style: Type.small.copyWith(color: Tone.bad))
+              else
+                Text('not compared yet', style: Type.small.copyWith(color: t.muted)),
+            ],
+          ),
           const SizedBox(height: 6),
           SelectableText(number ?? 'not ready yet',
               style: Type.numeric.copyWith(color: t.text)),
           const SizedBox(height: 8),
+          if (number != null && state != Verification.matches) ...[
+            RxButton(
+              state == Verification.changed
+                  ? 'It still matches, trust it again'
+                  : 'I have compared it, and it matches',
+              wide: true,
+              weight: Weight.secondary,
+              onTap: () {
+                store.markVerified(widget.conversationId, number);
+                setState(() {});
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
           // What it is for comes before how to use it. The panel used to open
           // with the caveat, which only makes sense to somebody who already
           // knew why they were looking at a row of digits.

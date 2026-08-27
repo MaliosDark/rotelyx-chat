@@ -37,17 +37,18 @@ sealed into padded envelopes and left in a blind mailbox.
 | Client source | about 15,900 lines under `lib/`, 72 files |
 | Runtime dependencies | 4: `web`, `ffi`, `get_storage`, `qr_flutter` |
 | Targets | web and Android build here; iOS, Linux, macOS and Windows are scaffolded |
-| Tests | 186. 184 pass; the two that do not are the same fault, below |
+| Tests | 200, all passing |
 | Outbound addresses | 2, both ours |
 | Third-party services | none |
 
-**Broken, and it is the next thing to fix.** A conversation read back from
-storage refuses to send. The engine now requires `rekeyAfterRestore` before a
-restored session sends anything, because a session read off disk believes it is
-at a generation the group may already have spent, and the phone has no way to
-call it: `session.rekeyAfterRestore` is not one of the operations the C ABI
-exposes. Two tests fail on exactly this, `native_engine_test.dart` and
-`note_to_self_test.dart`. Ghost mode is unaffected, since nothing is read back.
+**Comparing the safety number is now enforced where it matters.** A
+conversation nobody has compared is marked, not blocked: stopping a first
+message teaches people to click through the thing that matters. A conversation
+whose number **changed** after it was compared does not send until somebody has
+looked, because that is the case the number exists to catch, and it only became
+detectable when the number started binding member keys rather than the group id.
+The digits are stored rather than a flag, since a flag cannot tell a change from
+nothing having happened.
 
 **Working:** pairing by QR, phrase or invitation, with the camera reading the
 code on a phone; one-to-one and group conversations; replies; reactions;

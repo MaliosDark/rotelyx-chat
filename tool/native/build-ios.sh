@@ -46,11 +46,15 @@ cd "$(dirname "$0")/../.."
 APP="$PWD"
 PROTOCOL="${ROTELYX_PROTOCOL:-$HOME/comms-real-e2e}"
 
+# The same profile the Android build uses, and for the same reason: this is a
+# library behind a C ABI, and `release` aborts on panic, which turns the guard
+# at that boundary into a comment. An audit found this half of the build still
+# on `release` after the Android half had moved.
 PROFILE=debug
 CARGO_FLAGS=()
 if [ "${1:-}" = "--release" ]; then
-  PROFILE=release
-  CARGO_FLAGS+=(--release)
+  PROFILE=mobile
+  CARGO_FLAGS+=(--profile mobile)
 fi
 
 if [ "$(uname)" != "Darwin" ]; then

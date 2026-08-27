@@ -174,6 +174,19 @@ class StoredMessage {
       );
 }
 
+/// What comparing the safety number has established for one conversation.
+enum Verification {
+  /// Nobody has compared it. Ordinary, and shown rather than enforced.
+  never,
+
+  /// Compared, and still the same digits.
+  matches,
+
+  /// Compared before, and different now. Somebody was added, a key changed, or
+  /// somebody is in the middle. The application stops rather than mentions it.
+  changed,
+}
+
 /// A conversation as it survives a restart.
 class StoredConversation {
   StoredConversation({
@@ -189,6 +202,7 @@ class StoredConversation {
     this.receipts = false,
     this.unread = false,
     this.lastOpened,
+    this.verifiedNumber,
     List<String>? burnAcks,
   }) : burnAcks = burnAcks ?? [];
 
@@ -211,6 +225,24 @@ class StoredConversation {
 
   /// No sound, no vibration, no notification.
   bool muted;
+
+  /// The safety number this device was told to trust, or null.
+  ///
+  /// # Why the number is stored rather than a flag
+  ///
+  /// A boolean saying "verified" answers the wrong question. The number is
+  /// worth comparing once, and it is worth comparing again every time the
+  /// conversation changes, because the case it exists to catch is a device
+  /// quietly added to a conversation that was already trusted. A flag cannot
+  /// tell that from nothing having happened.
+  ///
+  /// Keeping the digits means the comparison can be made by the application on
+  /// every open, and the person is only interrupted when the answer changed.
+  ///
+  /// This became worth doing on 26 August 2026. Before that the number was a
+  /// hash of the group id, which is fixed when a conversation is created, so it
+  /// could not change and storing it would have proved nothing.
+  String? verifiedNumber;
 
   /// Whether this device tells them when their messages have been read.
   ///
@@ -577,6 +609,7 @@ class RotelyxStore {
       if (c.pinned) 'pin': true,
       if (c.muted) 'mute': true,
       if (c.receipts) 'rcpt': true,
+      if (c.verifiedNumber != null) 'vnum': c.verifiedNumber,
       if (c.unread) 'unread': true,
       if (c.lastOpened != null)
         'opened': c.lastOpened!.millisecondsSinceEpoch,
@@ -615,6 +648,39 @@ class RotelyxStore {
   /// rather than against the code that was supposed to not store it.
   List<Object?> debugAllValues() =>
       _box.getKeys<Iterable<String>>().map(_box.read<Object?>).toList();
+
+  /// What the safety number says about this conversation right now.
+  ///
+  /// Three states, and the difference between the last two is the whole point.
+  /// `never` is a conversation nobody has compared, which is ordinary and is
+  /// shown rather than enforced: blocking a first message would teach people to
+  /// dismiss the thing that matters. `changed` is a conversation that was
+  /// compared and no longer matches, which is either a device somebody added or
+  /// somebody in the middle, and that one interrupts.
+  Verification verificationOf(String id, String? current) {
+    final c = load(id);
+    if (c == null || current == null) return Verification.never;
+    if (c.verifiedNumber == null) return Verification.never;
+    return c.verifiedNumber == current ? Verification.matches : Verification.changed;
+  }
+
+  /// Record that somebody compared the digits and they matched.
+  ///
+  /// Takes the number rather than a boolean so that a later change is
+  /// detectable. See [StoredConversation.verifiedNumber].
+  void markVerified(String id, String number) {
+    final c = load(id);
+    if (c == null) return;
+    c.verifiedNumber = number;
+    save(c);
+  }
+
+  /// Accept a number that changed, replacing what was trusted before.
+  ///
+  /// Separate from [markVerified] so the call sites cannot be confused: this
+  /// one is only reached from a screen that has already told somebody their
+  /// conversation changed and asked them to compare again.
+  void acceptChangedNumber(String id, String number) => markVerified(id, number);
 
   /// Whether this conversation has a PIN of its own.
   bool isLocked(String id) => _box.read(_kChatLock(id)) is String;
@@ -690,6 +756,7 @@ class RotelyxStore {
         pinned: json['pin'] == true,
         muted: json['mute'] == true,
         receipts: json['rcpt'] == true,
+        verifiedNumber: json['vnum'] as String?,
         unread: json['unread'] == true,
         lastOpened: json['opened'] is int
             ? DateTime.fromMillisecondsSinceEpoch(json['opened'] as int)
