@@ -11,9 +11,15 @@
 ///
 /// Now it moves when a member or a device is added, which is the case worth
 /// catching, and these are the assertions that it is caught.
+///
+/// A later round of the same audit pointed out that catching it was not the
+/// whole of the finding: the application knew the conversation was unverified
+/// and only said so behind a tap, so nothing ever put the digits in front of
+/// anybody. Hence `declined`, and hence the tests below it: being asked once is
+/// now part of the state, and saying no to the question is not the same fact as
+/// never having been asked.
 library;
 
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
@@ -45,10 +51,48 @@ void main() {
     await store.create('a passphrase nobody will guess');
   });
 
-  test('a conversation nobody compared is not stopped, only marked', () {
+  test('a conversation nobody compared is asked, not stopped', () {
     store.save(conversation('fresh', 'hello'));
 
     expect(store.verificationOf('fresh', '11111 22222'), Verification.never);
+  });
+
+  test('being asked once is remembered, and is not verification', () {
+    store.save(conversation('asked', 'hello'));
+    store.markAskedToVerify('asked');
+
+    // Declining must not read as never: that is what would bring the question
+    // back on the next message and spend a warning nobody needed twice.
+    expect(store.verificationOf('asked', '11111 22222'), Verification.declined);
+
+    // And it must not read as verified either. Nothing was compared, so a
+    // different number later is not a change this device can claim to detect.
+    expect(store.verificationOf('asked', '33333 44444'), Verification.declined,
+        reason: 'declining stores no number, so there is nothing to change '
+            'against and the conversation stays unverified');
+  });
+
+  test('declining survives a restart', () async {
+    store.save(conversation('still-asked', 'hello'));
+    store.markAskedToVerify('still-asked');
+
+    store.lock();
+    expect(await store.unlock('a passphrase nobody will guess'), isTrue);
+
+    expect(store.verificationOf('still-asked', '11111 22222'),
+        Verification.declined,
+        reason: 'the question would otherwise return on every cold open, which '
+            'is how a real warning gets dismissed without being read');
+  });
+
+  test('comparing after declining still verifies', () {
+    store.save(conversation('later', 'hello'));
+    store.markAskedToVerify('later');
+    store.markVerified('later', '11111 22222');
+
+    expect(store.verificationOf('later', '11111 22222'), Verification.matches);
+    expect(store.verificationOf('later', '33333 44444'), Verification.changed,
+        reason: 'having declined once must not cost them the detection later');
   });
 
   test('comparing it records the digits, not a flag', () {

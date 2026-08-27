@@ -11,10 +11,20 @@ Package: `rotelyx_chat` · Bundle ID: `com.ideoalabs.rotelyx`
 
 ---
 
-> **Rotelyx is unaudited and pre-release. Do not use it to protect anything.**
-> It makes no security claims until the review gates in the protocol
+> **Rotelyx is independently unaudited and pre-release. Do not use it to protect
+> anything.** It makes no security claims until the review gates in the protocol
 > repository's `docs/THREAT-MODEL.md` section 5 are met. The pairing screen says
 > so too, on purpose: a client that looks finished is itself a security claim.
+>
+> Five rounds of internal review at Ideoa Labs closed every finding raised
+> against this client, including the two that mattered: it used to drive the
+> engine into reusing a media nonce across calls, and it used to show a safety
+> number that could not change. Internal is not independent, and the difference
+> is the whole reason the line above still reads the way it does.
+
+**Found something? Email <contact@ideoa.co.uk>, and please do not open a public
+issue.** Terms, scope and what is explicitly not a finding are in
+[`SECURITY.md`](SECURITY.md).
 
 ---
 

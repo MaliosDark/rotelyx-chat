@@ -1,0 +1,47 @@
+# A-4 enforcement (Rotelyx Chat app repo). Ideoa Labs.
+#
+# Fails the build if the e2e remote-control hook (window.__rotelyx) could reach
+# production. It builds the client the production way and confirms the marker is
+# absent from the artifact, then runs the same guard on native release scripts.
+#
+# Deploy: copy to the APP repo's .github/workflows/ , and place verify-no-e2e.sh
+# at scripts/verify-no-e2e.sh (or adjust the path below).
+
+name: no-e2e-in-release
+on:
+  push: { branches: [ master ] }
+  pull_request:
+  release: { types: [ published ] }
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with: { channel: stable }
+      - run: flutter pub get
+
+      # Build exactly as production ships (no --dart-define=e2e).
+      - name: Production web build
+        run: tool/dev/build-web.sh
+
+      # The authoritative check: the hook must be tree-shaken out.
+      - name: Assert the e2e hook is absent
+        run: bash scripts/verify-no-e2e.sh .
+
+      # Belt and braces: prove a mis-build WOULD be caught. Build WITH e2e into a
+      # throwaway dir and confirm the marker appears there; the job still passes
+      # because we only assert on the production build/web above.
+      - name: Sanity - the check can see the hook when present
+        run: |
+          tool/dev/build-web.sh --dart-define=e2e=true -o build/e2e
+          if grep -rl "__rotelyx" build/e2e >/dev/null 2>&1; then
+            echo "ok: the marker is detectable when e2e is on"
+          else
+            echo "the check would miss a leaked hook; investigate the marker"; exit 1
+          fi

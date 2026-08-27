@@ -302,6 +302,67 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  /// Put the digits in front of them once, before the first message leaves.
+  ///
+  /// This does not refuse. Whichever they answer, the message is sent: the
+  /// point is that nobody reaches their second message without having been told
+  /// the number exists and been given the chance to compare it. Declining is
+  /// recorded so the question does not come back, and the conversation goes on
+  /// reading as unverified everywhere it is shown.
+  Future<void> _askToCompare(String pending) async {
+    final t = RotelyxThemeScope.of(context);
+    final current = rotelyx.safetyNumber ?? '';
+
+    final compared = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: t.surface,
+        title: const Text('Have you compared this number?'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Read these digits out to them on a call, or hold the two phones '
+              'side by side. The same number on both means nobody is sitting in '
+              'the middle of this conversation.',
+            ),
+            const SizedBox(height: Metrics.pad),
+            SelectableText(current, style: Type.numeric.copyWith(color: t.text)),
+            const SizedBox(height: Metrics.pad),
+            Text(
+              'Comparing it here proves nothing. That is the one channel '
+              'somebody in the middle would control.',
+              style: Type.small.copyWith(color: t.faint),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Not now, send it'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('I compared it, it matches'),
+          ),
+        ],
+      ),
+    );
+
+    if (!mounted) return;
+    if (compared == true) {
+      store.markVerified(widget.conversationId, current);
+    } else {
+      store.markAskedToVerify(widget.conversationId);
+    }
+    setState(() => _conversation = store.load(widget.conversationId));
+
+    // Asked and answered: the send that triggered this now runs to the end.
+    if (_input.text.trim() == pending) _send();
+  }
+
   void _send() {
     final text = _input.text.trim();
     if (text.isEmpty) return;
@@ -312,19 +373,26 @@ class _ChatScreenState extends State<ChatScreen> {
       return;
     }
 
-    // A conversation whose safety number changed since it was compared does not
-    // send until somebody has looked.
+    // Two states hold a message back, and they hold it back differently.
     //
-    // This is the one place the application stops a person from doing what they
-    // asked. The reason it is worth it: the number now changes when a member or
-    // a device is added, and the case being caught is a device added quietly to
-    // a conversation somebody already trusted. A banner would be read as
-    // decoration by the third time it appeared. A conversation that has simply
-    // never been compared is *not* stopped, because blocking a first message
-    // teaches people to click through the thing that matters.
-    if (store.verificationOf(widget.conversationId, rotelyx.safetyNumber) ==
-        Verification.changed) {
+    // `changed` refuses. The number now moves when a member or a device is
+    // added, so the case being caught is a device added quietly to a
+    // conversation somebody already trusted, and that is worth a refusal.
+    //
+    // `never` asks, once, with the digits on screen, and sends either way. The
+    // reason it asks at all is that the shield in the header used to be the only
+    // thing that knew this conversation was unverified, and it was behind a tap.
+    // The reason it only asks once is that a question which returns on every
+    // cold open is answered without being read by the third time, which is how
+    // a real warning gets spent before it is needed.
+    final state =
+        store.verificationOf(widget.conversationId, rotelyx.safetyNumber);
+    if (state == Verification.changed) {
       _numberChanged();
+      return;
+    }
+    if (state == Verification.never && rotelyx.safetyNumber != null) {
+      _askToCompare(text);
       return;
     }
 
@@ -928,6 +996,8 @@ class _ChatScreenState extends State<ChatScreen> {
               onToggleSafety: () => setState(() => _showSafety = !_showSafety),
               onAddMember: _addMember,
               expanded: _showSafety,
+              verification: store.verificationOf(
+                  widget.conversationId, rotelyx.safetyNumber),
               resuming: _resuming,
               resumable: store.sessionBlob(widget.conversationId) != null,
             ),
@@ -1035,6 +1105,7 @@ class _Header extends StatelessWidget {
     required this.onToggleSafety,
     required this.onAddMember,
     required this.expanded,
+    required this.verification,
     required this.resuming,
     required this.resumable,
     required this.live,
@@ -1053,6 +1124,10 @@ class _Header extends StatelessWidget {
   final VoidCallback onToggleSafety;
   final VoidCallback onAddMember;
   final bool expanded;
+
+  /// What the shield reports. It used to report whether the panel below it was
+  /// open, which is the one thing a person looking at a shield is not asking.
+  final Verification verification;
   final bool resuming;
 
   /// Joined, and joined to the conversation this header sits above. Passed in
@@ -1159,9 +1234,25 @@ class _Header extends StatelessWidget {
           ),
           IconButton(
             onPressed: onToggleSafety,
-            tooltip: 'Safety number',
-            icon: Icon(expanded ? Icons.verified_user : Icons.verified_user_outlined,
-                size: 20, color: expanded ? Tone.accent : t.muted),
+            tooltip: switch (verification) {
+              Verification.matches => 'Safety number, compared',
+              Verification.changed => 'Safety number changed',
+              Verification.declined => 'Safety number, never compared',
+              Verification.never => 'Safety number, not compared yet',
+            },
+            icon: Icon(
+              switch (verification) {
+                Verification.matches => Icons.verified_user,
+                Verification.changed => Icons.gpp_maybe,
+                _ => Icons.gpp_bad,
+              },
+              size: 20,
+              color: switch (verification) {
+                Verification.matches => Tone.good,
+                Verification.changed => Tone.bad,
+                _ => t.muted,
+              },
+            ),
           ),
         ],
       ),
@@ -1201,13 +1292,21 @@ class _SafetyPanelState extends State<_SafetyPanel> {
               // Said plainly, in all three states. A conversation nobody has
               // compared should look different from one that has been, or the
               // comparison is a thing people believe they did.
-              if (state == Verification.matches)
-                Text('compared', style: Type.small.copyWith(color: Tone.good))
-              else if (state == Verification.changed)
-                Text('changed since you compared it',
-                    style: Type.small.copyWith(color: Tone.bad))
-              else
-                Text('not compared yet', style: Type.small.copyWith(color: t.muted)),
+              Text(
+                switch (state) {
+                  Verification.matches => 'compared',
+                  Verification.changed => 'changed since you compared it',
+                  Verification.declined => 'never compared',
+                  Verification.never => 'not compared yet',
+                },
+                style: Type.small.copyWith(
+                  color: switch (state) {
+                    Verification.matches => Tone.good,
+                    Verification.changed => Tone.bad,
+                    _ => t.muted,
+                  },
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 6),
