@@ -138,7 +138,7 @@ no address. It then wakes every stored token every `everySeconds`.
 
     POST https://api.push.apple.com/3/device/<token>
     authorization: bearer <JWT, ES256, signed with the .p8 key>
-    apns-topic: com.ideoalabs.rotelyx
+    apns-topic: com.rotelyx.ios
     apns-push-type: alert
     apns-priority: 10
 
@@ -165,7 +165,7 @@ Started with:
       --apns-key /etc/rotelyx/AuthKey_XXXXXXXXXX.p8 \
       --apns-key-id XXXXXXXXXX \
       --apns-team-id YYYYYYYYYY \
-      --apns-topic com.ideoalabs.rotelyx \
+      --apns-topic com.rotelyx.ios \
       --wake-every 300 \
       --wake-state /var/lib/rotelyx/wake.sealed \
       --mailbox-state /var/lib/rotelyx/mailbox.sealed
@@ -253,7 +253,7 @@ between finding a mistake here and finding it there.
 
 ### The App Group
 
-`group.com.ideoalabs.rotelyx`, named in both entitlement files and once in
+`group.com.rotelyx.ios`, named in both entitlement files and once in
 `SharedContainer.swift`, because three literals is two too many.
 
 The conversation log now lives in it. `lib/main.dart` builds `GetStorage` with
@@ -305,7 +305,7 @@ which is exactly what a locked screen with previews switched off shows anyway.
 2. Enable the **Push Notifications** capability on Runner. The entitlement is
    written; the capability has to be switched on in the developer account so the
    provisioning profile carries it.
-3. Register the App Group `group.com.ideoalabs.rotelyx` in the developer account
+3. Register the App Group `group.com.rotelyx.ios` in the developer account
    and confirm both targets' profiles carry it.
 4. Create an APNs authentication key and put the `.p8` on the mailbox server,
    never in this repository.
@@ -398,9 +398,10 @@ entitlement revoked.
 
 ## Delivery state, which needs none of this
 
-The mailbox already answers `stored` for a deposit and `fannedOut {stored,
-asked}` for a fan-out, so the app can honestly say **in their mailbox**, and
-stops there.
+The mailbox answers `stored` for a deposit, so the app can honestly say **in
+their mailbox**, and stops there. A group message is one deposit per recipient
+and therefore one `stored` each: the request that named every recipient at once
+was removed, because it handed the operator the whole membership in one frame.
 
 Not "delivered", not "read", except for one narrow case that has to be an
 exception: a self-destructing message acknowledges its own reading, because

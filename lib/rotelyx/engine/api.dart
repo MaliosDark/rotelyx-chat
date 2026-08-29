@@ -67,6 +67,29 @@ abstract interface class RotelyxSession {
 
   String safetyNumber();
   List<String> roster();
+
+  /// Everyone here, each with the key that identifies them.
+  ///
+  /// JSON: `[{"label":…,"key":…}]`, the key base64. [roster] gives the labels
+  /// alone, which is right for showing who is present and useless for acting
+  /// on one of them: a label is a claim, and two members can make the same one.
+  String rosterDetail();
+
+  /// Put a member out of the conversation, returning the commit to deliver.
+  ///
+  /// A removal is a commit and not a local setting. A device that is gone is a
+  /// leaf that can still decrypt, and forgetting it here changes nothing: the
+  /// key schedule includes it until the group says otherwise. Everybody who
+  /// applies the commit moves to an epoch derived without that leaf, which is
+  /// also what makes the removal visible rather than something the removed
+  /// device could ignore.
+  ///
+  /// It does not reach backwards. What that member could already read, it
+  /// keeps.
+  ///
+  /// Deliver the result with [sealCommitForGroup], addressed at the epoch the
+  /// others are still on, exactly as an invitation's commit is.
+  String removeMember(String signatureKeyB64);
   int get epoch;
   int get memberCount;
 
@@ -143,6 +166,18 @@ abstract interface class RotelyxEngine {
   /// Not a secret channel and not authentication: whoever arrives first
   /// answers. Only the safety number detects that.
   String rendezvousTag(String phrase);
+
+  /// What to name an envelope by when telling the mailbox it arrived.
+  ///
+  /// Delivery peeks and removal waits for this receipt, so an envelope nobody
+  /// acknowledges sits until its seven-day TTL and the tag fills at 256, after
+  /// which the server refuses deposits and messages are lost with nothing said
+  /// to the sender. It is not optional housekeeping.
+  ///
+  /// The engine computes it because the digest is over the envelope's stored
+  /// bytes, and computing it here would be a third implementation of the wire
+  /// format.
+  String receiptFor(String envelopeB64);
 
   String sealUnder(String tagHex, String payloadB64);
   String openUnder(String envelopeB64, String tagHex);

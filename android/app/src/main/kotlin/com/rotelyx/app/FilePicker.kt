@@ -1,4 +1,4 @@
-package com.ideoalabs.rotelyx
+package com.rotelyx.app
 
 import android.app.Activity
 import android.content.Intent

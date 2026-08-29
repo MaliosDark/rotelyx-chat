@@ -2,8 +2,10 @@
 ///
 /// # Why this file matters more than it looks
 ///
-/// The mailbox keeps nothing: an envelope is removed when it is collected, and
-/// what is never collected expires. There is no server-side history, no account
+/// The mailbox keeps nothing for long: an envelope is removed when the reader
+/// acknowledges it, and what is never acknowledged expires after seven days.
+/// **This client does not acknowledge yet**, so for now everything it receives
+/// sits out the full seven days. See the ledger in the protocol repository. There is no server-side history, no account
 /// to restore from, and no other device holding a copy unless the user made
 /// one. If this store loses a conversation, the conversation is gone.
 ///

@@ -1,4 +1,4 @@
-package com.ideoalabs.rotelyx
+package com.rotelyx.app
 
 import android.app.Notification
 import android.app.PendingIntent
@@ -58,8 +58,8 @@ class ConnectionService : Service() {
         private const val ID = 0x52545859
         private const val RUNNING = "rotelyx.running"
 
-        const val ACTION_START = "com.ideoalabs.rotelyx.CONNECT"
-        const val ACTION_STOP = "com.ideoalabs.rotelyx.DISCONNECT"
+        const val ACTION_START = "com.rotelyx.app.CONNECT"
+        const val ACTION_STOP = "com.rotelyx.app.DISCONNECT"
 
         fun start(context: Context) {
             val intent = Intent(context, ConnectionService::class.java)

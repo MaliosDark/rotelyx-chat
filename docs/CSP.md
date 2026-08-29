@@ -58,7 +58,7 @@ location / {
     img-src 'self' data: blob:;
     media-src 'self' data: blob:;
     font-src 'self';
-    connect-src 'self' blob: data: wss://mail-rotelyx.ideoa.co;
+    connect-src 'self' blob: data: wss://m1.telyx.me;
     frame-ancestors 'none';
     base-uri 'self';
     form-action 'none';

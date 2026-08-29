@@ -19,7 +19,7 @@ Verify the mechanical parts with:
 
 | | Where |
 |---|---|
-| Target API 35, compile against 35 | `android/app/build.gradle` |
+| Target API 36, compile against 36 | `android/app/build.gradle` |
 | Sixteen kilobyte page alignment on all three ABIs | `tool/native/build-android.sh` |
 | A signing config that reads a key outside the repository | `android/app/build.gradle` |
 | Signing material excluded from version control | `.gitignore` |
@@ -27,12 +27,13 @@ Verify the mechanical parts with:
 | `POST_NOTIFICATIONS` declared and requested at runtime | `Notifications.kt`, `MainActivity.kt` |
 | Uncompressed native libraries | `packagingOptions`, `useLegacyPackaging false` |
 
-## Target API 35
+## Target API 36
 
-Play has required API 35 for new applications and for updates to existing ones
-since 31 August 2025. Compiling against it and targeting it are two settings and
-both are needed; targeting an older API with a newer compile SDK is accepted by
-Gradle and rejected by Play.
+Play has required API 35 as a floor for new applications and for updates since
+31 August 2025. This targets and compiles against **36**, which is above the
+floor. Compiling against a level and targeting it are two settings and both are
+needed: targeting an older API with a newer compile SDK is accepted by Gradle
+and rejected by Play.
 
 ## Sixteen kilobyte pages
 

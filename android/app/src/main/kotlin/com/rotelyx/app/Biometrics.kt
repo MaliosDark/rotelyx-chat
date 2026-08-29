@@ -1,4 +1,4 @@
-package com.ideoalabs.rotelyx
+package com.rotelyx.app
 
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt

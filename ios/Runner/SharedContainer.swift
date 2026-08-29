@@ -31,7 +31,7 @@ enum SharedContainer {
     /// Named in both entitlement files. A mismatch between them and this string
     /// produces a nil container and an application that silently stops keeping
     /// history, so it is one constant and not three literals.
-    static let group = "group.com.ideoalabs.rotelyx"
+    static let group = "group.com.rotelyx.ios"
 
     /// Where both processes may read and write.
     ///

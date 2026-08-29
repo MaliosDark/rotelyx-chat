@@ -70,9 +70,9 @@ stack drags in a great deal of generic code and debug keeps a symbol for all of
 it. Nobody steps through this library from Dart, and the thing being debugged is
 always on the other side of the ABI.
 
-Requires the NDK. This machine has 23.1.7779620 under
-`/home/serafin/Dinter/_devtools/android/sdk/ndk`, which works; anything newer
-will too.
+Requires the NDK. 23.1.7779620 is what this was developed against and anything
+newer works too. The build script finds it under `$ANDROID_HOME`, so set that
+if yours lives somewhere the script does not look.
 
 ### iOS
 
@@ -170,7 +170,7 @@ two wrappers, and they interoperate.
 *The protocol repository has the hard half and it is tested.* `rotelyx-media`
 does frame encryption, an adaptive jitter buffer and loss recovery;
 `rotelyx-codec` is Telyx, a transform speech codec written for a channel where
-latency is spendable. 150 tests pass. Fidelity mode loses nothing at 98 percent
+latency is spendable. 166 tests cover the two between them. Fidelity mode loses nothing at 98 percent
 packet loss, measured, and calls are relayed by construction:
 `MediaOut::new` refuses every path policy that permits a direct route, so the
 other party never learns your address and there is no switch to turn that off.

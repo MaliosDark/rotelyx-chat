@@ -23,6 +23,9 @@ const allowedHosts = <String, String>{
       'the blind mailbox: store and forward, never learns the sender, never '
           'sees plaintext',
   '127.0.0.1': 'the mailbox running locally during development',
+  'localhost':
+      'the same machine by its other name, in the development CSP that '
+          'tool/dev/run-ui-test.sh installs. Never in a shipped build',
   'amber.telyx.me':
       'the relay calls are carried over. QUIC, so a browser cannot reach it: '
           'named in rotelyx_config.dart and in a comment there explaining why '
@@ -56,9 +59,16 @@ void main() {
     final root = Directory.current;
     final offenders = <String>[];
 
+    // `tool/` is here because that is where this rotted. The mailbox moved
+    // host and the shipped code moved with it, while a driver and a CSP-editing
+    // sed in tool/ kept naming the old one: one connected to a host that no
+    // longer answers, the other silently matched nothing and stopped doing its
+    // job. Neither ships, and both are code that names a host, which is what
+    // this test is for.
     final sources = [
       Directory('${root.path}/lib'),
       Directory('${root.path}/web'),
+      Directory('${root.path}/tool'),
     ];
 
     for (final dir in sources) {
@@ -67,7 +77,9 @@ void main() {
       for (final entity in dir.listSync(recursive: true)) {
         if (entity is! File) continue;
         if (_skip(entity.path)) continue;
-        if (!RegExp(r'\.(dart|html|js|json)$').hasMatch(entity.path)) continue;
+        if (!RegExp(r'\.(dart|html|js|json|sh|py)$').hasMatch(entity.path)) {
+          continue;
+        }
 
         final relative = entity.path.replaceFirst('${root.path}/', '');
         final lines = entity.readAsLinesSync();

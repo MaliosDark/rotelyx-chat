@@ -60,5 +60,5 @@ done
 8. host → guest message decrypts
 9. guest → host message decrypts
 
-It talks to production (`wss://mail-rotelyx.ideoa.co/mailbox`) and leaves a
+It talks to production (`wss://m1.telyx.me/mailbox`) and leaves a
 short-lived conversation there under a timestamped meeting phrase.

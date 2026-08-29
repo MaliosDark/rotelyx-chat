@@ -30,6 +30,7 @@ extension type _Ns._(JSObject _) implements JSObject {
   external WasmKeyJs unlockKey(String passphrase, String blob);
 
   external String rendezvousTag(String phrase);
+  external String receiptFor(String envelopeB64);
   external String sealUnder(String tagHex, String payloadB64);
   external String openUnder(String envelopeB64, String tagHex);
 
@@ -56,6 +57,8 @@ extension type WasmSessionJs._(JSObject _) implements JSObject {
   external String safetyNumber();
 
   external JSArray roster();
+  external String rosterDetail();
+  external String removeMember(String signatureKeyB64);
   external int get epoch;
   external int get memberCount;
 
@@ -161,6 +164,13 @@ class _WebSession implements RotelyxSession {
   String safetyNumber() => inner.safetyNumber();
   @override
   List<String> roster() => _strings(inner.roster());
+
+  @override
+  String rosterDetail() => inner.rosterDetail();
+
+  @override
+  String removeMember(String signatureKeyB64) =>
+      inner.removeMember(signatureKeyB64);
   @override
   int get epoch => inner.epoch;
   @override
@@ -319,6 +329,8 @@ class _WebEngine implements RotelyxEngine {
 
   @override
   String rendezvousTag(String phrase) => _require().rendezvousTag(phrase);
+  @override
+  String receiptFor(String envelopeB64) => _require().receiptFor(envelopeB64);
   @override
   String sealUnder(String tagHex, String payloadB64) =>
       _require().sealUnder(tagHex, payloadB64);

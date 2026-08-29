@@ -1,4 +1,4 @@
-package com.ideoalabs.rotelyx
+package com.rotelyx.app
 
 import android.media.AudioAttributes
 import android.media.AudioFormat

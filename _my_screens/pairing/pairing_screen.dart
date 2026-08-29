@@ -156,7 +156,7 @@ class _PairingScreenState extends State<PairingScreen>
                   ],
                   if (_error != null) _errorBox(theme, _error!),
                   const SizedBox(height: 20),
-                  _unauditedNotice(theme),
+                  _reviewNotice(theme),
                 ],
               ),
             ),
@@ -448,15 +448,15 @@ class _PairingScreenState extends State<PairingScreen>
   ///
   /// A chat client that looks finished is itself a security claim, which is the
   /// one thing the threat model says cannot be made yet.
-  Widget _unauditedNotice(AppTheme theme) => Container(
+  Widget _reviewNotice(AppTheme theme) => Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
             border: Border.all(color: theme.borderColor),
             borderRadius: BorderRadius.circular(10)),
         child: Text(
-          'Rotelyx is unaudited and pre-release. It makes no security claims '
-          'until an independent cryptographic review is complete. Do not use it '
-          'to protect anything.',
+          'Rotelyx is internally audited and pre-release. '
+          'It makes no security claims until an outside review is complete. '
+          'Do not use it to protect anything.',
           textAlign: TextAlign.center,
           style: TextStyle(fontSize: 11, color: theme.greyText, height: 1.5),
         ),

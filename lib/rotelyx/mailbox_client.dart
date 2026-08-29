@@ -1,16 +1,24 @@
 /// Client for the blind mailbox.
 ///
-/// The wire protocol is three frames out and five in:
+/// The frames this client sends, and the ones it acts on:
 ///
 ///   out  {"op":"deposit","envelope":"<b64>"}
 ///        {"op":"subscribe","tags":["<hex>", ...]}
 ///        {"op":"unsubscribe","tags":["<hex>", ...]}
+///        {"op":"collected","digests":["<hex>", ...]}
+///        {"op":"registerWake",...}  {"op":"revokeWake",...}
 ///
 ///   in   {"op":"ready","waiting":N}
 ///        {"op":"stored"}
-///        {"op":"fannedOut","stored":N,"asked":N}
+///        {"op":"overQuota","limit":N,"used":N,"tier":"..."}
 ///        {"op":"envelope","envelope":"<b64>"}
 ///        {"op":"error","message":"..."}
+///        {"op":"wakeRegistered","everySeconds":N}
+///
+/// The server sends `dropped` and `tier` as well, and this client neither asks
+/// for them nor acts on them. Counting the list is not the point: what matters
+/// is that every reply saying a request **failed** has a case here. `overQuota`
+/// did not, so a refused deposit looked exactly like an accepted one.
 ///
 /// `ready` is the reply to `subscribe`, not a greeting. The server says nothing
 /// at all until the client speaks, and `waiting` counts the envelopes that were
@@ -28,6 +36,8 @@
 library;
 
 import 'dart:async';
+
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'dart:convert';
 
 import 'push.dart';
@@ -111,6 +121,16 @@ class MailboxClient {
     socket.closed.listen((why) => _errors.add('mailbox connection $why'));
   }
 
+  /// Feed one frame in, without a socket.
+  ///
+  /// Only ever called from `test/mailbox_replies_test.dart`. It exists because
+  /// the defect this file carried was not in the parsing or the sending: it
+  /// was a reply the switch had no case for, which is invisible to any test
+  /// that drives the client through a real connection and only checks that
+  /// messages arrive. What has to be checked is that a refusal is not silence.
+  @visibleForTesting
+  void handleFrameForTest(String text) => _onFrame(text);
+
   void _onFrame(String text) {
     final Map<String, dynamic> frame;
     try {
@@ -137,13 +157,46 @@ class MailboxClient {
         if (every is int) _wakeInterval.add(every);
       case 'stored':
         _accepted.add(1);
-      case 'fannedOut':
-        // `stored` below `asked` means a recipient's slot was full. Reported
-        // rather than hidden: a silently dropped recipient looks exactly like
-        // someone who stopped replying.
-        final stored = frame['stored'];
-        if (stored is int) _accepted.add(stored);
+      case 'overQuota':
+        // The allowance is spent and **the envelope was not stored**.
+        //
+        // This had no case at all and no default, so a refused deposit was
+        // indistinguishable from an accepted one and the message showed as
+        // sent. It reaches the same channel as any other refusal, with the
+        // numbers, because "try again later" is not actionable and "you have
+        // used 64 of 64 MiB, it returns tomorrow" is.
+        final used = frame['used'], limit = frame['limit'];
+        final tier = frame['tier'] ?? 'free';
+        if (used is int && limit is int) {
+          _errors.add(
+            'The $tier allowance is spent: ${(used / 1048576).round()} of '
+            '${(limit / 1048576).round()} MiB used this period. That message '
+            'was not sent. The allowance returns tomorrow.',
+          );
+        } else {
+          _errors.add('The allowance is spent. That message was not sent.');
+        }
     }
+  }
+
+  /// Tell the mailbox these envelopes arrived, so it can stop holding them.
+  ///
+  /// Delivery peeks and removal waits for this. An envelope nobody
+  /// acknowledges sits until its seven-day TTL, and a tag that fills at 256
+  /// makes the server refuse further deposits: messages lost, and silently,
+  /// because a refused deposit produces no error the sender can see.
+  ///
+  /// Send it **after** the envelope has been opened and written down, never on
+  /// arrival. Not acknowledging costs re-delivery, which is recoverable and
+  /// which MLS refuses as a replay so nothing is shown twice. Acknowledging
+  /// something not yet stored loses it.
+  ///
+  /// The digest is not a capability: the server only honours one for a tag
+  /// this connection is listening on, so naming somebody else's envelope does
+  /// nothing.
+  void collected(List<String> digests) {
+    if (digests.isEmpty) return;
+    _send({'op': 'collected', 'digests': digests});
   }
 
   void deposit(String envelope) => _send({'op': 'deposit', 'envelope': envelope});
@@ -152,9 +205,10 @@ class MailboxClient {
 
   /// Stop listening on these tags.
   ///
-  /// Collection removes an envelope, so a client still subscribed to a tag it
-  /// has finished with eats traffic meant for somebody else. Unsubscribing from
-  /// the rendezvous tag once a conversation exists is not tidiness.
+  /// A client still subscribed to a tag it has finished with is handed traffic
+  /// meant for somebody else, and acknowledging any of it takes that envelope
+  /// away from the reader it was for. Unsubscribing from the rendezvous tag
+  /// once a conversation exists is not tidiness.
   void unsubscribe(List<String> tags) => _send({'op': 'unsubscribe', 'tags': tags});
 
   /// Ask to be woken on the schedule.

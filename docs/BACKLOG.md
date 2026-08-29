@@ -33,7 +33,8 @@ refusal always says who refused it and why.
 | Message text on a locked screen, as a switch | `ui/screens/settings.dart` |
 | Receiving while the app is closed, without Firebase | `android/.../ConnectionService.kt` |
 | Sixteen kilobyte page alignment, which Play requires | `tool/native/check-alignment.sh` |
-| Release signing, target API 35, privacy manifest, export declaration | `docs/RELEASING.md` |
+| Target API 36, privacy manifest, export declaration | `docs/RELEASING.md` |
+| Release signing is wired and **cannot run**: no upload key exists, so a release build signs with the debug key and Play refuses it | `android/app/build.gradle`, `docs/RELEASING.md` |
 | The camera scans a meeting code on a phone | `android/.../QrCamera.kt`, `qr/camera_native.dart` |
 | Renaming, pinning, muting and read receipts, per conversation | `ui/screens/contact.dart` |
 | Profile pictures, cropped and stripped of metadata before they leave | `ui/screens/picture.dart` |

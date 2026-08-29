@@ -1,4 +1,4 @@
-package com.ideoalabs.rotelyx
+package com.rotelyx.app
 
 import android.content.Intent
 import io.flutter.plugin.common.MethodChannel

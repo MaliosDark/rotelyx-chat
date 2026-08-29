@@ -130,6 +130,20 @@ class RotelyxService {
   Stream<RotelyxMessage> get messages => _messages.stream;
   Stream<RotelyxState> get stateChanges => _stateChanges.stream;
 
+  /// Something the person needs told while the conversation is still working.
+  ///
+  /// Separate from [stateChanges] because these are not state: the connection
+  /// is fine and something specific was refused. Separate from failing the
+  /// conversation because a spent allowance is not a broken conversation, and
+  /// dropping into `failed` for it would throw somebody out of a chat that
+  /// still works.
+  ///
+  /// This exists because the mailbox's own error channel was only acted on
+  /// while **not** joined, so a refusal that arrived mid-conversation, which is
+  /// when deposits actually happen, was dropped without a word.
+  Stream<String> get notices => _notices.stream;
+  final _notices = StreamController<String>.broadcast();
+
   /// A fingerprint of the conversation, for confirming out of band that two
   /// devices are in the same group and not in two groups an attacker sat
   /// between. Null before the group exists.
@@ -280,6 +294,10 @@ class RotelyxService {
       // Decrypting advances the peer's ratchet, which has to happen in order or
       // the next one will not open. The plaintext itself is discarded.
       peer.receive(payload);
+      // Consumed: the ratchet moved, so a re-delivery of this one would not
+      // open anyway. Releasing it is the only thing that keeps a note to self
+      // from leaving seven days of envelopes behind it.
+      _acknowledge(envelopeB64);
     } on Object {
       // Not for this half either, or out of window. Nothing to do and nothing
       // worth telling anybody.
@@ -929,7 +947,15 @@ class RotelyxService {
     _mailboxListeners.add(mailbox.errors.listen((message) {
       if (state != RotelyxState.joined) {
         _moveTo(RotelyxState.failed, error: message);
+        return;
       }
+      // Joined, so the conversation is not broken and must not be failed for
+      // this. It still has to be said: the refusals that arrive here are
+      // things that did not happen, like a deposit the allowance would not
+      // cover, and a message that did not go is exactly what a person cannot
+      // find out any other way.
+      lastError = message;
+      _notices.add(message);
     }));
 
     try {
@@ -961,6 +987,12 @@ class RotelyxService {
       }
       if (payload != null) {
         _onRendezvous(payload);
+        // The meeting tag needs releasing as much as a conversation tag does,
+        // and more: a knock nobody acknowledges is re-delivered on every
+        // reconnect, and the meeting tag is the one a stranger can derive from
+        // a code that was read aloud. Acknowledged after `_onRendezvous`, which
+        // is where the handshake is applied.
+        _acknowledge(incoming.envelope);
         return;
       }
     }
@@ -1126,6 +1158,11 @@ class RotelyxService {
       if (plaintext == null) {
         // A commit. The epoch moved, so our tags moved with it, listening on
         // the old set would go quiet with nothing saying why.
+        //
+        // Acknowledged here rather than below: MLS has consumed the commit and
+        // this side is at the new epoch, so re-delivery would only be refused
+        // as a replay and the envelope would sit until its TTL.
+        _acknowledge(envelopeB64);
         _resubscribe();
         _stateChanges.add(state);
         return;
@@ -1133,12 +1170,35 @@ class RotelyxService {
       final signal = Signal.decode(plaintext);
       if (signal != null) {
         _onSignal(signal);
+        _acknowledge(envelopeB64);
         return;
       }
 
+      // After `_emit`, which records and persists, so the mailbox is only told
+      // to let go of something this device has written down.
       _emit(RotelyxMessage(text: plaintext, mine: false, at: DateTime.now()));
+      _acknowledge(envelopeB64);
     } on Object catch (e) {
       lastError = 'a message failed to decrypt: $e';
+    }
+  }
+
+  /// Tell the mailbox an envelope arrived, so it can stop holding it.
+  ///
+  /// Called only on the paths that processed one: a commit applied, a signal
+  /// acted on, a message recorded and persisted. Never on the path where
+  /// opening failed, because an envelope that is not ours to read is not ours
+  /// to release.
+  ///
+  /// Best effort. A receipt that does not arrive means re-delivery, which MLS
+  /// refuses as a replay, so the cost is battery rather than correctness. The
+  /// other direction, acknowledging something unstored, loses a message, which
+  /// is why this is never called before the write.
+  void _acknowledge(String envelopeB64) {
+    try {
+      _mailbox?.collected([RotelyxWasm.receiptFor(envelopeB64)]);
+    } on Object {
+      // See above: re-delivery is the recoverable failure and it is this one.
     }
   }
 
@@ -1150,6 +1210,61 @@ class RotelyxService {
       return session.roster();
     } on Object {
       return const [];
+    }
+  }
+
+  /// Everyone here, each with the key that identifies them.
+  ///
+  /// [roster] gives labels, which two members can both claim. Removing takes a
+  /// key, so anything offering removal has to read this one.
+  List<({String label, String key})> get members {
+    final session = _session;
+    if (session == null || state != RotelyxState.joined) return const [];
+    try {
+      final raw = jsonDecode(session.rosterDetail()) as List;
+      return [
+        for (final m in raw.cast<Map<String, dynamic>>())
+          (label: m['label'] as String, key: m['key'] as String),
+      ];
+    } on Object {
+      return const [];
+    }
+  }
+
+  /// Put a member out of the conversation.
+  ///
+  /// This is how a lost or stolen device is revoked, and until 29 August 2026
+  /// the phone could not do it at all: the engine had it, the C ABI did not,
+  /// so the browser and the desktop could revoke and the device most likely to
+  /// be lost could not.
+  ///
+  /// A removal is a commit. Everybody who applies it moves to an epoch derived
+  /// without that leaf, which is what makes it real rather than a local note,
+  /// and what makes it visible to the removed device instead of something it
+  /// could ignore. It does not reach backwards: what that member could already
+  /// read, it keeps.
+  ///
+  /// The commit is addressed at the epoch the others are still on, because that
+  /// commit is what moves them off it. Sending it at the new epoch would
+  /// deposit under tags nobody is listening on and split the group silently,
+  /// which is the same trap the invitation path documents.
+  Future<bool> removeMember(String signatureKeyB64) async {
+    final session = _session;
+    if (session == null || state != RotelyxState.joined) return false;
+
+    try {
+      final commit = session.removeMember(signatureKeyB64);
+      for (final envelope in session.sealCommitForGroup(commit)) {
+        _mailbox?.deposit(envelope);
+      }
+      // Our own tags moved with the epoch, as they do after any commit.
+      _resubscribe();
+      _stateChanges.add(state);
+      return true;
+    } on Object catch (e) {
+      lastError = 'could not remove that member: $e';
+      _stateChanges.add(state);
+      return false;
     }
   }
 
@@ -1497,6 +1612,7 @@ class RotelyxService {
     _usePeer(null);
     await _messages.close();
     await _stateChanges.close();
+    await _notices.close();
   }
 }
 

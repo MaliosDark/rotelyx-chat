@@ -7,13 +7,13 @@
 
 A Flutter chat client by **Ideoa Labs**, speaking the Rotelyx protocol.
 
-Package: `rotelyx_chat` · Bundle ID: `com.ideoalabs.rotelyx`
+Package: `rotelyx_chat` · Bundle IDs: `com.rotelyx.app` (Android), `com.rotelyx.ios`, `com.rotelyx.mac`, `com.rotelyx.linux`
 
 ---
 
-> **Rotelyx is independently unaudited and pre-release. Do not use it to protect
-> anything.** It makes no security claims until the review gates in the protocol
-> repository's `docs/THREAT-MODEL.md` section 5 are met. The pairing screen says
+> **Rotelyx is internally audited and pre-release.** Five rounds closed every
+> finding raised against this client. No outside review yet, so the gates in the
+> protocol repository's `docs/THREAT-MODEL.md` section 5 are not all met. The pairing screen says
 > so too, on purpose: a client that looks finished is itself a security claim.
 >
 > Five rounds of internal review at Ideoa Labs closed every finding raised
@@ -89,7 +89,7 @@ The whole live codebase opens exactly two outbound addresses, and they are the
 same service in two environments:
 
 ```
-wss://mail-rotelyx.ideoa.co/mailbox     production
+wss://m1.telyx.me/mailbox     production
 ws://127.0.0.1:3341/mailbox             local development
 ```
 
@@ -302,7 +302,7 @@ adb install -r build/app/outputs/flutter-apk/app-release.apk
 
 Install on both, pair them with a QR code, and press the call button in the
 chat header. The relay has to be reachable from both: `rotelyxConfig.relay` in
-`lib/rotelyx/rotelyx_config.dart` points at `relay-rotelyx.ideoa.co` in
+`lib/rotelyx/rotelyx_config.dart` points at `amber.telyx.me` in
 production and at `127.0.0.1:3340` in development, and a phone cannot reach the
 second one.
 
@@ -403,7 +403,7 @@ from Google instead. The flag sets `useLocalCanvasKit: true`. The gstatic string
 still appears in the bundle afterwards, as the dead branch of that ternary.
 
 Verified against the compiled output rather than the source: `main.dart.js`
-names `mail-rotelyx.ideoa.co` and nothing else reachable.
+names `m1.telyx.me` and nothing else reachable.
 
 ### The server must rewrite unknown paths to `index.html`
 
@@ -478,7 +478,7 @@ answers from a build it cached.
 
 Five levels, because each catches something the one below it cannot.
 
-**`flutter test`**, 127 tests across 19 files, in about thirty seconds. The
+**`flutter test`**, 203 tests across 31 files, in about a minute and a half. The
 engine and transport tests need the native library on the loader path:
 
 ```bash

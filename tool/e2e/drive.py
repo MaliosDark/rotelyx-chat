@@ -132,7 +132,7 @@ def main():
             ok("console clean apart from the fonts the CSP blocks")
 
         # ---- the real handshake, against the production mailbox ------------
-        print("\npairing against wss://mail-rotelyx.ideoa.co/mailbox ...")
+        print("\npairing against wss://m1.telyx.me/mailbox ...")
 
         driver_js = open(f"{OUT}/pair.js").read()
         js(a, driver_js)

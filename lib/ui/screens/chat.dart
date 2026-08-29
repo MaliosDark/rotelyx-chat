@@ -102,6 +102,18 @@ class _ChatScreenState extends State<ChatScreen> {
       if (!mounted) return;
       setState(() => _conversation = store.load(widget.conversationId));
     });
+
+    // Things that were refused while the conversation still works. A spent
+    // allowance is the one this was built for: the deposit did not happen and
+    // nothing else on this screen would ever say so, because a message that is
+    // not stored looks the same from here as one that is.
+    rotelyx.notices.listen((message) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(message),
+        duration: const Duration(seconds: 8),
+      ));
+    });
     _resumeIfNeeded();
   }
 
@@ -1269,6 +1281,53 @@ class _SafetyPanel extends StatefulWidget {
 }
 
 class _SafetyPanelState extends State<_SafetyPanel> {
+  /// Ask, then remove.
+  ///
+  /// The dialog says the three things a person needs and no more: that
+  /// everyone will see it, that it cannot be undone, and that it does not
+  /// reach backwards. The last one matters most and is the one people assume
+  /// wrongly: removing somebody does not unsay what they already read.
+  Future<void> _confirmRemoval(String label, String key) async {
+    final t = RotelyxThemeScope.of(context);
+
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: t.surface,
+        title: Text('Remove $label?'),
+        content: const Text(
+          'Everyone in the conversation sees this, including them, and there '
+          'is no undo: to let them back in you would have to invite them '
+          'again.\n\n'
+          'From now on they cannot read anything. What they already received, '
+          'they keep, and nothing here can change that.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Remove', style: TextStyle(color: Tone.bad)),
+          ),
+        ],
+      ),
+    );
+
+    if (go != true || !mounted) return;
+
+    final done = await rotelyx.removeMember(key);
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(done
+          ? '$label was removed.'
+          : 'Could not remove $label: ${rotelyx.lastError ?? "unknown"}'),
+    ));
+    setState(() {});
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = RotelyxThemeScope.of(context);
@@ -1347,11 +1406,20 @@ class _SafetyPanelState extends State<_SafetyPanel> {
             Text('In this conversation',
                 style: Type.label.copyWith(color: t.muted)),
             const SizedBox(height: 6),
+            // Long-press to remove. It lives beside the safety number because
+            // that is the panel somebody opens when they are worried, and
+            // revoking a device is what they came to do. Not a visible button:
+            // removal is a commit everyone sees and cannot be undone, so it
+            // asks for a deliberate gesture and then asks again.
             Wrap(
               spacing: 6,
               runSpacing: 6,
               children: [
-                for (final name in rotelyx.roster) RxChip(name),
+                for (final m in rotelyx.members)
+                  GestureDetector(
+                    onLongPress: () => _confirmRemoval(m.label, m.key),
+                    child: RxChip(m.label),
+                  ),
               ],
             ),
             const SizedBox(height: 6),

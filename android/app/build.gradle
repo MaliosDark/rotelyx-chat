@@ -44,7 +44,7 @@ if (keystorePropertiesFile.exists()) {
 }
 
 android {
-    namespace "com.ideoalabs.rotelyx"
+    namespace "com.rotelyx.app"
     // 35 is what Google Play requires of every new application and every
     // update since 31 August 2025. Compiling against it is not the same as
     // targeting it, and both are needed.
@@ -67,7 +67,7 @@ android {
     }
 
     defaultConfig {
-        applicationId "com.ideoalabs.rotelyx"
+        applicationId "com.rotelyx.app"
 
         // 24 is where the engine's dependencies land, and it is also where the
         // Rust library is built for: see tool/native/build-android.sh.

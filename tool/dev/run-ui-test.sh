@@ -21,7 +21,7 @@ trap restore EXIT INT TERM
 cp "$INDEX" "$BACKUP"
 
 # Only connect-src changes, and only to add the loopback debug service.
-sed -i "s|connect-src 'self' blob: data: wss://mail-rotelyx.ideoa.co;|connect-src 'self' blob: data: wss://mail-rotelyx.ideoa.co ws://127.0.0.1:* ws://localhost:*;|" "$INDEX"
+sed -i "s|connect-src 'self' blob: data: wss://m1.telyx.me;|connect-src 'self' blob: data: wss://m1.telyx.me ws://127.0.0.1:* ws://localhost:*;|" "$INDEX"
 echo "CSP de desarrollo instalada"
 
 flutter drive \

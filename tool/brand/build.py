@@ -50,7 +50,11 @@ import os
 
 from PIL import Image
 
-BRAND = "/home/serafin/comms-real-e2e/docs/brand"
+# The protocol repository holds the source artwork. Overridable, and the
+# default is only right on the machine this was written on.
+BRAND = os.path.join(
+    os.environ.get("ROTELYX_PROTOCOL", "/home/serafin/comms-real-e2e"),
+    "docs", "brand")
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Where the vertical lockup separates. Measured from the source rather than

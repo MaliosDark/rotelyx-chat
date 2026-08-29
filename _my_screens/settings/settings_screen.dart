@@ -63,7 +63,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               'This client contacts no third party. The only outbound '
               'connection is the mailbox above, which never learns who sent a '
               'message and never sees plaintext.\n\n'
-              'Rotelyx is unaudited and pre-release.',
+              'Rotelyx is internally audited and pre-release.',
               style:
                   TextStyle(fontSize: 11, color: theme.greyText, height: 1.5),
             ),

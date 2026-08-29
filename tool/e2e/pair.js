@@ -12,6 +12,25 @@ window.__rx = (() => {
   const say = (m) => S.log.push(m);
 
   const deposit = (e) => S.socket.send(JSON.stringify({ op: 'deposit', envelope: e }));
+
+  // Tell the mailbox an envelope arrived, so it stops holding it.
+  //
+  // The Dart does this and so must anything claiming to mirror it, and there is
+  // a second reason here: this harness deposits into the **production** mailbox.
+  // Without a receipt every run left its envelopes sitting for the full
+  // seven-day TTL under a tag derived from a phrase, which is litter in
+  // somebody's live service and, run often enough, fills a tag.
+  //
+  // After the envelope is handled, never on arrival. Best effort: a receipt
+  // that does not go means re-delivery, which is the harmless direction.
+  const acknowledge = (e) => {
+    try {
+      S.socket.send(JSON.stringify({
+        op: 'collected',
+        digests: [window.rotelyx.receiptFor(e)],
+      }));
+    } catch (err) { /* re-delivery is recoverable; losing a message is not */ }
+  };
   const subscribe = (t) => S.socket.send(JSON.stringify({ op: 'subscribe', tags: t }));
   const unsubscribe = (t) => S.socket.send(JSON.stringify({ op: 'unsubscribe', tags: t }));
 
@@ -83,10 +102,29 @@ window.__rx = (() => {
     try { payload = S.session.openMine(envelopeB64, LOOKBACK); }
     catch { return; }  // not ours in this window
 
-    const text = S.session.receive(payload);
+    // `receive` answers with which of three things arrived, as JSON:
+    // `{"kind":"message","text":...}`, `{"kind":"membership",...}` or
+    // `{"kind":"nothing"}`. This read the result as the plaintext, from when
+    // the engine returned that or nothing, so every message came back as an
+    // object and matched no expected text. The Dart had the same bug once and
+    // it was worse there: an object is not null, but the old check made it
+    // null, and null means "a commit" to the caller, so Android dropped every
+    // inbound message in silence.
+    //
+    // This file exists to mirror the Dart step for step, so a divergence here
+    // is not cosmetic: it is the harness no longer testing what the client
+    // does, while still reporting.
+    const answer = S.session.receive(payload);
     S.epoch = S.session.epoch;
-    if (text === null || text === undefined) { resubscribe(); return; }
-    S.inbox.push(text);
+    if (answer === null || answer === undefined) { resubscribe(); return; }
+
+    let parsed;
+    try { parsed = JSON.parse(answer); }
+    catch { S.err = 'receive did not answer with JSON: ' + answer; return; }
+
+    if (parsed.kind === 'membership') { resubscribe(); return; }
+    if (parsed.kind !== 'message') return;   // nothing, and nothing to do
+    S.inbox.push(parsed.text);
   }
 
   return {
@@ -104,7 +142,7 @@ window.__rx = (() => {
         S.meeting = window.rotelyx.rendezvousTag(phrase);
         if (role === 'host') S.session.found();
 
-        S.socket = new WebSocket('wss://mail-rotelyx.ideoa.co/mailbox');
+        S.socket = new WebSocket('wss://m1.telyx.me/mailbox');
 
         S.socket.onerror = () => { S.err = 'mailbox unreachable'; };
         S.socket.onmessage = (ev) => {
@@ -116,8 +154,9 @@ window.__rx = (() => {
           // meeting tag but arrives after the conversation exists.
           let rv = null;
           try { rv = window.rotelyx.openUnder(r.envelope, S.meeting); } catch {}
-          if (rv !== null) { onRendezvous(rv); return; }
+          if (rv !== null) { onRendezvous(rv); acknowledge(r.envelope); return; }
           onConversation(r.envelope);
+          acknowledge(r.envelope);
         };
 
         S.socket.onopen = () => {

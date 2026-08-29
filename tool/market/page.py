@@ -184,9 +184,10 @@ def main():
 
 
 HEAD = '''<title>Where This Can Ship</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=Public+Sans:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<!-- No webfont link on purpose. This repository says it opens no third-party
+     address, and a reader who greps for one is not going to weigh whether the
+     file they found happens to ship. Every rule below already names a system
+     fallback, so the page loses a typeface and nothing else. -->
 <style>
 :root {
   --paper: #F1F4F7;

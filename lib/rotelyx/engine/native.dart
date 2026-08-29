@@ -277,6 +277,13 @@ class _NativeSession implements RotelyxSession {
   List<String> roster() => _strings(_op('session.roster'));
 
   @override
+  String rosterDetail() => _string(_op('session.rosterDetail'));
+
+  @override
+  String removeMember(String signatureKeyB64) => _string(
+      _op('session.removeMember', {'signatureKey': signatureKeyB64}));
+
+  @override
   int get epoch => _int(_op('session.epoch'));
 
   @override
@@ -460,6 +467,10 @@ class _NativeEngine implements RotelyxEngine {
   @override
   String rendezvousTag(String phrase) =>
       _string(_call({'op': 'rendezvous.tag', 'passphrase': phrase}));
+
+  @override
+  String receiptFor(String envelopeB64) =>
+      _string(_call({'op': 'mailbox.receiptFor', 'envelope': envelopeB64}));
 
   @override
   String sealUnder(String tagHex, String payloadB64) =>
