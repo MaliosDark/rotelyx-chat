@@ -334,6 +334,7 @@ class RotelyxStore {
   static const _kTransport = 'rotelyx.transport-identity';
   static const _kBiometric = 'rotelyx.biometric';
   static const _kIndex = 'rotelyx.index';
+  static const _kCapability = 'rotelyx.capability-token';
   static String _kSession(String id) => 'rotelyx.session.$id';
   static String _kLog(String id) => 'rotelyx.log.$id';
 
@@ -401,6 +402,53 @@ class RotelyxStore {
     } else {
       _box.write(_kMailbox, value);
     }
+  }
+
+  /// A capability token, sealed under the vault key.
+  ///
+  /// # Sealed, and one, and not beside a conversation
+  ///
+  /// Sealed because it is a bearer credential: whoever holds it spends the tier
+  /// it was bought for. It goes under the vault key rather than in the unsealed
+  /// settings, which are for things a screen needs **before** a passphrase has
+  /// been given, and nothing needs this before then: the mailbox connection is
+  /// made after unlocking.
+  ///
+  /// One, rather than one per conversation, and that is a privacy decision more
+  /// than a filing one. A token carries a random id and the mailbox meters
+  /// against it, so every deposit under one is tied to every other. Buying
+  /// several would not undo that either, because the mailbox already sees them
+  /// arrive from one address.
+  ///
+  /// Null when there is none, which is the ordinary state: the free tier works
+  /// and this application is usable without ever having one.
+  String? get capabilityToken {
+    final key = _key;
+    final blob = _box.read(_kCapability) as String?;
+    if (key == null || blob == null) return null;
+    try {
+      return utf8.decode(base64Decode(RotelyxWasm.openBlob(key, blob)));
+    } catch (_) {
+      // A token that will not open is a token from another passphrase. Silence
+      // would be wrong here and so would a crash: the caller carries on
+      // unauthenticated, which is a working state, and the next large message
+      // says so through the mailbox's own refusal.
+      return null;
+    }
+  }
+
+  set capabilityToken(String? value) {
+    final key = _key;
+    if (key == null) return;
+    final trimmed = value?.trim() ?? '';
+    if (trimmed.isEmpty) {
+      _box.remove(_kCapability);
+      return;
+    }
+    _box.write(
+      _kCapability,
+      RotelyxWasm.sealBlob(key, base64Encode(utf8.encode(trimmed))),
+    );
   }
 
   /// Read something that has to be legible before the vault is open.

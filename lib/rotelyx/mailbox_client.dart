@@ -57,6 +57,16 @@ class MailboxEnvelope {
   final String envelope;
 }
 
+/// Shortest a blindly issued token can be, and the line between the two auth
+/// frames.
+///
+/// Measured rather than reasoned: a signed token is 119 characters and a blind
+/// one is 406. This sits in the middle of that gap. The same number, for the
+/// same reason, is in `rotelyx-mailbox-client` and in `site/chat.html`, and
+/// `rotelyx_capability` has a test that fails if the two formats ever grow close
+/// enough that a length stops telling them apart.
+const int blindTokenMinimum = 240;
+
 class MailboxClient {
   MailboxClient(this.url);
 
@@ -138,6 +148,16 @@ class MailboxClient {
   @visibleForTesting
   void handleFrameForTest(String text) => _onFrame(text);
 
+  /// Put a socket in place without connecting, so a test can watch what this
+  /// client sends rather than only what it says.
+  ///
+  /// The token work needs this: holding a token and presenting it at the right
+  /// moment is a property of what goes **out**, and every test here until now
+  /// could only see what came in. A defect that is invisible from one side is
+  /// how `overquota` survived a release.
+  @visibleForTesting
+  void useSocketForTest(TextSocket socket) => _socket = socket;
+
   void _onFrame(String text) {
     final Map<String, dynamic> frame;
     try {
@@ -155,7 +175,22 @@ class MailboxClient {
         final envelope = frame['envelope'];
         if (envelope is String) _envelopes.add(MailboxEnvelope(envelope));
       case 'error':
-        _errors.add('mailbox refused a frame: ${frame['message']}');
+        // A size refusal is the other thing a tier decides, and the server
+        // sends it as prose rather than as a shape. The substring is pinned on
+        // that side by the mailbox server's own wire test, which makes it a term
+        // of the contract instead of a guess about somebody's wording.
+        final message = '${frame['message']}';
+        if (message.contains('tier allows at most')) {
+          final refused = _inFlight.isNotEmpty ? _inFlight.removeAt(0) : null;
+          if (refused != null && _presentHeldToken()) {
+            _inFlight.insert(0, refused);
+            _send({'op': 'deposit', 'envelope': refused});
+            return;
+          }
+          if (refused != null) _inFlight.insert(0, refused);
+        }
+        if (_inFlight.isNotEmpty) _inFlight.removeAt(0);
+        _errors.add('mailbox refused a frame: $message');
       case 'wakeRegistered':
         // How often this device will be woken, in seconds, as the mailbox
         // decided. Read rather than assumed so that Settings can state the
@@ -163,12 +198,24 @@ class MailboxClient {
         final every = frame['everySeconds'];
         if (every is int) _wakeInterval.add(every);
       case 'stored':
+        if (_inFlight.isNotEmpty) _inFlight.removeAt(0);
         _accepted.add(1);
       case 'overquota':
         // The allowance is spent and **the envelope was not stored**.
         //
         // Lowercase, because that is what the server sends. This read
         // `overQuota` for one whole release and therefore matched nothing.
+        //
+        // If a token is held, this is the moment it earns its keep: present it
+        // and send the refused envelope again. That happens at most once per
+        // connection, and the envelope is the one at the front of `_inFlight`
+        // because the server answers deposits in order.
+        final refused = _inFlight.isNotEmpty ? _inFlight.removeAt(0) : null;
+        if (refused != null && _presentHeldToken()) {
+          _inFlight.insert(0, refused);
+          _send({'op': 'deposit', 'envelope': refused});
+          return;
+        }
         //
         // This had no case at all and no default, so a refused deposit was
         // indistinguishable from an accepted one and the message showed as
@@ -225,7 +272,63 @@ class MailboxClient {
     _send({'op': 'collected', 'digests': digests});
   }
 
-  void deposit(String envelope) => _send({'op': 'deposit', 'envelope': envelope});
+  void deposit(String envelope) {
+    // Kept until the server answers, so a refusal can name the envelope it
+    // refused. The server answers deposits in order on one connection, so the
+    // front of this queue is what a `stored` or an `overquota` is about.
+    _inFlight.add(envelope);
+    _send({'op': 'deposit', 'envelope': envelope});
+  }
+
+  /// Keep a capability token, and do not present it yet.
+  ///
+  /// # Why holding beats presenting
+  ///
+  /// A token carries a random id and the mailbox meters against it, so every
+  /// deposit made under one is tied to every other. Without a token, an
+  /// unauthenticated caller gets a fresh capability per connection and one
+  /// person's conversations are not tied to each other at the mailbox at all.
+  ///
+  /// Presenting at connect throws that away permanently, and throws it away for
+  /// nothing on the traffic that would have fit in the free tier anyway, which
+  /// is most of it. So the token waits here and goes out only when the free
+  /// tier actually refuses something. The mailbox accepts an `auth` at any
+  /// point on a connection and upgrades the capability in place, which is what
+  /// makes waiting possible.
+  ///
+  /// The safe behaviour is what happens by default. A caller that does nothing
+  /// gets the fewest links.
+  void holdToken(String token) {
+    _token = token.trim().isEmpty ? null : token.trim();
+    _presented = false;
+  }
+
+  /// Present the held token, if there is one that has not gone out yet.
+  ///
+  /// The mailbox has one frame for each kind of token and refuses to guess
+  /// which arrived, deliberately: guessing means trying both and reporting
+  /// whichever error reads better, and a refusal then stops naming one thing.
+  /// The holder is the side that knows, so the holder says.
+  ///
+  /// Told apart by length. A signed token is a claim set and a 64 byte
+  /// signature, about 119 characters; a blind one is a 16 byte id and an RSA
+  /// signature at 2048 bits, 406. The threshold sits in the middle of that gap
+  /// and `rotelyx_capability` has a test that fails if the two formats ever
+  /// grow close enough for it to be a guess.
+  bool _presentHeldToken() {
+    final token = _token;
+    if (token == null || _presented) return false;
+    _presented = true;
+    _send({
+      'op': token.length >= blindTokenMinimum ? 'authblind' : 'auth',
+      'token': token,
+    });
+    return true;
+  }
+
+  String? _token;
+  bool _presented = false;
+  final _inFlight = <String>[];
 
   void subscribe(List<String> tags) => _send({'op': 'subscribe', 'tags': tags});
 

@@ -926,6 +926,12 @@ class RotelyxService {
     final mailbox = MailboxClient(mailboxUrl);
     _mailbox = mailbox;
 
+    // Held, not presented. It goes to the mailbox only if the free tier refuses
+    // something: see `MailboxClient.holdToken` for why waiting is the safe
+    // default rather than a saving.
+    final token = RotelyxStore.instance.capabilityToken;
+    if (token != null) mailbox.holdToken(token);
+
     _mailboxListeners.add(mailbox.envelopes.listen(_onEnvelope));
     _mailboxListeners.add(mailbox.accepted.listen((count) {
       var left = count;
