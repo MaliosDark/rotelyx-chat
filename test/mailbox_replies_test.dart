@@ -3,7 +3,7 @@
 /// # Why this file exists
 ///
 /// The client sent the right frames and parsed the ones it knew. What it did
-/// not have was a case for `overQuota`, which is how the server says it refused
+/// not have was a case for `overquota`, which is how the server says it refused
 /// a deposit because the period's allowance is spent. With no case and no
 /// default the frame fell through, and a message that was never stored looked
 /// to the person who sent it exactly like one that was.
@@ -23,7 +23,7 @@ void main() {
     final sub = client.errors.listen(said.add);
 
     client.handleFrameForTest(
-      '{"op":"overQuota","limit":67108864,"used":67108900,"tier":"free"}',
+      '{"op":"overquota","limit":67108864,"used":67108900,"tier":"free"}',
     );
     await Future<void>.delayed(Duration.zero);
 
@@ -47,7 +47,7 @@ void main() {
     // A server that answered without the fields, or an older one. The fallback
     // must still be a refusal rather than nothing: guessing at the numbers
     // would be worse than omitting them, and silence is worse than both.
-    client.handleFrameForTest('{"op":"overQuota"}');
+    client.handleFrameForTest('{"op":"overquota"}');
     await Future<void>.delayed(Duration.zero);
 
     expect(said, hasLength(1));

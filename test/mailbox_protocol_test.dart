@@ -23,7 +23,7 @@ import 'package:flutter_test/flutter_test.dart';
 /// What `Request` in `rotelyx-mailbox-server` deserialises, and what each is
 /// for. Sorted, and every entry earns its place by naming the reply it expects.
 const accepted = <String, String>{
-  'deposit': 'one sealed envelope. Answered with `stored`, or `overQuota` when '
+  'deposit': 'one sealed envelope. Answered with `stored`, or `overquota` when '
       'the allowance is spent and the envelope was not kept',
   'subscribe': 'listen on these tags, and hand over what is already waiting. '
       'Answered with `ready`',

@@ -10,15 +10,22 @@
 ///
 ///   in   {"op":"ready","waiting":N}
 ///        {"op":"stored"}
-///        {"op":"overQuota","limit":N,"used":N,"tier":"..."}
+///        {"op":"overquota","limit":N,"used":N,"tier":"..."}
 ///        {"op":"envelope","envelope":"<b64>"}
 ///        {"op":"error","message":"..."}
 ///        {"op":"wakeRegistered","everySeconds":N}
 ///
 /// The server sends `dropped` and `tier` as well, and this client neither asks
 /// for them nor acts on them. Counting the list is not the point: what matters
-/// is that every reply saying a request **failed** has a case here. `overQuota`
+/// is that every reply saying a request **failed** has a case here. `overquota`
 /// did not, so a refused deposit looked exactly like an accepted one.
+///
+/// **It was given one, spelled `overQuota`, and the server sends `overquota`.**
+/// The server's enum is `rename_all = "lowercase"`, so a name that reads as two
+/// words there arrives as one. The fix went in with the client's own spelling
+/// and the bug it describes stayed live, and the test written to guard it fed
+/// this client a string this client had produced. Ops are compared against what
+/// the server sends now, and `default` below catches the next one.
 ///
 /// `ready` is the reply to `subscribe`, not a greeting. The server says nothing
 /// at all until the client speaks, and `waiting` counts the envelopes that were
@@ -157,8 +164,11 @@ class MailboxClient {
         if (every is int) _wakeInterval.add(every);
       case 'stored':
         _accepted.add(1);
-      case 'overQuota':
+      case 'overquota':
         // The allowance is spent and **the envelope was not stored**.
+        //
+        // Lowercase, because that is what the server sends. This read
+        // `overQuota` for one whole release and therefore matched nothing.
         //
         // This had no case at all and no default, so a refused deposit was
         // indistinguishable from an accepted one and the message showed as
@@ -176,6 +186,22 @@ class MailboxClient {
         } else {
           _errors.add('The allowance is spent. That message was not sent.');
         }
+      default:
+        // An op this client does not know.
+        //
+        // Silence here is what let a misspelled `overQuota` sit through a
+        // release: the frame fell through, a refused deposit looked accepted,
+        // and nothing anywhere said a word. A name that arrives and matches
+        // nothing is now visible rather than swallowed.
+        //
+        // Not an error to the person, because the server is free to add
+        // replies this client has no use for, and telling somebody about
+        // `dropped` would be noise. It goes where a developer looks.
+        assert(() {
+          // ignore: avoid_print
+          print('mailbox: unhandled op ${frame['op']}');
+          return true;
+        }());
     }
   }
 
