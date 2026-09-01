@@ -16,6 +16,7 @@
 /// [safetyNumber] is surfaced rather than hidden behind a details panel.
 library;
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
@@ -304,14 +305,16 @@ class RotelyxService {
     }
   }
 
-  void _onSignal(Signal signal) {
+  /// [from] is the label MLS authenticated as the author, or null when the
+  /// bridge could not say.
+  void _onSignal(Signal signal, {String? from}) {
     switch (signal.kind) {
       case SignalKind.burnRead:
         _theyRead(signal.burnIds);
       case SignalKind.read:
-        _theySawUpTo(signal.readThrough);
+        _theySawUpTo(signal.readThrough, from: from);
       case SignalKind.reaction:
-        _theyReacted(signal);
+        _theyReacted(signal, from: from);
       case SignalKind.profile:
         _theyChangedPicture(signal.picture);
       case SignalKind.retract:
@@ -338,37 +341,98 @@ class RotelyxService {
   /// say they had read up to". That is right in the only case it has to be
   /// right in: they read in order, and anything sent after they looked is not
   /// covered.
-  void _theySawUpTo(DateTime through) {
-    // Who said it. A group of eight needs all eight before a double tick is
-    // honest, and in a conversation of two this is the only other member.
-    final who = conversationName ?? 'They';
+  /// Deliver a signal as if it had arrived from [from].
+  ///
+  /// The receipt path is where a group differs from a pair, and the difference
+  /// is invisible from outside: a pair works whatever the attribution is,
+  /// because there is only one other member. A test that cannot say who a
+  /// receipt came from can only ever exercise the case that already worked.
+  @visibleForTesting
+  void deliverSignalForTest(Signal signal, {String? from}) =>
+      _onSignal(signal, from: from);
+
+  /// [from] is who MLS authenticated as the author of the receipt.
+  ///
+  /// # This used to be the conversation's name, and that broke every group
+  ///
+  /// `conversationName` describes the whole conversation: for three people it
+  /// is a string like "Alice and 2 others". Every member's receipt therefore
+  /// arrived under the same name, the second one matched `seenBy.contains`, and
+  /// the loop skipped it. So `seenBy` never grew past one and the tick, which
+  /// waits for everybody, **never appeared in a group at all**.
+  ///
+  /// The value was there the whole time. MLS authenticates the sending leaf,
+  /// `rotelyx-crypto` has carried it since it was written, and the wasm layer
+  /// dropped it on the way out.
+  ///
+  /// Null falls back to the old behaviour, because an older bridge cannot say
+  /// who spoke and a conversation of two is right either way: there is only one
+  /// other member for the receipt to be from.
+  void _theySawUpTo(DateTime through, {String? from}) {
+    final who = from ?? conversationName ?? 'They';
     final others = memberCount > 1 ? memberCount - 1 : 1;
 
     _rewrite((messages) {
       var changed = false;
       for (var i = 0; i < messages.length; i++) {
-        final m = messages[i];
-        if (!m.mine || m.seen) continue;
-        if (m.at.isAfter(through)) continue;
-        if (m.seenBy.contains(who)) continue;
-
-        final readers = [...m.seenBy, who];
-
-        // The tick only once everybody has said so. Until then the names are
-        // kept and the tick is not shown, because "somebody read it" and
-        // "everybody read it" are different facts.
-        messages[i] = m.copyWith(
-          seenBy: readers,
-          seen: readers.length >= others,
-        );
+        final next = readBy(messages[i], who, through, others);
+        if (next == null) continue;
+        messages[i] = next;
         changed = true;
       }
       return changed;
     });
   }
 
+  /// Fold one reader into one message, or null when nothing changes.
+  ///
+  /// # Why this is a function and not four lines inside the loop
+  ///
+  /// It was four lines inside the loop, and the group case was wrong for as
+  /// long as it existed with nothing able to say so: `memberCount` comes from a
+  /// live MLS session, so exercising a group of three meant founding a group of
+  /// three, and no test did. A conversation of two takes the same path and is
+  /// correct whatever the attribution is, because there is only one other
+  /// member the receipt can be from.
+  ///
+  /// Pulled out, the decision takes `others` as a number and can be asked about
+  /// a group of eight without one existing.
+  ///
+  /// `others` is how many people other than us are in the conversation, which
+  /// is how many receipts a tick has to wait for.
+  @visibleForTesting
+  static StoredMessage? readBy(
+    StoredMessage m,
+    String who,
+    DateTime through,
+    int others,
+  ) {
+    // Not ours, or already ticked: nothing a receipt can add.
+    if (!m.mine || m.seen) return null;
+
+    // A high water mark below this message covers everything up to it and not
+    // this one, or anything sent after somebody looked would be marked read.
+    if (m.at.isAfter(through)) return null;
+
+    // The same person twice, which a redelivered envelope produces. Counting it
+    // would show a tick before everybody had read it, which is the one thing
+    // the tick exists not to do.
+    if (m.seenBy.contains(who)) return null;
+
+    final readers = [...m.seenBy, who];
+
+    // The tick only once everybody has said so. Until then the names are kept
+    // and the tick is not shown, because "somebody read it" and "everybody read
+    // it" are different facts.
+    return m.copyWith(seenBy: readers, seen: readers.length >= others);
+  }
+
   /// Add or remove a reaction on one of our messages.
-  void _theyReacted(Signal signal) {
+  /// [from] is who MLS authenticated as the author, for the same reason as
+  /// [_theySawUpTo]: a reaction in a group is attributed to whoever made it,
+  /// and attributing all of them to the conversation's own name collapsed
+  /// several people into one.
+  void _theyReacted(Signal signal, {String? from}) {
     final emoji = signal.emoji;
     if (emoji.isEmpty) return;
     final at = signal.reactionAt;
@@ -383,7 +447,7 @@ class RotelyxService {
         // Emoji to the people who chose it. Their label rather than an
         // identifier, because there is no identifier: a member is a claim they
         // made when they joined, and it is what a tooltip can honestly show.
-        final who = conversationName ?? 'They';
+        final who = from ?? conversationName ?? 'They';
         final next = {
           for (final entry in m.reactions.entries) entry.key: List<String>.of(entry.value)
         };
@@ -1173,16 +1237,18 @@ class RotelyxService {
         _stateChanges.add(state);
         return;
       }
-      final signal = Signal.decode(plaintext);
+      final signal = Signal.decode(plaintext.text);
       if (signal != null) {
-        _onSignal(signal);
+        // The author travels with it. A receipt says "I read up to here" and
+        // in a group it matters a great deal which "I" that was.
+        _onSignal(signal, from: plaintext.from);
         _acknowledge(envelopeB64);
         return;
       }
 
       // After `_emit`, which records and persists, so the mailbox is only told
       // to let go of something this device has written down.
-      _emit(RotelyxMessage(text: plaintext, mine: false, at: DateTime.now()));
+      _emit(RotelyxMessage(text: plaintext.text, mine: false, at: DateTime.now()));
       _acknowledge(envelopeB64);
     } on Object catch (e) {
       lastError = 'a message failed to decrypt: $e';

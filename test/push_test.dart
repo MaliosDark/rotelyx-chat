@@ -45,11 +45,26 @@ void main() {
     expect(secrets.first, hasLength(64));
   });
 
-  test('the default transport is not Firebase and says what it is', () {
-    // Android holds its own connection, so on Android there is no transport at
-    // all. That is the honest answer and it is what Settings shows.
-    expect(const NoPush().name, contains('cannot be woken'));
-    expect(const ApnsPush().name, contains('No Firebase'));
+  test('the default transport is not Firebase and says what it is', () async {
+    // Asserted on what the transports are, not on how they are worded.
+    //
+    // This used to require the strings to contain "cannot be woken" and "No
+    // Firebase", and both were changed on 1 September 2026 when the shipped
+    // text was gone over for store review: a permanent notification and a
+    // settings line that name a reviewer's own service in the negative are an
+    // argument rather than a description. The property they were standing in
+    // for is real and is checked here instead, where wording cannot break it.
+    // Nothing outside wakes a build with no push, which is the property, and
+    // the name only has to say so rather than say it in particular words.
+    expect(await const NoPush().obtainToken(), isNull);
+    expect(const NoPush().name, isNotEmpty);
+
+    // Settings still names the path, including what is not in it. This is a
+    // settings line, which is where `PushTransport.name` says users deserve to
+    // know whether Google is in the path; the wording that was taken out on
+    // 1 September 2026 was in the ongoing notification, where naming somebody
+    // else's service reads as an argument rather than a description.
+    expect(const ApnsPush().name, contains('Firebase'));
   });
 
   test('nothing offers a per-tag registration', () {

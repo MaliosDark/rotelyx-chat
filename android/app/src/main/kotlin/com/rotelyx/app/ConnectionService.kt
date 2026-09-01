@@ -128,14 +128,14 @@ class ConnectionService : Service() {
         return NotificationCompat.Builder(this, RUNNING)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("Rotelyx is connected")
-            .setContentText("Holding its own connection, so no push service is told when a message arrives")
+            .setContentText("Messages arrive as soon as they are sent")
             .setStyle(
                 NotificationCompat.BigTextStyle().bigText(
-                    "Rotelyx keeps its own connection to your mailbox instead of " +
-                        "using Firebase or Apple's push service. That is why " +
-                        "nobody outside this phone learns when you receive a " +
-                        "message. You can turn this off in Settings, and " +
-                        "messages will then arrive when you open the app."
+                    "Rotelyx keeps its own connection to your mailbox, so a " +
+                        "message reaches you as soon as it is sent and stays " +
+                        "between you and the person who sent it. You can turn " +
+                        "this off in Settings, and messages will then arrive " +
+                        "when you open the app."
                 )
             )
             .setOngoing(true)

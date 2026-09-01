@@ -128,7 +128,7 @@ class NoPush implements PushTransport {
   const NoPush();
 
   @override
-  String get name => 'none, this build cannot be woken';
+  String get name => 'none: this device is not woken from outside';
 
   @override
   Future<String?> obtainToken() async => null;
@@ -160,7 +160,7 @@ class ApnsPush implements PushTransport {
   const ApnsPush();
 
   @override
-  String get name => 'Apple, directly. No Firebase and no Google';
+  String get name => 'Apple, directly. Not through Firebase';
 
   @override
   Future<String?> obtainToken() => applePushToken();

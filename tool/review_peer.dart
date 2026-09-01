@@ -191,7 +191,7 @@ Future<void> main(List<String> args) async {
 
     try {
       final plaintext =
-          session.receive(session.openMine(incoming, rotelyxConfig.lookback));
+          session.receive(session.openMine(incoming, rotelyxConfig.lookback))?.text;
 
       if (plaintext == null) {
         // A commit. The epoch moved and the tags moved with it.

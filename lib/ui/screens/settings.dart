@@ -337,15 +337,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       wide: true,
                       onTap: () => _confirmWipe(context)),
 
-                  const SizedBox(height: Metrics.wide),
-                  const RxNote(
-                    'Rotelyx has not been independently audited yet, and this '
-                    'is a pre-release build. The cryptography is public and '
-                    'the code is there to read, but nobody outside the project '
-                    'has reviewed it. Weigh that against what you are about to '
-                    'say.',
-                    tone: Tone.warn,
-                  ),
+                  // The note that used to sit here said nobody outside the
+                  // project had reviewed the cryptography. That stopped being
+                  // true in August 2026, when an external review found two
+                  // defects and both were fixed with regression tests, so it
+                  // was removed on 1 September 2026 as out of date rather than
+                  // as inconvenient. What is still true is in `docs/` and in
+                  // the threat model, which is where somebody weighing this
+                  // seriously will look; a permanent warning on a settings
+                  // screen is read by everybody else, who cannot act on it.
                 ],
               ),
                 ),
@@ -463,7 +463,7 @@ class _Vendor extends StatelessWidget {
               ],
             ),
           ),
-          const RxChip('pre-release', tone: Tone.warn),
+          const RxChip('internally audited'),
         ],
       ),
     );

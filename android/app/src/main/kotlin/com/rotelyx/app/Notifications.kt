@@ -113,8 +113,8 @@ class Notifications(private val context: Context) {
             RUNNING, "Staying connected", NotificationManager.IMPORTANCE_MIN
         ).apply {
             description =
-                "Shown while Rotelyx holds its own connection, so messages arrive " +
-                    "without Google or Apple being told that one did."
+                "Shown while Rotelyx keeps its own connection, so a message " +
+                    "reaches you as soon as it is sent."
             setShowBadge(false)
             enableVibration(false)
             setSound(null, null)

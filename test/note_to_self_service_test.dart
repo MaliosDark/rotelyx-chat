@@ -20,6 +20,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:get_storage/get_storage.dart';
 import 'package:rotelyx_chat/rotelyx/rotelyx_service.dart';
 import 'package:rotelyx_chat/rotelyx/rotelyx_store.dart';
+import 'package:rotelyx_chat/rotelyx/signal.dart';
 
 void main() {
   setUpAll(() async {
@@ -64,6 +65,40 @@ void main() {
         reason: 'a note to yourself is yours, on both halves of it');
   });
 
+  // --- who a read receipt is attributed to -----------------------------------
+  //
+  // Here rather than in `group_receipts_test.dart` because it needs the service
+  // and therefore the store, and two files owning that at once fight over it on
+  // disk.
+  //
+  // **And before the resume test below**, not after: a restored session refuses
+  // to send until its rekey commit has been delivered, and nothing here
+  // delivers one. Placed after it, `send` returns false and the failure reads
+  // like a broken receipt rather than a session that is doing what it says.
+  //
+  // `group_receipts_test.dart` covers when the tick appears. This covers the
+  // name that goes in, which is where the defect was: every member of a group
+  // arrived under the conversation's own name, so the second receipt looked
+  // like a repeat of the first and the tick never completed.
+
+  test('a read receipt is recorded against its sender, not the conversation', () {
+    expect(rotelyx.send('who read this'), isTrue);
+
+    final id = rotelyx.conversationId!;
+    final ours = store.load(id)!.messages.where((m) => m.mine).last;
+
+    rotelyx.deliverSignalForTest(
+      Signal.read(ours.at.add(const Duration(seconds: 1))),
+      from: 'Beto',
+    );
+
+    final after = store.load(id)!.messages.where((m) => m.mine).last;
+    expect(after.seenBy, ['Beto'],
+        reason: 'the name kept must be the member MLS authenticated. Taken from '
+            '`conversationName` instead, every member of a group arrives under '
+            'one name and the tick never completes');
+  });
+
   test('opening it again resumes rather than founding a second one', () async {
     final before = store.load(RotelyxService.selfConversationId)!.messages.length;
 
@@ -74,4 +109,5 @@ void main() {
         reason: 'founding again would replace the group and orphan everything '
             'written into the old one');
   });
+
 }

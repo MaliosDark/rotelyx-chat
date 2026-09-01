@@ -333,7 +333,7 @@ class _NativeSession implements RotelyxSession {
   String send(String text) => _string(_op('session.send', {'text': text}));
 
   @override
-  String? receive(String messageB64) {
+  Received? receive(String messageB64) {
     final result = _op('session.receive', {'message': messageB64});
 
     // The bridge answers with which of three things arrived, as an object:
@@ -352,15 +352,18 @@ class _NativeSession implements RotelyxSession {
       final kind = result['kind'];
       if (kind == 'message') {
         final text = result['text'];
-        return text is String ? text : null;
+        if (text is! String) return null;
+        final from = result['from'];
+        return Received(text, from: from is String && from.isNotEmpty ? from : null);
       }
       // Membership and nothing both mean the group moved rather than that
       // somebody said something, which is what null means to the caller.
       return null;
     }
 
-    // The older contract, in case an older bridge is loaded.
-    return result is String ? result : null;
+    // The older contract, in case an older bridge is loaded. It carried no
+    // author, so the message is unattributed rather than guessed at.
+    return result is String ? Received(result) : null;
   }
 
   @override

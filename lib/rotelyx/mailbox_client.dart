@@ -17,15 +17,13 @@
 ///
 /// The server sends `dropped` and `tier` as well, and this client neither asks
 /// for them nor acts on them. Counting the list is not the point: what matters
-/// is that every reply saying a request **failed** has a case here. `overquota`
-/// did not, so a refused deposit looked exactly like an accepted one.
+/// is that every reply saying a request **failed** has a case here.
 ///
-/// **It was given one, spelled `overQuota`, and the server sends `overquota`.**
-/// The server's enum is `rename_all = "lowercase"`, so a name that reads as two
-/// words there arrives as one. The fix went in with the client's own spelling
-/// and the bug it describes stayed live, and the test written to guard it fed
-/// this client a string this client had produced. Ops are compared against what
-/// the server sends now, and `default` below catches the next one.
+/// The server spells this one `overquota`, all lowercase: its enum is
+/// `rename_all = "lowercase"`, so a name that reads as two words in Rust
+/// arrives as one on the wire. `docs/MAILBOX-WIRE.md` in the Rotelyx repository
+/// is generated from the server's own serialiser and is the authority for every
+/// op name here.
 ///
 /// `ready` is the reply to `subscribe`, not a greeting. The server says nothing
 /// at all until the client speaks, and `waiting` counts the envelopes that were
@@ -151,10 +149,9 @@ class MailboxClient {
   /// Put a socket in place without connecting, so a test can watch what this
   /// client sends rather than only what it says.
   ///
-  /// The token work needs this: holding a token and presenting it at the right
-  /// moment is a property of what goes **out**, and every test here until now
-  /// could only see what came in. A defect that is invisible from one side is
-  /// how `overquota` survived a release.
+  /// The token work needs it: holding a token and presenting it at the right
+  /// moment is a property of what goes **out**, and the tests here could only
+  /// see what came in.
   @visibleForTesting
   void useSocketForTest(TextSocket socket) => _socket = socket;
 
@@ -203,8 +200,7 @@ class MailboxClient {
       case 'overquota':
         // The allowance is spent and **the envelope was not stored**.
         //
-        // Lowercase, because that is what the server sends. This read
-        // `overQuota` for one whole release and therefore matched nothing.
+        // Lowercase, which is what the server sends.
         //
         // If a token is held, this is the moment it earns its keep: present it
         // and send the refused envelope again. That happens at most once per
@@ -236,10 +232,8 @@ class MailboxClient {
       default:
         // An op this client does not know.
         //
-        // Silence here is what let a misspelled `overQuota` sit through a
-        // release: the frame fell through, a refused deposit looked accepted,
-        // and nothing anywhere said a word. A name that arrives and matches
-        // nothing is now visible rather than swallowed.
+        // Made visible rather than swallowed: a name that arrives and matches
+        // nothing is the one thing this switch cannot report by itself.
         //
         // Not an error to the person, because the server is free to add
         // replies this client has no use for, and telling somebody about

@@ -85,7 +85,7 @@ void main() {
         reason: 'a two member group must address the mailbox');
 
     // What the mailbox would have handed back to the other half.
-    final read = b.receive(b.openMine(envelopes.first, 2));
+    final read = b.receive(b.openMine(envelopes.first, 2))?.text;
     expect(read, written);
 
     a.dispose();
@@ -142,7 +142,7 @@ void main() {
 
     const written = 'this note was written before the restart';
     final envelopes = a2.sealForGroup(a2.send(written));
-    expect(b2.receive(b2.openMine(envelopes.first, 2)), written);
+    expect(b2.receive(b2.openMine(envelopes.first, 2))?.text, written);
 
     a2.dispose();
     b2.dispose();

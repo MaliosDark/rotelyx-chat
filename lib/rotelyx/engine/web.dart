@@ -206,7 +206,7 @@ class _WebSession implements RotelyxSession {
   @override
   String send(String text) => inner.send(text);
   @override
-  String? receive(String messageB64) {
+  Received? receive(String messageB64) {
     // The core answers with JSON saying which of three things arrived, not with
     // the plaintext. Passed straight through, a message reached the screen as
     // `{"kind":"message","text":"hola"}`, and a rekey reached it as
@@ -220,14 +220,16 @@ class _WebSession implements RotelyxSession {
     try {
       decoded = jsonDecode(answer);
     } on FormatException {
-      // An older bridge, which returned the plaintext itself.
-      return answer;
+      // An older bridge, which returned the plaintext itself and no author.
+      return Received(answer);
     }
-    if (decoded is! Map) return answer;
+    if (decoded is! Map) return Received(answer);
 
     if (decoded['kind'] == 'message') {
       final text = decoded['text'];
-      return text is String ? text : null;
+      if (text is! String) return null;
+      final from = decoded['from'];
+      return Received(text, from: from is String && from.isNotEmpty ? from : null);
     }
     // Membership and nothing both mean the group moved rather than that
     // somebody said something, which is what null means to the caller.

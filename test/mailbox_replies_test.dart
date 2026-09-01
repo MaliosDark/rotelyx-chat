@@ -2,15 +2,17 @@
 ///
 /// # Why this file exists
 ///
-/// The client sent the right frames and parsed the ones it knew. What it did
-/// not have was a case for `overquota`, which is how the server says it refused
-/// a deposit because the period's allowance is spent. With no case and no
-/// default the frame fell through, and a message that was never stored looked
-/// to the person who sent it exactly like one that was.
+/// `overquota` is how the server says it refused a deposit because the period's
+/// allowance is spent. With no case for it and no default the frame falls
+/// through, and a message that was never stored looks to the person who sent it
+/// exactly like one that was.
 ///
-/// That is the shape of every defect this client has had: not a wrong answer,
-/// but a refusal that produces no error. So this file checks the refusals
-/// rather than the happy path, which `rotelyx_service` already covers.
+/// Refusals are the interesting half of this protocol: a wrong answer is
+/// visible and a refusal that produces no error is not. So this file checks
+/// those rather than the happy path, which `rotelyx_service` already covers.
+///
+/// The op names come from `docs/MAILBOX-WIRE.md`, which the Rotelyx server
+/// generates from its own serialiser.
 library;
 
 import 'package:flutter_test/flutter_test.dart';

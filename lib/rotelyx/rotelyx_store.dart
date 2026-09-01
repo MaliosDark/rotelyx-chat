@@ -335,6 +335,7 @@ class RotelyxStore {
   static const _kBiometric = 'rotelyx.biometric';
   static const _kIndex = 'rotelyx.index';
   static const _kCapability = 'rotelyx.capability-token';
+  static const _kMyName = 'rotelyx.my-name';
   static String _kSession(String id) => 'rotelyx.session.$id';
   static String _kLog(String id) => 'rotelyx.log.$id';
 
@@ -447,6 +448,42 @@ class RotelyxStore {
     }
     _box.write(
       _kCapability,
+      RotelyxWasm.sealBlob(key, base64Encode(utf8.encode(trimmed))),
+    );
+  }
+
+  /// The name this device offers when it meets somebody.
+  ///
+  /// # Why it is kept
+  ///
+  /// It was read and never written: `pair.dart` loaded it on every visit and
+  /// nothing ever saved it, so the field was empty every single time and
+  /// somebody pairing a second person typed their own name again. Kept here,
+  /// sealed like everything else, because it is a label somebody chose and
+  /// there is no reason for it to be legible to anything holding the file.
+  ///
+  /// Null when none has been set, which is the state a generated one fills.
+  String? get myName {
+    final key = _key;
+    final blob = _box.read(_kMyName) as String?;
+    if (key == null || blob == null) return null;
+    try {
+      return utf8.decode(base64Decode(RotelyxWasm.openBlob(key, blob)));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  set myName(String? value) {
+    final key = _key;
+    if (key == null) return;
+    final trimmed = value?.trim() ?? '';
+    if (trimmed.isEmpty) {
+      _box.remove(_kMyName);
+      return;
+    }
+    _box.write(
+      _kMyName,
       RotelyxWasm.sealBlob(key, base64Encode(utf8.encode(trimmed))),
     );
   }

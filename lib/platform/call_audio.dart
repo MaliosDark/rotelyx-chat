@@ -96,6 +96,26 @@ Future<void> playFrame(Int16List pcm) async {
   }
 }
 
+/// One of the short generated tones, named rather than passed as audio.
+///
+/// `connected` when a call is through, `failed` when it is not. Both are
+/// synthesised by `tool/sound/build.py` and shipped as Android resources, so
+/// there is nothing to attribute and the recipe is in the repository.
+///
+/// Named rather than handed the samples because the platform side plays it
+/// through the call's own audio route, which is a thing only it knows about:
+/// on a speakerphone the tone belongs in the loudspeaker and against an ear it
+/// belongs in the earpiece.
+Future<void> playTone(String name) async {
+  if (!audioIsBuilt) return;
+  try {
+    await _channel.invokeMethod<bool>('tone', {'name': name});
+  } on PlatformException {
+    // A tone is an announcement, never the thing itself. A device that will
+    // not play one still places the call.
+  }
+}
+
 /// Earpiece or speakerphone.
 Future<void> useSpeaker(bool loud) async {
   if (!audioIsBuilt) return;

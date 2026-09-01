@@ -64,6 +64,14 @@ String generatePassphrase({int words = defaultWordCount}) {
 }
 
 /// 4096 words, so each is exactly 12 bits.
+/// The same list, for anything else that needs ordinary words.
+///
+/// Exposed for `chosen_name.dart`, which builds a display name out of two of
+/// them. A name is not a secret and this list is not one either: it ships in
+/// the application and its whole security argument rests on the number of
+/// words drawn, never on which words are in it.
+const List<String> phraseWords = _words;
+
 const List<String> _words = [
   'abating', 'abed', 'abhor', 'ablaze', 'abloom', 'abreast', 'abscess', 'absence',
   'absent', 'abuse', 'acacia', 'accede', 'acceded', 'accent', 'accept', 'accurst',

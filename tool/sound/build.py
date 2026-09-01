@@ -17,7 +17,10 @@ that the shipped file is what it claims to be.
 
 # What is being made, and why it sounds like this
 
-    assets/sound/message.wav    an arriving message
+    assets/sound/message.wav      an arriving message
+    assets/sound/connected.wav    a call that got through
+    assets/sound/failed.wav       a call that did not
+
 
 A notification tone has about four hundred milliseconds to be recognised
 without being annoying on the thousandth hearing. What that means in practice:
@@ -72,6 +75,23 @@ def tone(freq, seconds, decay):
     return out
 
 
+def detuned(freq, seconds, decay, cents=14.0):
+    """One pitch against itself, slightly sharp, so the two beat.
+
+    Two sines a few cents apart drift in and out of phase at their difference
+    frequency, which is a slow wobble rather than a new pitch. It is the sound
+    of something not quite tuned, and it is doing the work in `failed`: a
+    falling interval alone reads as an ending, and an ending is not the same
+    statement as a fault. Fourteen cents is about one beat a second at these
+    pitches, which is audible as unease in half a second and does not become a
+    tremolo.
+    """
+    ratio = 2 ** (cents / 1200.0)
+    a = tone(freq, seconds, decay)
+    b = tone(freq * ratio, seconds, decay)
+    return [(x + y) / 2 for x, y in zip(a, b)]
+
+
 def sequence(parts):
     """Lay tones out in time, in seconds, and mix where they overlap."""
     # Rounded up rather than truncated. Truncating loses the last sample of
@@ -115,7 +135,32 @@ def main():
     # who caused it does not need. The recipe is in the history if it is ever
     # wanted.
 
-    for name, samples in [("message", incoming)]:
+    # Through: the fourth rises as in `message`, and then instead of stopping
+    # it lands on the octave below A5 and holds. Rising says the same thing an
+    # arriving message says; the landing note is what makes it an answer rather
+    # than a question, and holding it for half a second is the part a person
+    # hears as "we are connected" without having been taught it.
+    connected = sequence([
+        (0.00, tone(E5, 0.22, 14.0)),
+        (0.08, tone(A5, 0.26, 12.0)),
+        (0.20, tone(A5 / 2, 0.55, 4.5)),
+    ])
+
+    # Not through: the same interval, taken the other way, and detuned. A
+    # falling fourth on its own is merely an ending, which is what a call the
+    # other person declined also is. The beat is what separates "it stopped"
+    # from "it broke", and it costs no extra length: this is 0.6 s, so it is
+    # finished before the screen has explained itself.
+    failed = sequence([
+        (0.00, detuned(A5, 0.24, 13.0)),
+        (0.10, detuned(E5, 0.50, 6.0)),
+    ])
+
+    for name, samples in [
+        ("message", incoming),
+        ("connected", connected),
+        ("failed", failed),
+    ]:
         path = os.path.join(sounds, f"{name}.wav")
         size = write(path, samples)
         print(f"  assets/sound/{name}.wav   {len(samples) / RATE:.2f}s  {size:,} bytes")
@@ -125,11 +170,15 @@ def main():
     # system will find it. The name has to be lowercase with no dashes.
     raw = os.path.join(ROOT, "android", "app", "src", "main", "res", "raw")
     os.makedirs(raw, exist_ok=True)
-    with open(os.path.join(sounds, "message.wav"), "rb") as src:
-        data = src.read()
-    with open(os.path.join(raw, "rotelyx_message.wav"), "wb") as dst:
-        dst.write(data)
-    print(f"  android/.../res/raw/rotelyx_message.wav   {len(data):,} bytes")
+    # All three, for the same reason. The call tones are not a notification
+    # channel's sound, but they are played by `CallAudio.kt` through the audio
+    # route the call is already using, and that reads a resource too.
+    for name in ("message", "connected", "failed"):
+        with open(os.path.join(sounds, f"{name}.wav"), "rb") as src:
+            data = src.read()
+        with open(os.path.join(raw, f"rotelyx_{name}.wav"), "wb") as dst:
+            dst.write(data)
+        print(f"  android/.../res/raw/rotelyx_{name}.wav   {len(data):,} bytes")
 
 
 if __name__ == "__main__":

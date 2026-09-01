@@ -153,8 +153,8 @@ void main() {
               'would produce, so equality here is the property that matters');
 
       const said = 'the first message either of them sent';
-      expect(guest.receive(host.send(said)), equals(said));
-      expect(host.receive(guest.send('and the reply')), equals('and the reply'));
+      expect(guest.receive(host.send(said))?.text, equals(said));
+      expect(host.receive(guest.send('and the reply'))?.text, equals('and the reply'));
     });
 
     test('a session survives being sealed and restored', () {
@@ -193,7 +193,7 @@ void main() {
       // The commit goes first, exactly as any other commit would.
       guest.receive(restored.rekeyAfterRestore());
 
-      expect(guest.receive(restored.send('sent after a restart')),
+      expect(guest.receive(restored.send('sent after a restart'))?.text,
           equals('sent after a restart'));
     });
 

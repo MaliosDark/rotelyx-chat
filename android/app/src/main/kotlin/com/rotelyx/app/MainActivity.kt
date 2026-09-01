@@ -164,7 +164,7 @@ class MainActivity : FlutterFragmentActivity() {
 
     override fun onDestroy() {
         waiting.clear()
-        audio?.stop()
+        audio?.stop(this)
         audio = null
         camera?.dispose()
         camera = null

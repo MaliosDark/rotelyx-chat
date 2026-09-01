@@ -54,6 +54,7 @@ import '../../rotelyx/rotelyx_service.dart';
 import '../../rotelyx/rotelyx_store.dart';
 import '../../rotelyx/rotelyx_wasm.dart';
 import '../brand.dart';
+import '../../rotelyx/chosen_name.dart';
 import '../theme.dart';
 import '../widgets.dart';
 import 'scan.dart';
@@ -133,7 +134,16 @@ class _PairScreenState extends State<PairScreen> {
   @override
   void initState() {
     super.initState();
-    _name.text = store.load('me')?.title ?? '';
+    // Remembered if there is one, invented if there is not, and never empty.
+    //
+    // `store.load('me')` was read here and written nowhere, so this was blank
+    // every time and somebody meeting a second person typed their own name
+    // again. It is kept now, and when there is nothing to keep yet a name is
+    // suggested rather than demanded: the field says itself that it is only a
+    // label, and stopping somebody to invent one is asking for work on the
+    // value that matters least, at the moment they are trying to do the thing
+    // that matters most.
+    _name.text = store.myName ?? suggestName();
 
     // Opened by a link rather than by the button. Fill the field and show the
     // tab it belongs to; accepting is still the person's to do, because the
@@ -208,6 +218,7 @@ class _PairScreenState extends State<PairScreen> {
   }
 
   Future<void> _attempt(Future<void> Function() run, {PairingRole? role}) async {
+    store.myName = _name.text.trim();
     if (_name.text.trim().isEmpty) {
       setState(() => _error = 'Choose a name others will see.');
       return;
@@ -257,6 +268,7 @@ class _PairScreenState extends State<PairScreen> {
   }
 
   Future<void> _scanCode() async {
+    store.myName = _name.text.trim();
     if (_name.text.trim().isEmpty) {
       setState(() => _error = 'Choose a name others will see.');
       return;
@@ -369,13 +381,11 @@ class _PairScreenState extends State<PairScreen> {
                     RxNote(_error!, tone: Tone.bad, title: 'Did not work'),
                   ],
 
-                  const SizedBox(height: Metrics.wide),
-                  const RxNote(
-                    'This is a pre-release build and nobody outside the '
-                    'project has audited it yet. The cryptography is public and '
-                    'the code is there to read.',
-                    title: 'Before you rely on this',
-                  ),
+                  // A warning about auditing used to sit here. See the note
+                  // where its twin was removed in settings.dart: it was out of
+                  // date, and this is the screen where two people are trying
+                  // to meet, which is the worst moment to hand somebody a
+                  // doubt they have no way to resolve.
                 ],
               ),
             ),

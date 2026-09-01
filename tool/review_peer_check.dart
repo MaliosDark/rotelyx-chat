@@ -120,7 +120,8 @@ Future<void> main(List<String> args) async {
     if (!joined) return;
     try {
       final heard = session
-          .receive(session.openMine(incoming, rotelyxConfig.lookback));
+          .receive(session.openMine(incoming, rotelyxConfig.lookback))
+          ?.text;
       if (heard != null && !replied.isCompleted) replied.complete(heard);
     } on Object {
       // Not for us in this window.

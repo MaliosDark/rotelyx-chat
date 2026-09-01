@@ -24,6 +24,8 @@ library;
 
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
+
 import '../platform/call_audio.dart';
 import 'call_loop.dart';
 import 'call_state.dart';
@@ -60,6 +62,24 @@ class Calls {
 
   /// Every change of phase, for whatever is showing.
   Stream<CallState> get changes => _changes.stream;
+
+  /// Why the last call ended, when there is more to say than "it ended".
+  ///
+  /// # Why this exists
+  ///
+  /// `_open` works out exactly why a call could not start: the connection never
+  /// arrived, this build has no codec, or an exception with its own message.
+  /// It returned that string and the only caller discarded it with
+  /// `unawaited`, so every one of those became the same screen: **Connection
+  /// lost**, with no way to tell a missing relay from a missing codec.
+  ///
+  /// Three different faults reading as one word is how a call that never had a
+  /// codec gets investigated as a network problem.
+  Stream<String> get failures => _failures.stream;
+  final _failures = StreamController<String>.broadcast();
+
+  /// The last reason, for a screen that draws rather than listens.
+  String? lastFailure;
 
   /// Whether this build can call at all.
   ///
@@ -106,6 +126,7 @@ class Calls {
 
     // The address rides with the ring. It is filtered where it is produced:
     // no IP, just the relay, so it says nothing about where this device is.
+    _say('ringing id=$id mine=$address');
     rotelyx.signal(Signal.call(CallSignal.ringing, id: id, address: address));
 
     // A heartbeat while it rings, so a caller who loses their connection does
@@ -127,13 +148,38 @@ class Calls {
       return 'The microphone permission was refused.';
     }
 
+    // The caller is the one that dials, and the only address it holds so far
+    // is its own: the ring carried this device an address, not the other way
+    // round. So the answer has to carry one back, and the endpoint is bound
+    // here rather than inside `_open` so there is one to send. Without this
+    // the caller dials an empty string, the engine refuses to decode it, and
+    // both phones report a lost connection having never opened a microphone.
+    final endpoint = _bind();
+    if (endpoint == null) {
+      hangUp(CallEnded.lost);
+      return 'This build cannot open a connection for calls.';
+    }
+    final address = endpoint.address;
+    if (address == null) {
+      hangUp(CallEnded.lost);
+      return 'The connection would not open.';
+    }
+
     final next = _state.answer();
     if (next == null) return null;
 
-    rotelyx.signal(Signal.call(CallSignal.answered, id: _state.id));
+    _say('answering id=${_state.id} mine=$address theirs=$_theirAddress');
+    // Filtered where it is produced: no IP, just the relay. See the ring.
+    rotelyx.signal(
+      Signal.call(CallSignal.answered, id: _state.id, address: address),
+    );
     _move(next);
 
-    return _open(dialling: false);
+    // Reported as well as returned, so the caller may ignore it and the reason
+    // still reaches anybody watching. See [failures].
+    final why = await _open(dialling: false);
+    _report(why);
+    return why;
   }
 
   /// End it, whatever it was doing.
@@ -141,6 +187,11 @@ class Calls {
     final id = _state.id;
     final next = _state.end(why);
     if (next == null) return;
+
+    // Only a call that broke. Declined, unanswered and hung up are endings a
+    // person either caused or expected, and a fault tone for those would be
+    // telling them something went wrong when nothing did.
+    if (why == CallEnded.lost) unawaited(playTone('failed'));
 
     if (id.isNotEmpty) {
       rotelyx.signal(Signal.call(
@@ -161,6 +212,7 @@ class Calls {
     if (what == null) return;
 
     final id = signal.callId;
+    _say('arrived ${signal.callSignal} id=$id address=${signal.callAddress}');
     if (signal.callAddress.isNotEmpty) _theirAddress = signal.callAddress;
 
     final next = _state.apply(what, id);
@@ -183,7 +235,7 @@ class Calls {
       case CallPhase.talking:
         // They answered what this device placed. Dialling, because the caller
         // connects and the receiver waits.
-        unawaited(_open(dialling: true));
+        unawaited(_open(dialling: true).then(_report));
       case CallPhase.over:
         _teardown();
         _clearLater();
@@ -191,6 +243,13 @@ class Calls {
       case CallPhase.ringingOut:
         break;
     }
+  }
+
+  /// Keep the reason a call failed, rather than dropping it.
+  void _report(String? why) {
+    if (why == null) return;
+    lastFailure = why;
+    _failures.add(why);
   }
 
   /// Open the media path, once both sides have agreed.
@@ -202,10 +261,20 @@ class Calls {
     if (session == null) return 'the conversation is not open';
 
     try {
+      // Said rather than dialled blindly: an empty address is refused by the
+      // engine as undecodable, which reaches the screen as a lost connection
+      // and hides the fact that nobody ever sent one.
+      _say('opening dialling=$dialling theirs=$_theirAddress');
+      if (dialling && (_theirAddress ?? '').isEmpty) {
+        hangUp(CallEnded.lost);
+        return 'they answered without an address to dial';
+      }
+
       final connection = dialling
-          ? endpoint.connect(_theirAddress ?? '')
+          ? endpoint.connect(_theirAddress!)
           : await _waitForPeer(endpoint);
 
+      _say('connection=${connection != null}');
       if (connection == null) {
         hangUp(CallEnded.lost);
         return 'the connection did not arrive';
@@ -223,7 +292,25 @@ class Calls {
 
       final loop = CallLoop(codec: codec, connection: connection);
       _loop = loop;
+
+      // Announced, even though the phase has not changed.
+      //
+      // Whatever is on screen is handed `loop` when it is built, and it is
+      // built the moment the call reaches `talking`, which happens in `answer`
+      // and in `_arrived` **before** this runs. Without this the screen holds
+      // the null it was built with for the life of the call: the duration and
+      // the quality line still work, because they come from the state, and the
+      // keypad silently does nothing, because it is the only control that
+      // needs the loop itself.
+      _changes.add(_state);
+
       await loop.start();
+
+      // Here rather than when the other side answered, because answering is
+      // not the same event as being through: everything between the two is
+      // where calls were failing, and a tone that plays before the media
+      // connection exists says the wrong thing confidently.
+      unawaited(playTone('connected'));
       return null;
     } on Object catch (e) {
       hangUp(CallEnded.lost);
@@ -236,10 +323,21 @@ class Calls {
   /// A blocking accept stops the isolate, and on a phone that is the thread
   /// drawing the interface. Polled in quarter second slices, the ring keeps
   /// animating while this waits.
+  /// Wait for the caller to arrive, in slices rather than in one wait.
+  ///
+  /// Ten seconds altogether, which is a caller's patience, taken a second at a
+  /// time so a call the person cancels stops within a second rather than
+  /// holding the isolate to the end.
+  ///
+  /// A second rather than the quarter it was. Each slice that expires abandons
+  /// an accept that may be part way through a handshake, and what it abandoned
+  /// is gone: the far side completed, this side started again from nothing. A
+  /// quarter of a second is inside the range a relayed handshake takes, so the
+  /// window was being closed on connections that were most of the way in.
   Future<RotelyxConnection?> _waitForPeer(RotelyxEndpoint endpoint) async {
-    for (var i = 0; i < 40; i++) {
+    for (var i = 0; i < 10; i++) {
       final connection =
-          endpoint.accept(timeout: const Duration(milliseconds: 250));
+          endpoint.accept(timeout: const Duration(seconds: 1));
       if (connection != null) return connection;
       if (!_state.isBusy) return null;
       await Future<void>.delayed(Duration.zero);
@@ -288,6 +386,19 @@ class Calls {
     final loop = _loop;
     _loop = null;
     unawaited(loop?.stop() ?? Future<void>.value());
+  }
+
+  /// On only under `--dart-define=ROTELYX_CALL_DIAG=true`.
+  ///
+  /// The setting up of a call is the part with no sound to listen to and no
+  /// counter to read: an address is minted on one side, travels through the
+  /// mailbox, and is dialled on the other, and if any of that is wrong the
+  /// only symptom is a call that runs with nothing coming out of it.
+  static const _diag =
+      bool.fromEnvironment('ROTELYX_CALL_DIAG', defaultValue: false);
+
+  void _say(String what) {
+    if (_diag) debugPrint('ROTELYX_CALL $what');
   }
 
   void _move(CallState next) {

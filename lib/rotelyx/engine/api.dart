@@ -27,6 +27,33 @@ library;
 
 /// A key derived from a passphrase. Opaque on purpose: the material never
 /// crosses into Dart, only a reference to it.
+/// A message that arrived, and who MLS says wrote it.
+///
+/// # Why the author is carried rather than inferred
+///
+/// With two people there is only one other person a message can be from, so
+/// every caller inferred it and nothing broke. In a group that inference is
+/// wrong, and it was wrong in a way nothing reported: read receipts were all
+/// attributed to the conversation's own name, so the second member's receipt
+/// looked like a repeat of the first and a group of three never showed a read
+/// tick at all.
+///
+/// MLS authenticates the sending leaf and has since the beginning. The value
+/// was dropped between the core and this interface.
+class Received {
+  const Received(this.text, {this.from});
+
+  /// The plaintext.
+  final String text;
+
+  /// The label the author joined under, when the group still holds their leaf.
+  ///
+  /// Null for a sender the group no longer has, and for a bridge older than
+  /// this field. A caller must treat null as "unattributed" rather than as
+  /// anybody in particular.
+  final String? from;
+}
+
 abstract interface class RotelyxKey {
   /// Release it. A browser leaves this to the garbage collector; a shared
   /// library does not have one, so the contract is explicit and both honour it.
@@ -118,8 +145,9 @@ abstract interface class RotelyxSession {
 
   String send(String text);
 
-  /// Plaintext, or null for a commit, which is not an error: the group changed.
-  String? receive(String messageB64);
+  /// What arrived, or null for a commit, which is not an error: the group
+  /// changed.
+  Received? receive(String messageB64);
 
   String myTag();
   List<String> myPollingTags(int lookback);

@@ -185,7 +185,7 @@ class _RotelyxAppState extends State<RotelyxApp> with WidgetsBindingObserver {
   void _seedForScreenshot() {
     final now = DateTime.now();
     store.save(StoredConversation(
-      id: 'demo',
+      id: 'screenshot',
       title: 'Ana',
       session: null,
       lastActivity: now,
@@ -251,6 +251,7 @@ class _RotelyxAppState extends State<RotelyxApp> with WidgetsBindingObserver {
         who: calls.who,
         state: calls.state,
         loop: calls.loop,
+        because: calls.lastFailure,
         onAnswer: () => unawaited(calls.answer()),
         onEnd: calls.hangUp,
       );
