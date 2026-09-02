@@ -479,7 +479,7 @@ class _Vendor extends StatelessWidget {
       padding: const EdgeInsets.all(Metrics.pad),
       decoration: BoxDecoration(
         color: t.raised,
-        borderRadius: Shapes.radius(),
+        borderRadius: BorderRadius.circular(Metrics.radius),
         border: Border.all(color: t.line),
       ),
       child: Row(
@@ -806,7 +806,7 @@ class _MailboxRow extends StatelessWidget {
         padding: const EdgeInsets.all(Metrics.pad),
         decoration: BoxDecoration(
           color: chosen ? Tone.accent.withValues(alpha: 0.10) : t.raised,
-          borderRadius: Shapes.radius(),
+          borderRadius: BorderRadius.circular(Metrics.radius),
           border: Border.all(color: chosen ? Tone.accent : t.line),
         ),
         child: Row(
