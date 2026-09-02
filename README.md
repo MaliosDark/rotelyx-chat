@@ -24,6 +24,19 @@ issue.** Terms, scope and what is explicitly not a finding are in
 
 ---
 
+<p align="center">
+  <img src="docs/screens/pair.png" width="248" alt="Starting a conversation: a name, and a way to meet">
+  <img src="docs/screens/qr.png" width="248" alt="A meeting code shown as a QR">
+  <img src="docs/screens/chat.png" width="248" alt="A conversation">
+</p>
+
+<p align="center">
+  <em>Meet, scan, talk. There is no third screen where you make an account.</em><br>
+  <sub><a href="docs/SCREENS.md">Every screen, and what each one is doing</a></sub>
+</p>
+
+---
+
 ## Quick start
 
 The engine is Rust and is not checked in, so it is built first. Everything else
