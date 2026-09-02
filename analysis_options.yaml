@@ -12,7 +12,6 @@ include: package:flutter_lints/flutter.yaml
 analyzer:
   exclude:
     # Screenshots, not code.
-    - _my_screens/**
 
 linter:
   # The lint rules applied to this project can be customized in the

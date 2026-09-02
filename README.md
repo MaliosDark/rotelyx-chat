@@ -11,20 +11,50 @@ Package: `rotelyx_chat` · Bundle IDs: `com.rotelyx.app` (Android), `com.rotelyx
 
 ---
 
-> **Rotelyx is internally audited and pre-release.** Five rounds closed every
-> finding raised against this client. No outside review yet, so the gates in the
-> protocol repository's `docs/THREAT-MODEL.md` section 5 are not all met. The pairing screen says
-> so too, on purpose: a client that looks finished is itself a security claim.
->
-> Five rounds of internal review at Ideoa Labs closed every finding raised
-> against this client, including the two that mattered: it used to drive the
-> engine into reusing a media nonce across calls, and it used to show a safety
-> number that could not change. Internal is not independent, and the difference
-> is the whole reason the line above still reads the way it does.
+> **Six rounds of review inside Ideoa Labs, by hand and with tooling.** Every
+> finding raised against this client is closed, including the two that
+> mattered: it used to drive the engine into reusing a media nonce across
+> calls, and it used to show a safety number that could not change. No
+> independent audit has been commissioned, so the gates in the protocol
+> repository's `docs/THREAT-MODEL.md` section 5 are not all met.
 
 **Found something? Email <contact@ideoa.co.uk>, and please do not open a public
 issue.** Terms, scope and what is explicitly not a finding are in
 [`SECURITY.md`](SECURITY.md).
+
+---
+
+## Quick start
+
+The engine is Rust and is not checked in, so it is built first. Everything else
+is ordinary Flutter.
+
+```sh
+tool/native/build-host.sh          # the engine, for tests and desktop
+flutter pub get
+flutter run
+```
+
+To put it on an Android phone:
+
+```sh
+tool/native/build-android.sh       # the engine, all three ABIs
+flutter build apk --release
+```
+
+To run the tests, which need to find the engine that was just built:
+
+```sh
+LD_LIBRARY_PATH=build/native flutter test
+```
+
+You will need [Flutter](https://docs.flutter.dev/get-started/install) and, for
+the engine, [Rust](https://rustup.rs) with the Android NDK.
+[`docs/NATIVE.md`](docs/NATIVE.md) has the versions and what each script does.
+
+There is nothing to sign up for and no server to configure: the client points at
+the public mailbox by default, and [`docs/`](docs/README.md) says how to point it
+at your own.
 
 ---
 
@@ -639,3 +669,25 @@ external file because `script-src 'self'` refuses inline code.
 It comes down on `flutter-first-frame`, or on a `flutter-view` element
 appearing, or after fifteen seconds regardless. The last one matters: a splash
 that outlives a failed boot hides the error the user needs to see.
+
+---
+
+## Documentation
+
+[`docs/`](docs/README.md) is indexed by the question each document answers.
+The protocol, the mailbox, the relay, the codec and the threat model are in
+[the protocol repository](https://github.com/MaliosDark/rotelyx).
+
+## Licence
+
+**GNU Affero General Public License v3** ([`LICENSE`](LICENSE)). Build it, change
+it, ship your own; publish what you change if you offer it over a network.
+
+Fonts and the vendored transport keep the licences they were granted under. The
+table above says which is which.
+
+Sending code? [`CLA.md`](CLA.md), which is one comment on your pull request. You
+keep your copyright; the project keeps the ability to ship the same code in a
+store, which AGPL-3.0 alone cannot do.
+
+Rotelyx is a trademark of Ideoa Labs. The licence covers the code, not the name.

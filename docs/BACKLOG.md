@@ -1,8 +1,12 @@
-# What is asked for, and where each piece stands
+# What is built, and what is not
 
-Written down because the list grew faster than it could be built and because a
-list held in a conversation is a list that gets dropped. Everything here was
-asked for directly. Nothing is here because it seemed like a good idea.
+Every item here was asked for by somebody using the application, and each says
+where it stands rather than whether it is planned. A list of intentions is not
+useful to anybody deciding whether to rely on this; a list of what works is.
+
+Read it as the honest half of the README. What is finished is described there;
+what is missing is described here, in the same words, without the missing parts
+being left out.
 
 Status is one of **done**, **started**, **not started**, or **refused**, and a
 refusal always says who refused it and why.

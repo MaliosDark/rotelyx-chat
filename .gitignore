@@ -165,3 +165,12 @@ desktop.ini
 # Python bytecode from the tools in tool/
 __pycache__/
 *.py[cod]
+
+# Backups, which is what a directory with a date in its name is.
+# One of these carried 33 MB of built .so and .wasm files, none of them
+# referenced by anything, all of them rebuildable by tool/native/build-android.sh
+# and the wasm step. A binary in a repository is a binary somebody will one day
+# ship without knowing which source it came from.
+*-backup-*/
+*.bak
+*.orig
