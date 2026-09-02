@@ -98,7 +98,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   SwitchListTile(
                     value: widget.dark,
                     onChanged: widget.onTheme,
-                    activeColor: Tone.accent,
+                    activeThumbColor: Tone.accent,
                     contentPadding: EdgeInsets.zero,
                     title: Text('Dark theme',
                         style: Type.body.copyWith(color: t.text)),
@@ -126,7 +126,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       }
                       setState(() => _notify = want);
                     },
-                    activeColor: Tone.accent,
+                    activeThumbColor: Tone.accent,
                     contentPadding: EdgeInsets.zero,
                     title: Text('Notify me about messages',
                         style: Type.body.copyWith(color: t.text)),
@@ -141,7 +141,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               store.showPreviews = want;
                             })
                         : null,
-                    activeColor: Tone.accent,
+                    activeThumbColor: Tone.accent,
                     contentPadding: EdgeInsets.zero,
                     title: Text('Show the message on a locked screen',
                         style: Type.body.copyWith(color: t.text)),
@@ -158,7 +158,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         final on = await alerts.stayConnected(want);
                         if (mounted) setState(() => _connected = on);
                       },
-                      activeColor: Tone.accent,
+                      activeThumbColor: Tone.accent,
                       contentPadding: EdgeInsets.zero,
                       title: Text('Receive while the app is closed',
                           style: Type.body.copyWith(color: t.text)),
@@ -196,7 +196,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       if (pin != null) lock.setPin(pin);
                       if (mounted) setState(() {});
                     },
-                    activeColor: Tone.accent,
+                    activeThumbColor: Tone.accent,
                     contentPadding: EdgeInsets.zero,
                     title: Text('Ask for a PIN to open the app',
                         style: Type.body.copyWith(color: t.text)),
@@ -211,7 +211,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       value: store.useBiometric,
                       onChanged: (want) =>
                           setState(() => store.useBiometric = want),
-                      activeColor: Tone.accent,
+                      activeThumbColor: Tone.accent,
                       contentPadding: EdgeInsets.zero,
                       secondary: Icon(Icons.fingerprint,
                           size: 20,
@@ -260,27 +260,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
 
                   const SizedBox(height: Metrics.pad),
-                  const _Section('Where your messages wait'),
-                  _MailboxPicker(onChanged: () => setState(() {})),
-
+                  // Everything above this line is something somebody changes
+                  // about their own phone. Everything below it is what the
+                  // application is doing and how, which is worth being able to
+                  // read and is not worth scrolling past every time.
+                  //
+                  // They were all one list until 2 September 2026, nine
+                  // sections deep, and three of them were diagnostics. What
+                  // that reads as is a settings screen with a developer's
+                  // console mixed into it, and the effect is that the settings
+                  // people actually came for are harder to find.
                   const SizedBox(height: Metrics.pad),
-                  const _Section('Under the hood'),
+                  const _Section('Privacy and protocol'),
                   _Fold(
+                    title: 'Where your messages wait',
+                    summary: 'The mailbox that holds them until you collect',
+                    children: [
+                      _MailboxPicker(onChanged: () => setState(() {})),
+                    ],
+                  ),
+                  const _Fold(
                     title: 'How your messages are protected',
                     summary: 'Built to hold up even against a quantum computer',
                     children: [
-                      _Row('Version',
-                          ready ? RotelyxWasm.protocolVersion : 'not loaded'),
-                      const _Row('Key agreement', 'X-Wing · ML-KEM-768 + X25519'),
-                      const _Row('Message layer', 'MLS'),
-                      _Row('Largest group',
-                          ready ? '${RotelyxWasm.maxMembers}' : 'not loaded'),
-                      _Row('Mailbox', Uri.parse(rotelyxConfig.mailbox).host),
-                      // Whether anything outside this device sits in the path
-                      // of a notification, named rather than assumed.
-                      _Row('Wake service', pushTransport.name),
-                      const SizedBox(height: Metrics.gap),
-                      const RxNote(
+                      _Row('Key agreement', 'X-Wing · ML-KEM-768 + X25519'),
+                      _Row('Message layer', 'MLS'),
+                      SizedBox(height: Metrics.gap),
+                      RxNote(
                         'Two separate key exchanges, one of them designed to '
                         'survive a computer that does not exist yet. Anything '
                         'recorded today stays unreadable if one is broken '
@@ -290,44 +296,72 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                     ],
                   ),
+                  _Fold(
+                    title: 'Who is in the path',
+                    summary: 'Named rather than assumed',
+                    children: [
+                      _Row('Mailbox', Uri.parse(rotelyxConfig.mailbox).host),
+                      // Whether anything outside this device sits in the path
+                      // of a notification, named rather than left to be
+                      // guessed at.
+                      _Row('Wake service', pushTransport.name),
+                      const SizedBox(height: Metrics.gap),
+                      const RxNote(
+                        'Calls always go through a relay, on purpose. A direct '
+                        'connection would show the other person your address, '
+                        'so the slower path is the one that keeps it to '
+                        'yourself. There is no switch for this.',
+                        title: 'Why calls take a moment to connect',
+                      ),
+                    ],
+                  ),
 
-                  const SizedBox(height: Metrics.gap),
-                  const RxNote(
-                    'Calls always go through a relay, on purpose. A direct '
-                    'connection would show the other person your address, so '
-                    'the slower path is the one that keeps it to yourself. '
-                    'There is no switch for this.',
-                    title: 'Why calls take a moment to connect',
+                  const SizedBox(height: Metrics.pad),
+                  const _Section('Advanced'),
+                  _Fold(
+                    title: 'Ghost mode',
+                    summary: store.isDark
+                        ? 'On: nothing is being written down'
+                        : 'Stop writing anything down until you quit',
+                    children: [
+                      if (store.isDark)
+                        const RxNote(
+                          'Nothing you do is being written to this phone. Your '
+                          'conversations are still on it, sealed, and the next '
+                          'time you open the app your password brings them '
+                          'back.',
+                          tone: Tone.good,
+                        )
+                      else ...[
+                        RxButton('Turn on ghost mode',
+                            weight: Weight.secondary,
+                            icon: Icons.auto_delete_outlined,
+                            wide: true,
+                            onTap: () => _confirmGoDark(context)),
+                        const SizedBox(height: Metrics.gap),
+                        const RxNote(
+                          'Stops writing anything down until you quit. What is '
+                          'already saved stays saved and stays sealed, so this '
+                          'deletes nothing, but the history comes off the '
+                          'screen while it is on.',
+                        ),
+                      ],
+                    ],
+                  ),
+                  _Fold(
+                    title: 'Build',
+                    summary: 'Versions and limits',
+                    children: [
+                      _Row('Version',
+                          ready ? RotelyxWasm.protocolVersion : 'not loaded'),
+                      _Row('Largest group',
+                          ready ? '${RotelyxWasm.maxMembers}' : 'not loaded'),
+                    ],
                   ),
 
                   const SizedBox(height: Metrics.pad),
                   const _Section('About'),
                   const _Vendor(),
-
-                  const SizedBox(height: Metrics.pad),
-                  const _Section('Right now'),
-                  if (store.isDark)
-                    const RxNote(
-                      'Nothing you do is being written to this phone. Your '
-                      'conversations are still on it, sealed, and the next '
-                      'time you open the app your password brings them back.',
-                      title: 'Ghost mode is on',
-                      tone: Tone.good,
-                    )
-                  else ...[
-                    RxButton('Turn on ghost mode',
-                        weight: Weight.secondary,
-                        icon: Icons.auto_delete_outlined,
-                        wide: true,
-                        onTap: () => _confirmGoDark(context)),
-                    const SizedBox(height: Metrics.gap),
-                    const RxNote(
-                      'Stops writing anything down until you quit. What is '
-                      'already saved stays saved and stays sealed, so this '
-                      'deletes nothing, but the history comes off the screen '
-                      'while it is on.',
-                    ),
-                  ],
 
                   const SizedBox(height: Metrics.pad),
                   const _Section('Danger'),
@@ -445,7 +479,7 @@ class _Vendor extends StatelessWidget {
       padding: const EdgeInsets.all(Metrics.pad),
       decoration: BoxDecoration(
         color: t.raised,
-        borderRadius: BorderRadius.circular(Metrics.radius),
+        borderRadius: Shapes.radius(),
         border: Border.all(color: t.line),
       ),
       child: Row(
@@ -771,8 +805,8 @@ class _MailboxRow extends StatelessWidget {
         curve: Motion.pressCurve,
         padding: const EdgeInsets.all(Metrics.pad),
         decoration: BoxDecoration(
-          color: chosen ? Tone.accent.withOpacity(0.10) : t.raised,
-          borderRadius: BorderRadius.circular(Metrics.radius),
+          color: chosen ? Tone.accent.withValues(alpha: 0.10) : t.raised,
+          borderRadius: Shapes.radius(),
           border: Border.all(color: chosen ? Tone.accent : t.line),
         ),
         child: Row(
