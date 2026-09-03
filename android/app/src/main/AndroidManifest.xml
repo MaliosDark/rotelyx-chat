@@ -43,10 +43,19 @@
          service at six hours in any twenty four, which for a messenger means it
          stops working every evening. Special use has no cap and is reviewed by
          a human, which is the right trade: the justification is true and short
-         enough to check. -->
+         enough to check.
+
+         There is deliberately no FOREGROUND_SERVICE_DATA_SYNC here, and it must
+         not be added back. `ConnectionService.type()` does pass the data sync
+         type below Android 14, but the per-type permissions arrived with
+         Android 14 and are only checked from there, where the same method
+         returns special use instead. So the permission would never be read by
+         anything. What it would do is cost a second justification: Play asks
+         the developer to declare and defend every foreground service permission
+         in the manifest, so an unused one is a use case that has to be argued
+         for and does not exist. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"/>
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>
 
     <!-- Reading a meeting code off somebody's screen. Requested when the
          scanner is opened and not before, because a camera prompt on first

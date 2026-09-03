@@ -23,7 +23,7 @@ pluginManagement {
 
 plugins {
     id "dev.flutter.flutter-plugin-loader" version "1.0.0"
-    id "com.android.application" version "8.1.0" apply false
+    id "com.android.application" version "8.7.3" apply false
     // Was ext.kotlin_version = '1.7.10' in build.gradle, which is where Flutter
     // put it before 3.19 and which its 3.24 embedding no longer compiles
     // against. Declared here so the version is in one place.
