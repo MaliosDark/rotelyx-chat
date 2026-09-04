@@ -196,6 +196,80 @@ class _PicturePickerState extends State<PicturePicker> {
 /// Written with `dart:ui` rather than an image package, because the engine
 /// already has a decoder for every format the platform supports and adding a
 /// dependency to redo it in Dart would be slower and would support fewer.
+/// Shrink a picture until it fits in [maxBytes], keeping its shape.
+///
+/// Returns the original when it already fits, null when the bytes are not a
+/// picture this platform can decode or when even the smallest step is still
+/// too big.
+///
+/// # Why this exists
+///
+/// A photograph off a modern phone is three to eight megabytes, and the
+/// envelope ladder tops out where it does, so choosing a picture from a camera
+/// roll was refused for being too large and the person was told to find a
+/// smaller photograph. Nobody has a smaller photograph. Every messenger
+/// shrinks on the way out and this one did it for avatars only.
+///
+/// Long edge rather than a square: an avatar is cropped because it is drawn in
+/// a circle, and cropping somebody's photograph to fit a size limit would throw
+/// away the part they were sending.
+///
+/// PNG because `toByteData` offers PNG and raw pixels and nothing else, and
+/// adding an image package for JPEG would be the first dependency this
+/// application has taken that it does not already need. The cost is real: PNG
+/// of a photograph is several times a JPEG of the same picture, so the steps
+/// below go further down than they would otherwise have to.
+Future<Uint8List?> shrinkToFit(Uint8List bytes, {required int maxBytes}) async {
+  if (bytes.length <= maxBytes) return bytes;
+
+  ui.Image source;
+  try {
+    final codec = await ui.instantiateImageCodec(bytes);
+    source = (await codec.getNextFrame()).image;
+  } on Object {
+    return null;
+  }
+
+  try {
+    for (final edge in const [2048, 1600, 1280, 1024, 800, 640, 480]) {
+      final longest =
+          source.width > source.height ? source.width : source.height;
+      // Never scale up: a small picture that is somehow over the limit is not
+      // helped by being redrawn larger.
+      if (edge >= longest && bytes.length > maxBytes && edge != 480) continue;
+
+      final scale = edge / longest;
+      final w = (source.width * scale).round().clamp(1, edge);
+      final h = (source.height * scale).round().clamp(1, edge);
+
+      final out = await _redraw(source, w, h);
+      if (out != null && out.length <= maxBytes) return out;
+    }
+    return null;
+  } finally {
+    source.dispose();
+  }
+}
+
+/// Draw [source] at [w] by [h] and encode it.
+Future<Uint8List?> _redraw(ui.Image source, int w, int h) async {
+  final recorder = ui.PictureRecorder();
+  Canvas(recorder).drawImageRect(
+    source,
+    Rect.fromLTWH(0, 0, source.width.toDouble(), source.height.toDouble()),
+    Rect.fromLTWH(0, 0, w.toDouble(), h.toDouble()),
+    Paint()..filterQuality = FilterQuality.medium,
+  );
+
+  final drawn = await recorder.endRecording().toImage(w, h);
+  try {
+    final data = await drawn.toByteData(format: ui.ImageByteFormat.png);
+    return data?.buffer.asUint8List();
+  } finally {
+    drawn.dispose();
+  }
+}
+
 Future<Uint8List?> shrinkToAvatar(Uint8List bytes, {int side = _side}) async {
   ui.Image source;
   try {

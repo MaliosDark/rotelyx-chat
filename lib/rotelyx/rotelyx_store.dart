@@ -211,6 +211,7 @@ class StoredConversation {
     this.lastOpened,
     this.verifiedNumber,
     this.askedToVerify = false,
+    this.meetingTag,
     List<String>? burnAcks,
   }) : burnAcks = burnAcks ?? [];
 
@@ -258,6 +259,22 @@ class StoredConversation {
   /// conversation. An interruption that returns on every cold open is one
   /// people learn to dismiss without reading, which costs more than it buys.
   bool askedToVerify;
+
+  /// The meeting place this conversation was made at, for the host only.
+  ///
+  /// # Why it is kept
+  ///
+  /// The host goes on answering knocks for the life of the conversation, so a
+  /// person given the phrase can arrive a week later. That worked until the
+  /// application was closed: the tag lived in a field on the service and
+  /// nothing wrote it down, so after a restart the host was no longer
+  /// listening where the phrase points and a newcomer waited at "knocking"
+  /// with nothing on the other side. Nobody was told, because from the host's
+  /// side nothing had happened.
+  ///
+  /// Null for a guest, who stops listening at the meeting place on the way in
+  /// so as not to swallow a knock meant for the host.
+  String? meetingTag;
 
   /// Whether this device tells them when their messages have been read.
   ///
@@ -711,6 +728,7 @@ class RotelyxStore {
       if (c.receipts) 'rcpt': true,
       if (c.verifiedNumber != null) 'vnum': c.verifiedNumber,
       if (c.askedToVerify) 'asked': true,
+      if (c.meetingTag != null) 'meet': c.meetingTag,
       if (c.unread) 'unread': true,
       if (c.lastOpened != null)
         'opened': c.lastOpened!.millisecondsSinceEpoch,
@@ -791,6 +809,14 @@ class RotelyxStore {
   /// This is not a weaker [markVerified]: it stores no number, so the
   /// conversation stays unverified and a later change is still invisible to it.
   /// All it buys is that nobody is asked the same question twice.
+  /// Remember where this conversation's host answers knocks.
+  void rememberMeetingTag(String id, String tag) {
+    final c = load(id);
+    if (c == null || c.meetingTag == tag) return;
+    c.meetingTag = tag;
+    save(c);
+  }
+
   void markAskedToVerify(String id) {
     final c = load(id);
     if (c == null || c.askedToVerify) return;
@@ -874,6 +900,7 @@ class RotelyxStore {
         receipts: json['rcpt'] == true,
         verifiedNumber: json['vnum'] as String?,
         askedToVerify: json['asked'] == true,
+        meetingTag: json['meet'] as String?,
         unread: json['unread'] == true,
         lastOpened: json['opened'] is int
             ? DateTime.fromMillisecondsSinceEpoch(json['opened'] as int)

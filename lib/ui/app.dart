@@ -24,6 +24,7 @@ import 'screens/pin.dart';
 import 'screens/settings.dart';
 import 'screens/unlock.dart';
 import 'brand.dart';
+import 'gestures.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -268,15 +269,25 @@ class _RotelyxAppState extends State<RotelyxApp> with WidgetsBindingObserver {
       );
     }
 
-    switch (_surface) {
-      case _Surface.unlock:
-        return UnlockScreen(
-          key: const ValueKey('unlock'),
-          onReady: () => setState(() => _surface = _Surface.home),
-        );
+    if (_surface == _Surface.unlock) {
+      return UnlockScreen(
+        key: const ValueKey('unlock'),
+        onReady: () => setState(() => _surface = _Surface.home),
+      );
+    }
 
-      case _Surface.pair:
-        return PairScreen(
+    final home = HomeScreen(
+      key: _homeKey,
+      onPair: () => setState(() => _surface = _Surface.pair),
+      onSettings: () => setState(() => _surface = _Surface.settings),
+    );
+
+    // Pairing and settings slide in over the list rather than replacing it
+    // between frames, and the same edge drag that closes a conversation closes
+    // them. It used to be a `setState` and a different screen, with no way to
+    // go back but the one button in the corner.
+    final Widget? over = switch (_surface) {
+      _Surface.pair => PairScreen(
           key: ValueKey('pair:${_arriving ?? ''}'),
           arriving: _arriving,
           onCancel: () => setState(() => _surface = _Surface.home),
@@ -286,10 +297,8 @@ class _RotelyxAppState extends State<RotelyxApp> with WidgetsBindingObserver {
             _homeKey = UniqueKey();
             _surface = _Surface.home;
           }),
-        );
-
-      case _Surface.settings:
-        return SettingsScreen(
+        ),
+      _Surface.settings => SettingsScreen(
           key: const ValueKey('settings'),
           dark: _dark,
           onTheme: (v) => setState(() => _dark = v),
@@ -298,15 +307,15 @@ class _RotelyxAppState extends State<RotelyxApp> with WidgetsBindingObserver {
             _homeKey = UniqueKey();
             _surface = _Surface.unlock;
           }),
-        );
+        ),
+      _ => null,
+    };
 
-      case _Surface.home:
-        return HomeScreen(
-          key: _homeKey,
-          onPair: () => setState(() => _surface = _Surface.pair),
-          onSettings: () => setState(() => _surface = _Surface.settings),
-        );
-    }
+    return SlideOver(
+      under: home,
+      over: over,
+      onBack: () => setState(() => _surface = _Surface.home),
+    );
   }
 }
 

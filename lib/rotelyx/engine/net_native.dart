@@ -56,6 +56,9 @@ typedef CloseDart = int Function(int);
 typedef FreeNative = Void Function(Pointer<Utf8>);
 typedef FreeDart = void Function(Pointer<Utf8>);
 
+typedef LastErrorNative = Int32 Function(Pointer<Pointer<Utf8>>);
+typedef LastErrorDart = int Function(Pointer<Pointer<Utf8>>);
+
 /// The eight transport symbols, looked up once.
 class NetSymbols {
   NetSymbols(DynamicLibrary handle)
@@ -71,7 +74,40 @@ class NetSymbols {
             handle.lookupFunction<CloseNative, CloseDart>('rotelyx_net_close'),
         shutdown =
             handle.lookupFunction<CloseNative, CloseDart>('rotelyx_net_shutdown'),
-        free = handle.lookupFunction<FreeNative, FreeDart>('rotelyx_string_free');
+        free = handle.lookupFunction<FreeNative, FreeDart>('rotelyx_string_free') {
+    // Looked up on its own and allowed to be absent.
+    //
+    // Every symbol above is in the initialiser list, so one of them missing
+    // throws and the whole transport is reported as "not built". That is right
+    // for the eight the transport needs and wrong for this one, which only
+    // explains a failure: a library from before it existed would otherwise
+    // stop calls working entirely in order to be unable to say why.
+    try {
+      _lastError = handle
+          .lookupFunction<LastErrorNative, LastErrorDart>('rotelyx_net_last_error');
+    } on ArgumentError {
+      _lastError = null;
+    }
+  }
+
+  LastErrorDart? _lastError;
+
+  /// Why the last `open` would not bind, when the library can say.
+  String? lastError() {
+    final fn = _lastError;
+    if (fn == null) return null;
+    final out = calloc<Pointer<Utf8>>();
+    try {
+      if (fn(out) != 0) return null;
+      final text = out.value.toDartString();
+      free(out.value);
+      return text;
+    } on Object {
+      return null;
+    } finally {
+      calloc.free(out);
+    }
+  }
 
   final OpenDart open;
   final AddrDart addr;
@@ -117,7 +153,11 @@ class RotelyxEndpoint {
     final url = relay.toNativeUtf8();
     try {
       final handle = lib.open(identity, url);
-      if (handle < 0) throw NetRefused(endpointFailure(handle));
+      if (handle < 0) {
+        final why = lib.lastError();
+        throw NetRefused(
+            why == null ? endpointFailure(handle) : '${endpointFailure(handle)}: $why');
+      }
       return RotelyxEndpoint._(lib, handle);
     } finally {
       calloc.free(identity);

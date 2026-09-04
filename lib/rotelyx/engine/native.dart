@@ -262,6 +262,14 @@ class _NativeKey implements RotelyxKey {
   }
 }
 
+/// Whether this build's engine carries the transport symbols at all.
+///
+/// Separate from `openEndpoint` returning null, because those are two
+/// different answers that read the same on a phone: a library from before
+/// calls existed, and a library that has them and would not bind. One is a
+/// build to replace and the other is a network to look at.
+bool get transportIsBuilt => _Library.transport != null;
+
 /// Bind this device's transport endpoint, for calls.
 ///
 /// Null when the library has no transport, which is a build from before calls

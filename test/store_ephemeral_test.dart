@@ -63,6 +63,54 @@ void main() {
     expect(store.conversationIds, contains('one'));
   });
 
+  /// The host has to still be listening where the phrase points.
+  ///
+  /// A host answers knocks for the life of a conversation, so somebody given
+  /// the phrase can arrive days later. The tag that says where lived only in a
+  /// field on the service, so closing the application ended it: the newcomer
+  /// knocked, nobody was there, and the only thing that happened was the word
+  /// "knocking" on their screen forever. Neither side was told.
+  test('the meeting place a host answers at survives being written down', () {
+    store.save(StoredConversation(
+      id: 'one',
+      title: 'Ana',
+      session: null,
+      messages: [],
+      lastActivity: DateTime.now(),
+      meetingTag: 'a1b2c3',
+    ));
+
+    expect(store.load('one')?.meetingTag, 'a1b2c3');
+  });
+
+  /// A guest never has one, and a conversation from before this was kept has
+  /// none written down. Both have to load rather than throw.
+  test('a conversation with no meeting place still loads', () {
+    store.save(StoredConversation(
+      id: 'two',
+      title: 'Bea',
+      session: null,
+      messages: [],
+      lastActivity: DateTime.now(),
+    ));
+
+    expect(store.load('two')?.title, 'Bea');
+    expect(store.load('two')?.meetingTag, isNull);
+  });
+
+  test('remembering one later reaches the stored conversation', () {
+    store.save(StoredConversation(
+      id: 'three',
+      title: 'Cira',
+      session: null,
+      messages: [],
+      lastActivity: DateTime.now(),
+    ));
+
+    store.rememberMeetingTag('three', 'ddee11');
+    expect(store.load('three')?.meetingTag, 'ddee11');
+  });
+
   test('several are listed newest first', () {
     final now = DateTime.now();
     for (final entry in [('a', 3), ('b', 1), ('c', 2)]) {

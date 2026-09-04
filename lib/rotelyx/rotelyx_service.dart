@@ -1644,6 +1644,12 @@ class RotelyxService {
     _role = PairingRole.host;
     _listening.clear();
 
+    // Back to the meeting place, when this device is the one that answers
+    // there. `_resubscribe` below covers the conversation's own tags and knew
+    // nothing about this one, so after a restart the host had stopped
+    // listening where the phrase points and a newcomer knocked at nobody.
+    _meetingTag = store.load(conversationId)?.meetingTag;
+
     try {
       await _openMailbox();
     } on Object {
@@ -1652,6 +1658,9 @@ class RotelyxService {
 
     _moveTo(RotelyxState.joined);
     _resubscribe();
+
+    final meeting = _meetingTag;
+    if (meeting != null) _mailbox?.subscribe([meeting]);
     _watchTagRotation();
     return true;
   }
@@ -1662,6 +1671,20 @@ class RotelyxService {
   void persistTo(String conversationId) {
     _persistId = conversationId;
     _persist();
+
+    // The meeting tag is written down here rather than left in a field,
+    // because the host answers knocks for the life of the conversation and a
+    // field does not survive the application being closed. Without this the
+    // phrase quietly stopped working after a restart: the newcomer knocked,
+    // nobody was listening where the phrase points, and neither side was told.
+    //
+    // Host only. A guest unsubscribes from the meeting place on the way in so
+    // as not to swallow a knock meant for the host, and writing down a tag it
+    // does not listen on would be a note that means nothing.
+    final meeting = _meetingTag;
+    if (meeting != null && _role == PairingRole.host) {
+      store.rememberMeetingTag(conversationId, meeting);
+    }
   }
 
   String? _persistId;

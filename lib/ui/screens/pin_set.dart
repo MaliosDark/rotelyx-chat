@@ -24,6 +24,9 @@ class SetPinSheet extends StatefulWidget {
       context: context,
       backgroundColor: t.surface,
       isScrollControlled: true,
+      // Grows to the height of the screen, so without this it grows past the
+      // status bar and the first line is drawn behind the clock.
+      useSafeArea: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
       ),

@@ -24,6 +24,7 @@ import '../burn.dart';
 import '../gestures.dart';
 import '../../rotelyx/calls.dart';
 import 'contact.dart';
+import 'picture.dart';
 import '../theme.dart';
 import '../widgets.dart';
 
@@ -33,11 +34,19 @@ class ChatScreen extends StatefulWidget {
     required this.conversationId,
     this.onBack,
     this.onChanged,
+    this.swipeToClose = true,
   });
 
   final String conversationId;
   final VoidCallback? onBack;
   final VoidCallback? onChanged;
+
+  /// Whether this screen handles the edge swipe itself.
+  ///
+  /// False when something above it is sliding this screen and already reading
+  /// the drag. Two handlers on one gesture is one that fights: the screen
+  /// would follow the finger and then be closed a second time by its own.
+  final bool swipeToClose;
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
@@ -199,7 +208,11 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _pickFile() async {
     final PickedFile? file;
     try {
-      file = await pickFile(maxBytes: maxAttachmentBytes);
+      // Picked well above what can be sent, because a picture is shrunk below
+      // and the old limit refused a camera photograph at the picker, before
+      // anything had a chance to make it smaller. Anything that is not a
+      // picture is still held to the real limit, a few lines down.
+      file = await pickFile(maxBytes: 24 * 1024 * 1024);
     } on NoFilePicker catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -213,8 +226,33 @@ class _ChatScreenState extends State<ChatScreen> {
     // and is not worth a message.
     if (file == null) return;
 
+    var bytes = file.bytes;
+    var mime = file.mime;
+
+    if (bytes.length > maxAttachmentBytes) {
+      final shrunk = await shrinkToFit(bytes, maxBytes: maxAttachmentBytes);
+      if (shrunk == null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(mime.startsWith('image/')
+                ? 'That picture will not shrink small enough to send.'
+                : 'That file is ${bytes.length ~/ (1024 * 1024)} MB and the '
+                    'limit is ${maxAttachmentBytes ~/ (1024 * 1024)} MB.')));
+        return;
+      }
+      if (!identical(shrunk, bytes)) {
+        bytes = shrunk;
+        // Redrawn through the engine's encoder, so it is a PNG now whatever it
+        // arrived as. Saying otherwise would have the far side decode it as
+        // the format it no longer is.
+        mime = 'image/png';
+      }
+    }
+
+    if (!mounted) return;
+
     final attachment =
-        Attachment(name: file.name, mime: file.mime, bytes: file.bytes);
+        Attachment(name: file.name, mime: mime, bytes: bytes);
 
     // Same fault the composer had: an attachment sent on the shorter question
     // lands in whichever conversation is live, which for a file is worse than
@@ -704,6 +742,9 @@ class _ChatScreenState extends State<ChatScreen> {
       context: context,
       backgroundColor: t.surface,
       isScrollControlled: true,
+      // Grows to the height of the screen, so without this it grows past the
+      // status bar and the first line is drawn behind the clock.
+      useSafeArea: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
       ),
@@ -985,7 +1026,7 @@ class _ChatScreenState extends State<ChatScreen> {
     // in the world says it should. Null on a wide screen, where the list is
     // beside this rather than behind it and there is nothing to go back to.
     return SwipeBack(
-      onBack: widget.onBack,
+      onBack: widget.swipeToClose ? widget.onBack : null,
       child: Container(
       color: t.backdrop,
       child: SafeArea(
@@ -1227,50 +1268,95 @@ class _Header extends StatelessWidget {
               ],
             ),
           ),
-          if (live && rotelyx.memberCount > 1)
-            IconButton(
-              onPressed: onAddMember,
-              tooltip: 'Add someone',
-              icon: Icon(Icons.person_add_alt, size: 19, color: t.muted),
-            ),
+          // One action and one menu, not four buttons.
+          //
+          // Four fixed width buttons beside an avatar leave about eighty
+          // logical pixels for the name and the route chip on a 360dp phone,
+          // and the chip is wider than that, so `via mailbox` was painted over
+          // the add-member button. It read as a spacing bug and was a row that
+          // had run out of room. An iPhone is wider and hid it.
+          //
+          // Calling is the thing somebody opens a conversation to do, so it
+          // keeps its place. The rest are settings and they belong behind one.
           if (onCall != null)
             IconButton(
               onPressed: onCall,
               tooltip: 'Call',
               icon: Icon(Icons.call, size: 19, color: t.muted),
             ),
-          IconButton(
-            onPressed: onOpenContact,
-            tooltip: 'Name, picture and notifications',
-            icon: Icon(Icons.tune, size: 19, color: t.muted),
-          ),
-          IconButton(
-            onPressed: onToggleSafety,
-            tooltip: switch (verification) {
-              Verification.matches => 'Safety number, compared',
-              Verification.changed => 'Safety number changed',
-              Verification.declined => 'Safety number, never compared',
-              Verification.never => 'Safety number, not compared yet',
-            },
+          PopupMenuButton<_HeaderAction>(
+            tooltip: 'More',
+            position: PopupMenuPosition.under,
+            // Tinted when the safety number changed, because that is a warning
+            // and a warning behind a menu nobody opens is not one. The rest of
+            // the states are answers to a question the person asked, and they
+            // can wait until the menu is open.
             icon: Icon(
-              switch (verification) {
-                Verification.matches => Icons.verified_user,
-                Verification.changed => Icons.gpp_maybe,
-                _ => Icons.gpp_bad,
-              },
+              Icons.more_vert,
               size: 20,
-              color: switch (verification) {
-                Verification.matches => Tone.good,
-                Verification.changed => Tone.bad,
-                _ => t.muted,
-              },
+              color: verification == Verification.changed ? Tone.bad : t.muted,
             ),
+            onSelected: (action) => switch (action) {
+              _HeaderAction.addMember => onAddMember(),
+              _HeaderAction.contact => onOpenContact(),
+              _HeaderAction.safety => onToggleSafety(),
+            },
+            itemBuilder: (_) => [
+              if (live && rotelyx.memberCount > 1)
+                const PopupMenuItem(
+                  value: _HeaderAction.addMember,
+                  child: ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(Icons.person_add_alt, size: 19),
+                    title: Text('Add someone'),
+                  ),
+                ),
+              const PopupMenuItem(
+                value: _HeaderAction.contact,
+                child: ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.tune, size: 19),
+                  title: Text('Name, picture and notifications'),
+                ),
+              ),
+              PopupMenuItem(
+                value: _HeaderAction.safety,
+                child: ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(
+                    switch (verification) {
+                      Verification.matches => Icons.verified_user,
+                      Verification.changed => Icons.gpp_maybe,
+                      _ => Icons.gpp_bad,
+                    },
+                    size: 19,
+                    color: switch (verification) {
+                      Verification.matches => Tone.good,
+                      Verification.changed => Tone.bad,
+                      _ => null,
+                    },
+                  ),
+                  title: Text(switch (verification) {
+                    Verification.matches => 'Safety number, compared',
+                    Verification.changed => 'Safety number changed',
+                    Verification.declined => 'Safety number, never compared',
+                    Verification.never => 'Safety number, not compared yet',
+                  }),
+                ),
+              ),
+            ],
           ),
         ],
       ),
     );
   }
 }
+
+/// What the header's overflow menu can do.
+enum _HeaderAction { addMember, contact, safety }
 
 class _SafetyPanel extends StatefulWidget {
   const _SafetyPanel({required this.conversationId});

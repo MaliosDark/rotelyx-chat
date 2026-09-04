@@ -371,6 +371,9 @@ RotelyxEndpoint? openEndpoint(
         {required String identityHex, required String relay}) =>
     null;
 
+/// A browser has no transport symbols, and never did.
+bool get transportIsBuilt => false;
+
 /// And has no codec to open a call on.
 RotelyxCall? openNativeCall(Object session,
         {required String call, int bytesPerFrame = 60, bool recoverLoss = false}) =>

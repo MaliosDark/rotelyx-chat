@@ -133,7 +133,24 @@ class MailboxClient {
     _socket = socket;
 
     socket.messages.listen(_onFrame);
-    socket.closed.listen((why) => _errors.add('mailbox connection $why'));
+
+    // A closed socket is not put on `errors`, and that is deliberate.
+    //
+    // This stream means "something did not happen": a deposit the allowance
+    // would not cover, a frame the mailbox refused. `rotelyx_service.dart`
+    // treats it that way, and fails the whole session for anything arriving
+    // here while the state is not yet `joined`.
+    //
+    // A socket closing is neither. It happens every time the screen is left,
+    // every time the network moves, and every time the mailbox restarts, and
+    // it is followed by a reconnection. Reporting it here put "mailbox
+    // connection closed" over the message box on both platforms, and when it
+    // landed a moment before the session had finished joining it failed the
+    // conversation outright. Leaving a chat and coming back was enough.
+    //
+    // Whether there is a live connection is already carried by the state the
+    // header draws from, which says `reconnecting` and then `offline`. That is
+    // the honest place for it: a condition, not an incident.
   }
 
   /// Feed one frame in, without a socket.

@@ -128,3 +128,140 @@ class PullForSettings extends StatelessWidget {
     );
   }
 }
+
+/// One screen slides in over another, and the drag moves it.
+///
+/// # What this replaces
+///
+/// One `setState` that swapped the whole screen. A conversation appeared and
+/// vanished between frames, and the edge swipe that closed it was a gesture
+/// with no feedback at all: nothing moved, and then the screen was different.
+/// Whether the swipe had been recognised was only knowable after letting go.
+///
+/// So the list stays mounted underneath, the conversation is drawn over it,
+/// and the drag moves it under the finger. Let go past a third of the way, or
+/// with any speed, and it finishes leaving; let go before that and it settles
+/// back. Nothing is decided while the finger is down.
+class SlideOver extends StatefulWidget {
+  const SlideOver({required this.under, required this.over, required this.onBack, super.key});
+
+  final Widget under;
+  final Widget? over;
+  final VoidCallback onBack;
+
+  @override
+  State<SlideOver> createState() => SlideOverState();
+}
+
+class SlideOverState extends State<SlideOver> with SingleTickerProviderStateMixin {
+  late final AnimationController _slide = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 260),
+    reverseDuration: const Duration(milliseconds: 220),
+  );
+
+  /// The conversation that is on the way out.
+  ///
+  /// Held so it can be watched leaving. Without it the widget is gone on the
+  /// frame the animation starts and what slides away is an empty rectangle.
+  Widget? _leaving;
+
+  bool _dragging = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.over != null) _slide.value = 1;
+  }
+
+  @override
+  void didUpdateWidget(SlideOver old) {
+    super.didUpdateWidget(old);
+    if (widget.over != null && old.over == null) {
+      _leaving = null;
+      _slide.forward();
+    } else if (widget.over == null && old.over != null) {
+      // Only when the drag did not already take it away, which leaves the
+      // controller at zero and nothing to play.
+      if (_slide.value > 0) {
+        _leaving = old.over;
+        _slide.reverse().whenComplete(() {
+          if (mounted) setState(() => _leaving = null);
+        });
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _slide.dispose();
+    super.dispose();
+  }
+
+  void _drag(DragUpdateDetails details, double width) {
+    if (!_dragging) return;
+    _slide.value = (_slide.value + details.delta.dx / -width).clamp(0.0, 1.0);
+  }
+
+  void _release(DragEndDetails details, double width) {
+    if (!_dragging) return;
+    _dragging = false;
+
+    final flung = details.velocity.pixelsPerSecond.dx > 700;
+    if (flung || _slide.value < 0.66) {
+      _slide.reverse(from: _slide.value).whenComplete(() {
+        if (mounted) widget.onBack();
+      });
+    } else {
+      _slide.forward(from: _slide.value);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final panel = widget.over ?? _leaving;
+    if (panel == null) return widget.under;
+
+    final width = MediaQuery.sizeOf(context).width;
+
+    return AnimatedBuilder(
+      animation: _slide,
+      builder: (context, _) {
+        final t = Curves.easeOutCubic.transform(_slide.value.clamp(0.0, 1.0));
+
+        return Stack(
+          children: [
+            // A little parallax, so the list reads as being behind rather than
+            // as a still picture the conversation happens to cover.
+            Transform.translate(
+              offset: Offset(-width * 0.22 * t, 0),
+              child: widget.under,
+            ),
+
+            // Darkened by however far the conversation has come across, which
+            // is also what makes a half-finished drag legible.
+            if (t > 0)
+              IgnorePointer(
+                child: ColoredBox(
+                  color: Colors.black.withValues(alpha: 0.28 * t),
+                  child: const SizedBox.expand(),
+                ),
+              ),
+
+            Transform.translate(
+              offset: Offset(width * (1 - t), 0),
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onHorizontalDragStart: (d) =>
+                    _dragging = d.globalPosition.dx <= 24,
+                onHorizontalDragUpdate: (d) => _drag(d, width),
+                onHorizontalDragEnd: (d) => _release(d, width),
+                child: panel,
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}

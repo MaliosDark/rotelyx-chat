@@ -45,6 +45,11 @@ class ContactSheet extends StatefulWidget {
       context: context,
       backgroundColor: t.surface,
       isScrollControlled: true,
+      // `isScrollControlled` lets this grow to the height of the screen, and
+      // without this it grows *past* the status bar: on a phone with a clock
+      // and a battery up there the first line of the sheet was drawn behind
+      // them. The default is false because a sheet is usually short.
+      useSafeArea: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
       ),
@@ -108,7 +113,7 @@ class _ContactSheetState extends State<ContactSheet> {
         padding: EdgeInsets.only(
           left: Metrics.gap,
           right: Metrics.gap,
-          top: Metrics.pad,
+          top: 18,
           bottom: MediaQuery.of(context).viewInsets.bottom + Metrics.gap,
         ),
         child: SingleChildScrollView(
@@ -116,15 +121,37 @@ class _ContactSheetState extends State<ContactSheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Center(
-                child: Container(
-                  width: 36,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: t.line,
-                    borderRadius: BorderRadius.circular(2),
+              // A handle to drag, and a button to press.
+              //
+              // The handle alone was the whole way out, and inside a scrolling
+              // sheet a downward drag scrolls rather than dismisses. On
+              // Android the hardware gesture still closed it; on iOS there is
+              // no such thing, so the sheet had no exit at all and the only
+              // move left was to kill the application.
+              Row(
+                children: [
+                  const SizedBox(width: 44),
+                  Expanded(
+                    child: Center(
+                      child: Container(
+                        width: 36,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: t.line,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
                   ),
-                ),
+                  SizedBox(
+                    width: 44,
+                    child: IconButton(
+                      onPressed: () => Navigator.of(context).maybePop(),
+                      tooltip: 'Close',
+                      icon: Icon(Icons.close, size: 20, color: t.muted),
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: Metrics.gap),
 

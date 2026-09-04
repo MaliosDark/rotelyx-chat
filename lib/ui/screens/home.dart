@@ -140,13 +140,21 @@ class _HomeScreenState extends State<HomeScreen> {
     );
 
     if (!wide) {
-      return _openId == null
-          ? list
-          : ChatScreen(
-              conversationId: _openId!,
-              onBack: () => setState(() => _openId = null),
-              onChanged: _reload,
-            );
+      return SlideOver(
+        under: list,
+        over: _openId == null
+            ? null
+            : ChatScreen(
+                key: ValueKey(_openId),
+                conversationId: _openId!,
+                onBack: () => setState(() => _openId = null),
+                onChanged: _reload,
+                // The slide below reads the drag, so the screen must not read
+                // it as well.
+                swipeToClose: false,
+              ),
+        onBack: () => setState(() => _openId = null),
+      );
     }
 
     return Row(

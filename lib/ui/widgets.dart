@@ -195,9 +195,19 @@ class RxChip extends StatelessWidget {
             Icon(icon, size: 12, color: c),
             const SizedBox(width: 5),
           ],
-          Text(text,
-              style: Type.small.copyWith(
-                  color: c, fontWeight: FontWeight.w600, height: 1)),
+          // Flexible, so a chip in a narrow row shrinks instead of painting
+          // its text outside its own pill. A `Row` with `MainAxisSize.min`
+          // asks for the width it wants and takes it whether or not the
+          // parent has it, and what that looked like in the conversation
+          // header was a chip drawn over the buttons beside it.
+          Flexible(
+            child: Text(text,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                softWrap: false,
+                style: Type.small.copyWith(
+                    color: c, fontWeight: FontWeight.w600, height: 1)),
+          ),
         ],
       ),
     );
@@ -493,6 +503,9 @@ Future<bool> explainPermission(
     context: context,
     backgroundColor: t.surface,
     isScrollControlled: true,
+    // Grows to the height of the screen, so without this it grows past the
+    // status bar and the first line is drawn behind the clock.
+    useSafeArea: true,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(Metrics.radius)),
     ),

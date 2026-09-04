@@ -111,7 +111,7 @@ class Calls {
 
     final endpoint = _bind();
     if (endpoint == null) {
-      return 'This build cannot open a connection for calls.';
+      return 'Calls cannot connect: ${_bindFailure ?? 'the endpoint would not open'}.';
     }
 
     final address = endpoint.address;
@@ -157,7 +157,7 @@ class Calls {
     final endpoint = _bind();
     if (endpoint == null) {
       hangUp(CallEnded.lost);
-      return 'This build cannot open a connection for calls.';
+      return 'Calls cannot connect: ${_bindFailure ?? 'the endpoint would not open'}.';
     }
     final address = endpoint.address;
     if (address == null) {
@@ -345,14 +345,35 @@ class Calls {
     return null;
   }
 
+  /// The reason the last `_bind` failed, or null.
+  ///
+  /// It used to be thrown away. `openEndpoint` reports which of four things
+  /// went wrong, and every one of them surfaced as "this build cannot open a
+  /// connection for calls", which names the build and says nothing about the
+  /// failure. On a phone that is the only diagnosis anybody gets.
+  String? _bindFailure;
+
   RotelyxEndpoint? _bind() {
     if (_endpoint != null) return _endpoint;
     try {
-      return _endpoint = openEndpoint(
+      _bindFailure = null;
+      final endpoint = openEndpoint(
         identityHex: store.transportIdentity,
         relay: rotelyxConfig.relay,
       );
-    } on NetRefused {
+      if (endpoint == null) {
+        // Null and an exception are different failures. This one is a library
+        // without the transport symbols, which is a build to replace rather
+        // than anything the person holding the phone can act on, and saying so
+        // is the difference between that and a relay it could not reach.
+        _bindFailure = transportIsBuilt
+            ? 'the engine has the transport and would not open it'
+            : 'this build of the engine has no transport';
+        return null;
+      }
+      return _endpoint = endpoint;
+    } on NetRefused catch (e) {
+      _bindFailure = e.message;
       return null;
     }
   }
