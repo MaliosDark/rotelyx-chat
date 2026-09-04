@@ -53,7 +53,15 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _reload();
     if (_openFirst && _conversations.isNotEmpty) {
-      _openId = _conversations.first.id;
+      // A frame later, not here. Opening during the first build mounts
+      // ChatScreen inside it, and what that screen does on the way up marks
+      // this element dirty before it has ever been clean, which trips
+      // `Element.rebuild`'s `!_dirty` assertion and paints a red error over
+      // the screenshot. Tapping a conversation does the same work one frame
+      // later, so this waits for the same moment the real path uses.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() => _openId = _conversations.first.id);
+      });
     }
 
     // A message arriving while this screen is showing has to appear on it.

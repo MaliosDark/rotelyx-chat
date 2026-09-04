@@ -1,7 +1,9 @@
 # Set rather than left to CocoaPods to infer. The engine is a static library
 # built for a deployment target, and a mismatch between it and the Runner is a
-# link error that reads as a missing symbol. 13.0 is what Flutter 3.24 supports.
-platform :ios, '13.0'
+# link error that reads as a missing symbol. 15.0 is Flutter 3.47's floor,
+# written here by `flutter build ios`, which rewrites the Xcode setting to
+# match: this line follows that rather than leading it.
+platform :ios, '15.0'
 
 # CocoaPods analytics sends network stats synchronously affecting flutter build latency.
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'

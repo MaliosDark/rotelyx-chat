@@ -3,12 +3,18 @@
 /// The work is in `android/app/src/main/kotlin/.../Notifications.kt`. This is
 /// the wire to it, and nothing more: no logic lives on both sides.
 ///
-/// iOS is not wired up here and calling this on iOS does nothing rather than
-/// throwing. The reason is in `docs/NOTIFICATIONS.md` and it is a platform
-/// limit rather than an omission: iOS does not permit a background socket, so
-/// there is no moment at which this application could decide to notify while
-/// it is not running. What iOS needs is a push, and a push needs somebody to
-/// send it.
+/// iOS answers two of these and not the rest, from `AppDelegate.swift`, and the
+/// split is the platform limit rather than an omission. iOS does not permit a
+/// background socket, so there is no moment at which this application could
+/// decide to notify while it is not running: what shows a notification there is
+/// the extension in `ios/NotificationService/`, when a push arrives.
+///
+/// So `show` and `clear` are Android's, and so are `connect` and `disconnect`,
+/// which are the foreground service. `permitted` and `request` are both
+/// platforms', because both have a permission and asking about it is the same
+/// question. Returning false on iOS instead, which is what this did, made the
+/// settings switch dead and told the person to change a setting they had never
+/// been asked for.
 library;
 
 import 'dart:io' show Platform;
@@ -24,24 +30,35 @@ const MethodChannel _channel = MethodChannel('rotelyx/notifications');
 class PlatformNotifier implements Notifier {
   const PlatformNotifier();
 
+  /// Whether this platform posts notifications from here.
   bool get _wired => Platform.isAndroid;
+
+  /// Whether this platform has a notification permission to ask about. Both
+  /// mobile ones do; only one of them posts.
+  bool get _asks => Platform.isAndroid || Platform.isIOS;
 
   @override
   Future<bool> permitted() async {
-    if (!_wired) return false;
+    if (!_asks) return false;
     try {
       return await _channel.invokeMethod<bool>('permitted') ?? false;
     } on PlatformException {
+      return false;
+    } on MissingPluginException {
+      // An iOS build from before AppDelegate answered this channel. Treated as
+      // "not permitted" rather than allowed to throw out of a settings screen.
       return false;
     }
   }
 
   @override
   Future<bool> request() async {
-    if (!_wired) return false;
+    if (!_asks) return false;
     try {
       return await _channel.invokeMethod<bool>('request') ?? false;
     } on PlatformException {
+      return false;
+    } on MissingPluginException {
       return false;
     }
   }

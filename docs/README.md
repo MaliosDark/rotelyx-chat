@@ -36,6 +36,7 @@ cryptography, the mailbox or the relay is documented there.
 |---|---|
 | Put it in the two stores | [RELEASING.md](RELEASING.md) |
 | Know where it can legally be offered | [JURISDICTIONS.md](JURISDICTIONS.md) |
+| Answer Apple's encryption documentation | [EXPORT-COMPLIANCE.md](EXPORT-COMPLIANCE.md) |
 | Report something you found | [../SECURITY.md](../SECURITY.md) |
 | Send code | [../CLA.md](../CLA.md) |
 

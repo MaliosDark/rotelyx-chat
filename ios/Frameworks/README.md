@@ -8,29 +8,54 @@ from the protocol repository in one command.
 tool/native/build-ios.sh          # on a Mac
 ```
 
-## The two steps Xcode needs afterwards
+## What the Xcode project already does with it
 
-**1. Add it to the Runner target as Do Not Embed.**
+Both steps below are in `Runner.xcodeproj` now, as build settings rather than
+as anything anybody has to remember. They were written here as manual Xcode
+steps because there was no Mac to try them on; the first build on one showed
+that one of the two was not enough.
 
-Runner target, General, Frameworks Libraries and Embedded Content, add
-`RotelyxEngine.xcframework`, set Embed to **Do Not Embed**. It is a static
-library, so it is linked into the Runner binary at build time; embedding would
-copy an archive into the bundle that nothing ever loads.
-
-**2. Add `-force_load` to Other Linker Flags.**
+**1. `-force_load`, so the archive is linked at all.**
 
 ```
 -force_load $(SRCROOT)/Frameworks/RotelyxEngine.xcframework/ios-arm64/librotelyx_mobile.a
 ```
 
-Without it the application builds, launches, and then reports that the engine is
-not loaded.
+Every call into the engine goes through `dart:ffi`, which looks symbols up by
+name at runtime. Nothing in the compiled Swift references any of them, so as far
+as the linker can tell the whole archive is unreachable and it takes only the
+members something asks for, which is none of them.
 
-The reason is worth knowing, because the symptom points at packaging and the
-cause is the linker. Every call into the engine goes through `dart:ffi`, which
-looks symbols up by name at runtime. Nothing in the compiled Swift or
-Objective-C references any of them, so as far as the linker can tell the entire
-archive is unreachable, and it drops it. `-force_load` says keep it anyway.
+Set per SDK, because the device slice and the simulator slice are different
+files and a build for one cannot link the other:
+`OTHER_LDFLAGS[sdk=iphoneos*]` takes `ios-arm64`,
+`OTHER_LDFLAGS[sdk=iphonesimulator*]` takes `ios-arm64_x86_64-simulator`.
+
+**2. `-Wl,-u` on the three ABI symbols, so the link survives dead stripping.**
+
+```
+-Wl,-u,_rotelyx_call -Wl,-u,_rotelyx_string_free -Wl,-u,_rotelyx_abi_version
+```
+
+This is the half that was missing, and it fails silently in the worst way: the
+build succeeds, the application launches, and it reports that the engine is not
+loaded. `-force_load` loads the objects; it does not anchor them. Release builds
+run `-dead_strip`, and in an executable a global symbol is not a root of that
+walk — only the entry point and what it reaches. So the linker pulled in 119 MB
+and then threw all of it away, and the finished binary was 400 KB with not one
+engine symbol in it.
+
+`-u` names a symbol as undefined before the link starts, which makes it a root,
+and everything it reaches is kept. With it the binary is 3.6 MB and
+
+```
+xcrun dyld_info -exports build/ios/Release-iphoneos/Runner.app/Runner
+```
+
+lists `_rotelyx_call`, `_rotelyx_string_free` and `_rotelyx_abi_version`. That
+export table is what `dlsym` reads, so it is the thing worth checking after any
+change to the linker flags: a binary of roughly the right size proves the code
+arrived, and those three names prove it can be found.
 
 This is also why `lib/rotelyx/engine/native.dart` uses
 `DynamicLibrary.process()` on iOS rather than opening a file: after this, the

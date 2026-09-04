@@ -27,6 +27,21 @@ import UserNotifications
 
   private static let channelName = "rotelyx/apple-push"
 
+  /// The same channel name Android answers on, and deliberately so: the Dart
+  /// side asks one question about permission and does not know which platform
+  /// replies. Only two of Android's methods are answered here, because only two
+  /// of them mean anything on iOS.
+  ///
+  /// `show` and `clear` are Android's, where the application holds its own
+  /// connection and decides to notify. iOS cannot hold that connection: the
+  /// notification is written by the extension in `ios/NotificationService/`
+  /// when a push arrives, and nothing in Dart posts one.
+  ///
+  /// `connect` and `disconnect` are the foreground service, which iOS has no
+  /// equivalent of. Its equivalent outcome, receiving while closed, is the
+  /// wake registration in `rotelyx_service.dart`.
+  private static let notifyChannelName = "rotelyx/notifications"
+
   /// The token, once Apple has given one.
   private var token: String?
 
@@ -59,6 +74,37 @@ import UserNotifications
           // back to this application's own container rather than refusing to
           // start: history is worth more than the extension's view of it.
           result(SharedContainer.path)
+        default:
+          result(FlutterMethodNotImplemented)
+        }
+      }
+
+      let notify = FlutterMethodChannel(
+        name: AppDelegate.notifyChannelName,
+        binaryMessenger: controller.binaryMessenger
+      )
+      notify.setMethodCallHandler { call, result in
+        switch call.method {
+        case "permitted":
+          // What iOS currently allows, which is not what was asked for: a
+          // person can grant at the prompt and revoke in Settings afterwards,
+          // and a switch that remembers the prompt rather than reading the
+          // system drifts out of step with it silently.
+          UNUserNotificationCenter.current().getNotificationSettings { settings in
+            let allowed = settings.authorizationStatus == .authorized
+              || settings.authorizationStatus == .provisional
+            DispatchQueue.main.async { result(allowed) }
+          }
+        case "request":
+          // Asking twice is not an error and does not prompt twice: iOS
+          // answers the second call with the standing decision. A refusal is
+          // final until the person changes it in Settings, which is what the
+          // Dart side tells them.
+          UNUserNotificationCenter.current().requestAuthorization(
+            options: [.alert, .sound, .badge]
+          ) { granted, _ in
+            DispatchQueue.main.async { result(granted) }
+          }
         default:
           result(FlutterMethodNotImplemented)
         }

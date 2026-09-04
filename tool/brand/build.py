@@ -35,6 +35,14 @@ longer match, and nobody notices because each one looks plausible on its own.
     android/.../mipmap-*/ic_launcher.png              the launcher icon
     android/.../drawable*/rotelyx_splash.png          the launch screen mark
 
+    ios/.../AppIcon.appiconset/*.png                  the home screen icon
+    ios/.../LaunchImage.imageset/*.png                the launch screen mark
+
+    The iOS ones replace the same Flutter placeholders, and the icon is the
+    one asset here that a store checks by itself: an app icon with an alpha
+    channel is rejected before review, so those are flattened onto the
+    backdrop rather than written out with the mark's own transparency.
+
 The Android ones replace what `flutter create` leaves behind, which is the
 Flutter logo and a white launch screen. Both are visible before a single line of
 this application runs: the icon in the drawer, and the white flash between
@@ -46,6 +54,7 @@ that backwards yields a logo that is invisible rather than wrong, which is
 harder to spot in a screenshot than it sounds.
 """
 
+import json
 import os
 
 from PIL import Image
@@ -226,6 +235,71 @@ def android():
     return made
 
 
+# The iOS launch image, per scale. The same three widths as Android's mdpi,
+# xhdpi and xxhdpi splashes, because 1x, 2x and 3x are the same three
+# multipliers under another name.
+LAUNCH = [("", 120), ("@2x", 240), ("@3x", 360)]
+
+# The application backdrop, `Tone.dBackdrop` in lib/ui/theme.dart, as the
+# launch screen and the flat plate behind the icon. Named once here for the
+# same reason it is named once there.
+BACKDROP = (11, 10, 15)
+
+
+def ios():
+    """The app icon and the launch screen, replacing Flutter's defaults.
+
+    # Why the icon is flattened
+
+    An iOS app icon may not have an alpha channel. The App Store rejects one
+    that does, before review, and `rotelyx-mark.png` carries alpha whether or
+    not any pixel uses it. So every size is composed onto the backdrop and
+    saved as RGB rather than resized and written straight out.
+
+    # Why the sizes are read rather than listed
+
+    `Contents.json` is what Xcode believes, and a list here that drifted from
+    it would produce an icon set that builds, ships, and shows a blank square
+    at whichever size was missed. So the sizes come out of that file.
+    """
+    mark = Image.open(f"{BRAND}/rotelyx-mark.png").convert("RGBA")
+    icon_set = os.path.join(
+        ROOT, "ios", "Runner", "Assets.xcassets", "AppIcon.appiconset")
+    made = []
+
+    with open(os.path.join(icon_set, "Contents.json")) as f:
+        entries = json.load(f)["images"]
+
+    for entry in entries:
+        name = entry.get("filename")
+        if not name:
+            continue
+        points = float(entry["size"].split("x")[0])
+        size = round(points * int(entry["scale"].rstrip("x")))
+        plate = Image.new("RGB", (size, size), BACKDROP)
+        art = mark.resize((size, size), Image.LANCZOS)
+        plate.paste(art, (0, 0), art)
+        plate.save(os.path.join(icon_set, name))
+        made.append((name, (size, size)))
+
+    # The launch screen, which is the wordmark on the backdrop rather than the
+    # square mark: this is the middle of a screen and there is room for the
+    # name, and it is the same choice Android's launch screen makes. The
+    # storyboard paints the backdrop behind it, so the image itself keeps its
+    # transparency.
+    wordmark_dark = Image.open(
+        os.path.join(ROOT, "assets", "images", "rotelyx-wordmark-dark.png"))
+    launch_set = os.path.join(
+        ROOT, "ios", "Runner", "Assets.xcassets", "LaunchImage.imageset")
+    for suffix, width in LAUNCH:
+        height = round(wordmark_dark.height * width / wordmark_dark.width)
+        wordmark_dark.resize((width, height), Image.LANCZOS).save(
+            os.path.join(launch_set, f"LaunchImage{suffix}.png"))
+        made.append((f"LaunchImage{suffix}.png", (width, height)))
+
+    return made
+
+
 def main():
     images = os.path.join(ROOT, "assets", "images")
     os.makedirs(images, exist_ok=True)
@@ -254,6 +328,9 @@ def main():
 
     for name, size in android():
         print(f"  android/.../{name:<34} {size}")
+
+    for name, size in ios():
+        print(f"  ios/.../{name:<38} {size}")
 
 
 if __name__ == "__main__":

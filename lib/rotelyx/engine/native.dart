@@ -71,6 +71,41 @@ class _Library {
   static _Library? _loaded;
   static String? _failure;
 
+  /// macOS arrives here two ways and only one of them has the engine linked in.
+  ///
+  /// A macOS application links it statically, like iOS, so the symbols are
+  /// already in the process. `flutter test` is a different process: the Dart
+  /// VM, with nothing linked into it, where `process()` returns a handle whose
+  /// every lookup fails and the error names a missing symbol rather than a
+  /// missing library. `tool/native/build-host.sh` already builds the dylib on a
+  /// Mac and puts it in `build/native`, so the fallback is to open it, which is
+  /// what makes the wrapper testable here as it is on Linux.
+  ///
+  /// Nothing tells the two apart before a lookup, so this does the lookup
+  /// rather than guessing.
+  static DynamicLibrary _macOsHandle() {
+    final process = DynamicLibrary.process();
+    try {
+      process.lookup<NativeFunction<_VersionNative>>('rotelyx_abi_version');
+      return process;
+    } on ArgumentError {
+      // `flutter test` runs from the project root, which is where
+      // build-host.sh leaves it; the bare name covers a dylib on the loader
+      // path instead.
+      for (final name in const [
+        'build/native/librotelyx_mobile.dylib',
+        'librotelyx_mobile.dylib',
+      ]) {
+        try {
+          return DynamicLibrary.open(name);
+        } on ArgumentError {
+          continue;
+        }
+      }
+      rethrow;
+    }
+  }
+
   /// Open the library for whichever platform this is.
   ///
   /// Android and Linux load a shared object by name from the usual search path,
@@ -84,8 +119,10 @@ class _Library {
       final DynamicLibrary handle;
       if (Platform.isAndroid) {
         handle = DynamicLibrary.open('librotelyx_mobile.so');
-      } else if (Platform.isIOS || Platform.isMacOS) {
+      } else if (Platform.isIOS) {
         handle = DynamicLibrary.process();
+      } else if (Platform.isMacOS) {
+        handle = _macOsHandle();
       } else if (Platform.isLinux) {
         handle = DynamicLibrary.open('librotelyx_mobile.so');
       } else if (Platform.isWindows) {

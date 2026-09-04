@@ -174,3 +174,20 @@ __pycache__/
 *-backup-*/
 *.bak
 *.orig
+
+# The iOS engine, built by tool/native/build-ios.sh from the protocol
+# repository. Several megabytes a slice and reproducible in one command, so it
+# is an artefact rather than source. The README beside it stays.
+/ios/Frameworks/RotelyxEngine.xcframework/
+
+# The PDF generated from docs/EXPORT-COMPLIANCE.md for App Store Connect.
+# One command to rebuild, and a binary nobody should have to guess the source of.
+/Rotelyx-Chat-Encryption-Documentation.pdf
+
+# The App Store listing copy, kept out of git: it is edited in the console.
+/App-Store-listing.txt
+
+# App Store Connect regional coverage file, generated rather than kept.
+/rotelyx-regions.geojson
+/App-Review-Notes.txt
+/NOTAS-REVISION.txt

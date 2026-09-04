@@ -201,6 +201,11 @@ is not in the app, and the rejection message does not say so. Verify with:
 
     python3 tool/ios/check-project.py
 
+and, once there is a build, in the bundle itself, which is the only place that
+settles it:
+
+    ls build/ios/Release-iphoneos/Runner.app/PrivacyInfo.xcprivacy
+
 ## Export compliance, which this application cannot skip
 
 `ITSAppUsesNonExemptEncryption` is set to **true**.
@@ -255,9 +260,24 @@ Firebase SDK in the binary, which registers an instance identifier with Google
 at launch and turns the App Privacy answer from "Data Not Collected" into a
 list. The mailbox calls Apple directly with a JWT signed by a `.p8` key.
 
-What remains is the mailbox side and five Xcode steps, both listed in
-`docs/PUSH.md`. A Notification Service Extension target cannot be created from a
-script.
+The mailbox side is built, in `crates/rotelyx-mailbox-server/src/wake.rs`: the
+registry that holds tokens and no tags, the fixed-schedule wake, and the ES256
+JWT that signs the call to `api.push.apple.com`. It is configuration rather than
+code from here, through `--apns-key`, `--apns-key-id`, `--apns-team-id`,
+`--apns-topic` and `--wake-every`. Without a key the server wakes nobody and
+says so when asked, rather than pretending.
+
+So what remains for notifications on iOS is **an APNs authentication key**: a
+`.p8` created once in the developer account and put on the mailbox server, never
+in this repository. The client half is done and the permission is asked for
+through the same channel Android uses, from `AppDelegate.swift`.
+
+The settings screen says which of the two mechanisms this build uses, and it is
+not the same sentence on both platforms. On Android there is no third party in
+the path at all; on iOS Apple carries the wake, and the screen says so rather
+than repeating the Android claim. A privacy claim that is true on one platform
+and false on the other is worse than no claim, and App Review reads that screen
+against the App Privacy answers.
 
 ## Other requirements
 
@@ -338,8 +358,9 @@ tool/native/check-alignment.sh
 
 | | |
 |---|---|
-| iOS notifications | Needs the mailbox to send a push and an extension to receive it. `docs/PUSH.md` |
+| An APNs authentication key | The last piece of iOS notifications. Created once in the developer account, put on the mailbox server as `--apns-key`, and kept out of this repository. Everything either side of it is built |
 | The Play foreground service declaration | Console form and a screen recording, once there is a console |
 | An upload key | `android/key.properties` is absent, so a release build signs with the debug key and Play refuses it. Generated once, by whoever owns the account: a lost upload key means going through Google support to publish again |
 | Export self-classification | A report to BIS, before the first iOS distribution |
-| `PrivacyInfo.xcprivacy` in the Xcode target | One drag, in Xcode, once |
+| The Program License Agreement | Xcode cannot create a provisioning profile until the account holder accepts the current PLA: the archive fails with `PLA Update available` and then, misleadingly, with `No profiles for 'com.rotelyx.ios' were found`. Accepted once, at developer.apple.com, by whoever holds the account |
+| App ID, App Group and Push in the developer account | `com.rotelyx.ios`, `com.rotelyx.ios.NotificationService`, `group.com.rotelyx.ios` and the Push Notifications capability. Automatic signing registers all four on the first successful archive, which is the archive the PLA is blocking |

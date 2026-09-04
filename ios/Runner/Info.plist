@@ -61,8 +61,30 @@
 	<string>Rotelyx needs the microphone for voice calls. It is used only while a call is running.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Rotelyx needs the camera to scan a meeting code. Nothing is recorded and nothing is sent.</string>
-	<key>ITSAppUsesNonExemptEncryption</key>
-	<true/>
+	<!-- ITSAppUsesNonExemptEncryption is deliberately absent, and absent is not
+	     the same as false.
+
+	     This application uses non-exempt encryption: it ships its own MLS and
+	     X-Wing implementation rather than calling the operating system's, and
+	     declaring false would be a false statement to Apple and, through them,
+	     to the United States Bureau of Industry and Security. It is never to be
+	     set false here.
+
+	     Declaring true is the other half, and it requires the binary to carry
+	     ITSEncryptionExportComplianceCode, the code App Store Connect issues
+	     against uploaded encryption documentation. Without a matching code the
+	     upload is refused at validation with "the export compliance key value
+	     [] doesn't match", which is what happened.
+
+	     With the key absent, App Store Connect asks the export questions per
+	     submission instead and they are answered there, truthfully. To go back
+	     to declaring it in the binary, put both keys in:
+
+	         <key>ITSAppUsesNonExemptEncryption</key><true/>
+	         <key>ITSEncryptionExportComplianceCode</key><string>THE-CODE</string>
+
+	     docs/EXPORT-COMPLIANCE.md holds the answers either path needs.
+	-->
 	<key>CFBundleShortVersionString</key>
 	<string>$(FLUTTER_BUILD_NAME)</string>
 	<key>CFBundleSignature</key>

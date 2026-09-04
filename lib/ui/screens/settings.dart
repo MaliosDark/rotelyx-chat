@@ -174,11 +174,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
 
                   const SizedBox(height: Metrics.gap),
-                  const RxNote(
-                    'No outside notification service is involved. This app '
-                    'keeps its own connection to the mailbox, so a message is '
-                    'decrypted on this phone before you are told about it, and '
-                    'nothing beyond this device learns that one arrived.',
+                  // Two platforms, two true answers, and the difference is the
+                  // whole point of the note: on one there is no third party at
+                  // all, on the other there is Apple and saying so is the
+                  // reason this switch is worth trusting. `canBeWoken` is the
+                  // condition rather than the platform, because it is the
+                  // condition that makes the second paragraph true.
+                  RxNote(
+                    rotelyx.canBeWoken
+                        ? 'Apple carries the wake and nothing else. Your phone '
+                            'is woken on a fixed schedule whether or not '
+                            'anything arrived, so what Apple sees is a '
+                            'heartbeat identical to every other phone, never '
+                            'that a message came for you. The message is '
+                            'collected and decrypted here, on this device, and '
+                            'the mailbox never learns which phone belongs to '
+                            'which conversation.'
+                        : 'No outside notification service is involved. This '
+                            'app keeps its own connection to the mailbox, so a '
+                            'message is decrypted on this phone before you are '
+                            'told about it, and nothing beyond this device '
+                            'learns that one arrived.',
                     title: 'Who tells you',
                   ),
 
