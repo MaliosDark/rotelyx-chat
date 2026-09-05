@@ -424,6 +424,7 @@ class MailboxClient {
         'op': 'registerWake',
         'token': grant.token,
         'kind': grant.kind,
+        'on_schedule': grant.onSchedule,
         'secret': grant.secret,
       });
 

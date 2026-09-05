@@ -712,7 +712,11 @@ class RotelyxService {
     _wakeToken = token;
     if (state == RotelyxState.joined) {
       _mailbox?.registerWake(
-          PushGrant(token: token, secret: store.wakeSecret));
+          PushGrant(
+            token: token,
+            secret: store.wakeSecret,
+            onSchedule: store.wakeOnSchedule,
+          ));
 
       // And a ticket under every tag already being listened on.
       //
@@ -785,7 +789,11 @@ class RotelyxService {
       final token = _wakeToken;
       if (token != null) {
         _mailbox?.registerWake(
-            PushGrant(token: token, secret: store.wakeSecret));
+            PushGrant(
+            token: token,
+            secret: store.wakeSecret,
+            onSchedule: store.wakeOnSchedule,
+          ));
 
         // Tickets go the same way as the registration and for the same
         // reason: the mailbox forgets both when the socket closes on its side,

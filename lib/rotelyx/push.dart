@@ -64,6 +64,7 @@ class PushGrant {
     required this.token,
     required this.secret,
     this.kind = defaultKind,
+    this.onSchedule = true,
   });
 
   /// The platform token to wake. Opaque here on purpose.
@@ -101,6 +102,20 @@ class PushGrant {
   /// `apns` are a device the notifier opens and then cannot deliver to, and
   /// nothing on either side would say so.
   static const defaultKind = 'apns';
+
+  /// Whether this device wants the mailbox's schedule as well as its tickets.
+  ///
+  /// True is the mailbox's own answer for a client that says nothing, and it
+  /// is the private one: every registered device woken on one rhythm is a
+  /// device the push service cannot pick out of the others by when it is
+  /// woken.
+  ///
+  /// False asks to be woken only when something arrives. That is immediate,
+  /// and it costs the rhythm: this device's pushes become the times its
+  /// correspondents send, blunted only by the decoys the notifier adds. On an
+  /// iPhone it also stops the schedule's contentless wakes, which until Apple
+  /// grants the filtering entitlement arrive as blank notifications.
+  final bool onSchedule;
 }
 
 /// What a platform must provide to support waking.

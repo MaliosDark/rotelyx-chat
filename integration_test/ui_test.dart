@@ -17,6 +17,7 @@ import 'package:rotelyx_chat/rotelyx/rotelyx_service.dart';
 import 'package:rotelyx_chat/rotelyx/rotelyx_store.dart';
 import 'package:rotelyx_chat/rotelyx/rotelyx_wasm.dart';
 import 'package:rotelyx_chat/ui/app.dart';
+import 'package:rotelyx_chat/ui/widgets.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -36,6 +37,25 @@ void main() {
       await tester.pump(const Duration(milliseconds: 200));
     }
     return ready();
+  }
+
+  /// Tap something that may be below the fold.
+  ///
+  /// `tap` takes the centre of the widget it finds and does not check that the
+  /// hit landed there. On a screen taller than the window that centre can be
+  /// off it, and the tap goes to whatever is at those coordinates instead:
+  /// Flutter warns and the test carries on believing it pressed a button. That
+  /// is how a pairing test came to pass by finding a field's hint text.
+  Future<void> press(WidgetTester tester, Finder finder) async {
+    await tester.ensureVisible(finder);
+    await tester.pumpAndSettle();
+    await tester.tap(finder);
+
+    // One frame, not settled. A button that starts something shows a spinner
+    // while it runs, and `pumpAndSettle` waits for animations to stop: against
+    // an indeterminate one it waits until it gives up. Callers that need to
+    // wait for an outcome use `until`, which pumps.
+    await tester.pump();
   }
 
   /// Get past the unlock screen, however this run happens to arrive at it.
@@ -163,7 +183,7 @@ void main() {
     expect(find.text('Choose a name others will see.'), findsNothing,
         reason: 'the name went into the wrong field');
 
-    await tester.tap(find.text('Wait here'));
+    await press(tester, find.text('Wait here'));
 
     // Reaching `pairing` means the whole chain ran through the widgets: a
     // session in wasm, a rendezvous tag, a socket to production, and a
@@ -172,13 +192,31 @@ void main() {
         tester, () => rotelyx.state == RotelyxState.pairing,
         budget: const Duration(seconds: 60));
 
+    // The screen keeps its own error, separate from the service's, and
+    // `_attempt` puts anything thrown there rather than moving the state. So a
+    // run that ends in `idle` with nothing on `lastError` has its reason under
+    // "Did not work" and nowhere else.
+    final shown = find
+        .descendant(of: find.byType(RxNote), matching: find.byType(Text))
+        .evaluate()
+        .map((e) => (e.widget as Text).data)
+        .whereType<String>()
+        .join(' | ');
+
     expect(reached, isTrue,
         reason: 'never reached pairing; stuck in ${rotelyx.state}; '
-            'last error: ${rotelyx.lastError}');
+            'last error: ${rotelyx.lastError}; on screen: "$shown"; '
+            // `_attempt` writes the name before it does anything else, so this
+            // separates "the button never fired" from "it fired and hung".
+            'name reached the store: ${store.myName}');
     expect(rotelyx.lastError, isNull);
 
     await tester.pump(const Duration(milliseconds: 300));
-    expect(find.textContaining('Waiting at the meeting place'), findsOneWidget);
+    // What the host sees while it waits. `_Waiting` says this for a host and
+    // "Knocking" for a guest; the old wording was neither and had never been
+    // reached, because the tap that gets here was landing on nothing.
+    expect(find.textContaining('Have the other person type the same phrase'),
+        findsOneWidget);
   });
 
   testWidgets('a short meeting phrase is refused by the wasm, visibly',
@@ -198,7 +236,7 @@ void main() {
     await tester.enterText(find.byType(TextField).last, 'short');
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Wait here'));
+    await press(tester, find.text('Wait here'));
     await until(tester, () => rotelyx.state == RotelyxState.failed);
     await tester.pumpAndSettle();
 

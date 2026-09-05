@@ -48,6 +48,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
   /// than no switch.
   bool _notify = false;
 
+  /// Whether this device asked to be woken the moment something arrives.
+  ///
+  /// The inverse of what is stored: the setting is written as "on a schedule",
+  /// which is the private default, and the switch is phrased as the thing a
+  /// person wants rather than as the mechanism.
+  bool _immediate = !store.wakeOnSchedule;
+
   /// Whether the background connection is being held.
   bool _connected = false;
 
@@ -186,6 +193,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                       'schedule and learns only that, never '
                                       'that a message arrived'
                                   : 'Shows a permanent notice and uses battery',
+                          style: Type.small.copyWith(color: t.faint)),
+                    ),
+
+                  // Only where a third party carries the wake, and only once
+                  // the switch above is on. On a platform that holds its own
+                  // connection there is no rhythm to give away and nothing to
+                  // choose between.
+                  if (alerts.canStayConnected && _connected && rotelyx.canBeWoken)
+                    SwitchListTile(
+                      value: _immediate,
+                      onChanged: (want) async {
+                        store.wakeOnSchedule = !want;
+                        setState(() => _immediate = want);
+                        // Registered again so the mailbox is told, rather than
+                        // waiting for whenever this device next registers.
+                        await rotelyx.askToBeWoken();
+                      },
+                      activeThumbColor: Tone.accent,
+                      contentPadding: EdgeInsets.zero,
+                      title: Text('Tell me straight away',
+                          style: Type.body.copyWith(color: t.text)),
+                      subtitle: Text(
+                          _immediate
+                              ? 'Arrives at once. Your phone is then woken '
+                                  'when somebody writes to you, and the push '
+                                  'service can see those times'
+                              : 'Arrives on a fixed schedule. Every phone is '
+                                  'woken on the same rhythm, so the push '
+                                  'service cannot tell yours apart',
                           style: Type.small.copyWith(color: t.faint)),
                     ),
 

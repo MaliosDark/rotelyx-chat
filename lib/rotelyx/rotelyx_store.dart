@@ -346,6 +346,7 @@ class RotelyxStore {
   static const _kProbe = 'rotelyx.probe';
   static const _kPreviews = 'rotelyx.previews';
   static const _kConnected = 'rotelyx.connected';
+  static const _kOnSchedule = 'rotelyx.wakeOnSchedule';
   static const _kMailbox = 'rotelyx.mailbox';
   static const _kWakeSecret = 'rotelyx.wake-secret';
   static const _kTransport = 'rotelyx.transport-identity';
@@ -399,6 +400,20 @@ class RotelyxStore {
   bool get stayConnected => _box.read(_kConnected) as bool? ?? false;
 
   set stayConnected(bool value) => _box.write(_kConnected, value);
+
+  /// Whether this device takes the mailbox's schedule as well as its tickets.
+  ///
+  /// Default true, which is the private answer: every device woken on one
+  /// rhythm is a device the push service cannot pick out by when it is woken.
+  /// False asks to be woken only when something arrives, which is immediate
+  /// and gives that rhythm away. `PushGrant.onSchedule` carries it.
+  ///
+  /// Kept beside `stayConnected` rather than in the vault, because the
+  /// registration happens before anybody has typed a password and a preference
+  /// about rhythm is not a secret.
+  bool get wakeOnSchedule => _box.read(_kOnSchedule) as bool? ?? true;
+
+  set wakeOnSchedule(bool value) => _box.write(_kOnSchedule, value);
 
   /// The mailbox this device uses, when it is not the one shipped as default.
   ///
