@@ -529,6 +529,17 @@ class _NativeEngine implements RotelyxEngine {
       _call({'op': 'rendezvous.open', 'envelope': envelopeB64, 'tag': tagHex}));
 
   @override
+  String sealWakeTicket(
+          String notifierKeyB64, String kind, String token, int hour) =>
+      _string(_call({
+        'op': 'wake.sealWakeTicket',
+        'notifier': notifierKeyB64,
+        'kind': kind,
+        'token': token,
+        'hour': hour,
+      }));
+
+  @override
   String sealBlob(RotelyxKey key, String dataB64) => _string(
       _call({'op': 'key.sealBlob', 'key': (key as _NativeKey).handle, 'data': dataB64}));
 

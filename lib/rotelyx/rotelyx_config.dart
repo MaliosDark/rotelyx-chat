@@ -12,6 +12,7 @@ class RotelyxConfig {
     required this.mailbox,
     required this.relay,
     required this.lookback,
+    this.notifierKey,
   });
 
   /// Ideoa Labs production. The mailbox is store-and-forward for peers that are
@@ -20,6 +21,8 @@ class RotelyxConfig {
     mailbox: 'wss://m1.telyx.me/mailbox',
     relay: 'https://amber.telyx.me',
     lookback: 39,
+    notifierKey:
+        'JQEdP4gaOPmrz1e+OgRs+jMc0ukVj5d29kYlxcF1/0kUkzErdLaTjKQwI0BM/unKLRiSymViUNR+bPi5jMSoEUA9z8NMF+Fl8cg5MPOaSmkwXLSS3Ax8uES2waeo8/kDv5mv1vBG22dWXCavxMsJiSOi3cEZeUO+PcMoiCMo20eAPzatSPa98sunWDvNi2UY1Sknz2NPzotiUAEGybA0a5I5C5obXSFtttwaH+ZZ0EyMPIi60BoAo/W6ruF7FgB9cOk7kZIxAekarJBqJYSKrVwc5BUXHkuCecqRduDJplW3p8oUTwo6VXUvFIGsLDcOmXVWUjoFbsSyV3JS1QIhmroORNhDFzc63oMKRZqHoKcj8Samrdhi7aIzl+M9X7V2K5IgZnsfpYMO+buwsOlVpaEa0CYxWJcg3umozEMm7pESWwUJLcN8J3Z4eCquEAVyNSldvZQeCoIn7VpF31vLuZgDK4xT3NhaTokrXJICYoNUE0zP4cOpE4o6//UBYFdSZIPCTnYiI5a0d8sD9jUFjAW4xyyilWQD/gIoR3INtLBhartBGQCfFCgXr+WTDQlBAENjYAs2e7OGYeiilLUD8WNvzFOYc7tDUUYbZoQaU/yQrtwopxeoLuxlXdNd4NeNX8a8GYFYLHdatpShbotKdDoZXuCom3lIlDuDS/AI+vmkcIQ5PYfFWeh+h1Vbj3BJMkyXXqnMHueQstOrfxYHObCPLYJROvNCh4kgt6J2dEO6BtMeqlgTeDrDKGi4OixMnTGfxoSIXwVgxGC6xOE+4HS9TxSRi3N7NQqOtFAE6SO8nmenn7s6TtJpYDFEouQcu4MOhWW8lBNOSwuq6amRuil709KJskYa3qskS4cR1rdDoDtRjLlwJHfKnCmmEuOmYrwwSDJLFTiphvm8iXCPC8RAAABr2IwLrHGPLAlIcgMP8rfJgKiKA8C9nqVwLrHJbrU2PjCD4yd5vxCGcjTMRlKj9ypFo1xuSpVIlvuyy/BUT5JoQ7ALQ6m5SJqj0ku3z3M3tSF7GyM4HtoTEeS3RMOb/iF8+fXFVyaQUvxH9wcN4QgG5TpqCUM6URINFYxkNCdvyWVRxtWfBKk1yfXBnehVNJlUkxyMjwFgZaOLJPoP6OM8C+JheJJSkeEQNrMHRhuZgbowzaXGmticjpvEN7pti7xiv7eJdddTuTyLeMGLDxOCOdg2E9o2rGPLCoqospRNPqOWa/udBfpqfozKSNmbniU/17J1cfA5gkxv2qYTfowpHjpshXt9s+rMEAMb5NxYUuQGo/Vq/vcAQBOrdHp9MwJJmeQ6UcUO1EhUmjeUgBVS0TtAXBtwvCoUuZNUm0l+EFcK/0IAQSzP4Htk3KWUtyEu7UVImIatYHrEBtyfmmlzqEtRdRwZW0JAyyw2qGeHP6OHOOBMDDbAV3RjcaR6k0akHftEGTPJx9NnFDBkYpFtDCMYcHVWzwlhWawIImt2W9A463UGwRmn6jZeTLNVMsyG9qUXK1OZyKyXdSEIw0A7hqdiWlO6fPGcIaupCM2phauHHfRwE7/ODDviPUStHkz2yns37wrBVeTSKAkILlUF21PZpo51xjL/gtO/h2xIc/c0HuQhfUmvoYPMaQ==',
   );
 
   /// The sibling process from `docs/DEPLOYMENT.md`, for working offline.
@@ -28,6 +31,25 @@ class RotelyxConfig {
     relay: 'http://127.0.0.1:3340',
     lookback: 39,
   );
+
+  /// The notifier's public key, base64, or null where there is none.
+  ///
+  /// # Why it is pinned here rather than asked for
+  ///
+  /// A wake ticket is this device's push token sealed to this key. The mailbox
+  /// stores the result and hands it on without ever being able to read it,
+  /// which is what lets a message wake a phone at once without anybody holding
+  /// the link between the phone and the conversation.
+  ///
+  /// All of that rests on the key being the notifier's. A client that asked
+  /// the mailbox which key to seal to would be asking the one party the
+  /// sealing protects it from, and would be given whichever key that party
+  /// preferred. So it lives in the build, like the relay does.
+  ///
+  /// Null means no ticket is left and nothing is immediate: the mailbox wakes
+  /// devices on its schedule instead, which is what it did before tickets
+  /// existed and remains a valid way to run.
+  final String? notifierKey;
 
   /// WebSocket URL of the blind mailbox.
   final String mailbox;

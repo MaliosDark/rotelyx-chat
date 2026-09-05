@@ -91,6 +91,14 @@ class RotelyxWasm {
   static String openUnder(String envelopeB64, String tagHex) =>
       engine.openUnder(envelopeB64, tagHex);
 
+  /// Seal this device's push token to the notifier, for one tag.
+  ///
+  /// Every call gives different bytes for the same token, which is what keeps
+  /// the mailbox from recognising two of this device's tickets as one device.
+  static String sealWakeTicket(
+          String notifierKeyB64, String kind, String token, int hour) =>
+      engine.sealWakeTicket(notifierKeyB64, kind, token, hour);
+
   // ---- blobs -----------------------------------------------------------------
 
   /// Seal arbitrary bytes under a passphrase-derived key.

@@ -35,6 +35,9 @@ const accepted = <String, String>{
   'authBlind': 'present a blindly issued one',
   'registerWake': 'be woken on the schedule. Answered with `wakeRegistered`',
   'revokeWake': 'stop being woken',
+  'leaveTickets': 'leave a sealed wake ticket under each of these tags, so a '
+      'message can wake this device at once rather than at the next sweep. The '
+      'mailbox cannot read one. Answered with `ticketsLeft`',
 };
 
 void main() {

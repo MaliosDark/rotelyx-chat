@@ -376,6 +376,31 @@ class MailboxClient {
     }
   }
 
+  /// Leave a sealed wake ticket under each of these tags.
+  ///
+  /// One ticket per tag, sealed separately, because two tickets from one
+  /// device share no bytes and that is what stops the mailbox recognising
+  /// them as one device across the hourly rotation. Sending one ticket for
+  /// several tags would undo it.
+  ///
+  /// Chunked for the same reason `subscribe` is: the server refuses an
+  /// oversized request outright rather than taking what fits.
+  void leaveTickets(Map<String, String> byTag) {
+    final entries = byTag.entries.toList();
+    for (var i = 0; i < entries.length; i += _tagsPerRequest) {
+      final end = i + _tagsPerRequest < entries.length
+          ? i + _tagsPerRequest
+          : entries.length;
+      _send({
+        'op': 'leaveTickets',
+        'tickets': [
+          for (final e in entries.sublist(i, end))
+            {'tag': e.key, 'ticket': e.value}
+        ],
+      });
+    }
+  }
+
   /// Stop listening on these tags.
   ///
   /// A client still subscribed to a tag it has finished with is handed traffic

@@ -63,7 +63,7 @@ class PushGrant {
   const PushGrant({
     required this.token,
     required this.secret,
-    this.kind = 'apns',
+    this.kind = defaultKind,
   });
 
   /// The platform token to wake. Opaque here on purpose.
@@ -93,6 +93,14 @@ class PushGrant {
   /// deliver anything itself, it relays to APNs, so using it would mean Apple
   /// sees the push and Google sees it too, in exchange for nothing.
   final String kind;
+
+  /// The service a grant names when nothing says otherwise.
+  ///
+  /// Named rather than repeated as a literal, because a wake ticket has to
+  /// name the same one: a ticket sealed as `fcm` and a registration made as
+  /// `apns` are a device the notifier opens and then cannot deliver to, and
+  /// nothing on either side would say so.
+  static const defaultKind = 'apns';
 }
 
 /// What a platform must provide to support waking.

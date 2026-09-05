@@ -1521,9 +1521,56 @@ class RotelyxService {
     final fresh = now.difference(_listening).toList();
     if (fresh.isNotEmpty) {
       _mailbox?.subscribe(fresh);
+      _leaveTicketsFor(fresh);
       _listening.addAll(fresh);
     }
     _subscribedBucket = _bucket();
+  }
+
+  /// Leave a wake ticket under each tag just subscribed to.
+  ///
+  /// # What this buys
+  ///
+  /// A message that arrives while this device is asleep wakes it at once
+  /// rather than at the next sweep of the mailbox's schedule. Without a ticket
+  /// the schedule is all there is, and the interval is the delay.
+  ///
+  /// # What it costs, which is nothing that can be followed
+  ///
+  /// A ticket is this device's push token sealed to the notifier's key. The
+  /// mailbox holds it and cannot read it, and because each one is sealed on
+  /// its own they share no bytes: holding one under every tag this device
+  /// listens on gives the mailbox rows with nothing in common. The notifier
+  /// can read a ticket and is never told which tag it came from.
+  ///
+  /// Skipped in silence when there is no notifier configured, no push token
+  /// yet, or the engine cannot seal one. Every one of those is a device that
+  /// falls back to the schedule, which is a slower wake and not a broken one,
+  /// and none of them is worth interrupting somebody about.
+  void _leaveTicketsFor(List<String> tags) {
+    final notifier = _config.notifierKey;
+    final token = _wakeToken;
+    final session = _session;
+    if (notifier == null || token == null || session == null) return;
+
+    // The same name the registration uses. A ticket that named a different
+    // service would be opened and then handed to a provider that has never
+    // heard of the token.
+    const kind = PushGrant.defaultKind;
+
+    final hour = DateTime.now().millisecondsSinceEpoch ~/ 3600000;
+    final byTag = <String, String>{};
+
+    for (final tag in tags) {
+      try {
+        byTag[tag] = RotelyxWasm.sealWakeTicket(notifier, kind, token, hour);
+      } on Object {
+        // One tag that could not be sealed for is one tag woken on the
+        // schedule. The rest are still worth leaving.
+      }
+    }
+
+    if (byTag.isNotEmpty) _mailbox?.leaveTickets(byTag);
   }
 
   /// Re-subscribe when the hour rolls over.

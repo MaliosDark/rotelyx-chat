@@ -34,6 +34,8 @@ extension type _Ns._(JSObject _) implements JSObject {
   external String sealUnder(String tagHex, String payloadB64);
   external String openUnder(String envelopeB64, String tagHex);
 
+  external String sealWakeTicket(
+      String notifierKeyB64, String kind, String token, int hour);
   external String sealBlob(WasmKeyJs key, String dataB64);
   external String openBlob(WasmKeyJs key, String blobB64);
 }
@@ -339,6 +341,11 @@ class _WebEngine implements RotelyxEngine {
   @override
   String openUnder(String envelopeB64, String tagHex) =>
       _require().openUnder(envelopeB64, tagHex);
+  @override
+  String sealWakeTicket(
+          String notifierKeyB64, String kind, String token, int hour) =>
+      _require().sealWakeTicket(notifierKeyB64, kind, token, hour);
+
   @override
   String sealBlob(RotelyxKey key, String dataB64) =>
       _require().sealBlob((key as _WebKey).inner, dataB64);

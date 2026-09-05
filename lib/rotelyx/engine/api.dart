@@ -210,6 +210,18 @@ abstract interface class RotelyxEngine {
   String sealUnder(String tagHex, String payloadB64);
   String openUnder(String envelopeB64, String tagHex);
 
+  /// Seal this device's push token to the notifier.
+  ///
+  /// One per tag, and never the same string twice: what makes the mailbox
+  /// unable to tell that two tickets belong to one device is that they share
+  /// no bytes. Leaving the same ticket under several tags would put a repeated
+  /// value in its table, which is the thing the hourly rotation exists to
+  /// prevent.
+  ///
+  /// [notifierKeyB64] is pinned in the build. Asking a server which key to
+  /// seal to would let that server name its own and read every ticket.
+  String sealWakeTicket(String notifierKeyB64, String kind, String token, int hour);
+
   String sealBlob(RotelyxKey key, String dataB64);
   String openBlob(RotelyxKey key, String blobB64);
 }
