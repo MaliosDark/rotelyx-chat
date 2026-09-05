@@ -19,14 +19,14 @@ class RotelyxConfig {
   static const production = RotelyxConfig(
     mailbox: 'wss://m1.telyx.me/mailbox',
     relay: 'https://amber.telyx.me',
-    lookback: 2,
+    lookback: 39,
   );
 
   /// The sibling process from `docs/DEPLOYMENT.md`, for working offline.
   static const local = RotelyxConfig(
     mailbox: 'ws://127.0.0.1:3341/mailbox',
     relay: 'http://127.0.0.1:3340',
-    lookback: 2,
+    lookback: 39,
   );
 
   /// WebSocket URL of the blind mailbox.
@@ -42,8 +42,34 @@ class RotelyxConfig {
 
   /// How many earlier hour buckets to poll alongside the current one.
   ///
-  /// Covers a sender whose clock lags and a recipient who was offline across an
-  /// hour boundary. Costs one extra lookup per bucket of slack.
+  /// # This is how long somebody can be offline
+  ///
+  /// A tag rotates every hour, and a message is deposited under the tag of the
+  /// hour it was sent in. It can only be collected while the recipient is
+  /// still asking for that hour, so this number is the whole answer to "how
+  /// long can this phone be away before messages start being lost".
+  ///
+  /// It was two, which is three hours counting the current one. The mailbox
+  /// holds an envelope for seven days, so a message sent to somebody whose
+  /// phone was off overnight sat on the server, intact and paid for, with
+  /// nobody left asking for it. Neither end was told: the sender saw it
+  /// delivered to the mailbox and the recipient saw nothing at all.
+  ///
+  /// Thirty nine, so forty hours counting the current one. A night, a working
+  /// day, and a margin.
+  ///
+  /// # Why not the seven days the envelope lives
+  ///
+  /// The set asked for is this window multiplied by the number of epochs whose
+  /// tag keys are still held, which is three, and doubled again for a note to
+  /// self, which listens on both halves. Seven days would be 168 buckets and
+  /// therefore 1008 tags, against a server that takes 64 per request and 256
+  /// per connection. Forty buckets is 120 tags in a conversation and 240 in a
+  /// note to self, which is inside both with room left.
+  ///
+  /// Those limits are a defence rather than an arbitrary ceiling: a client
+  /// asking for hundreds of tags is one enumerating them. Raising them to buy
+  /// a longer window is a real trade and not a configuration change.
   final int lookback;
 }
 

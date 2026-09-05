@@ -359,7 +359,22 @@ class MailboxClient {
   bool _presented = false;
   final _inFlight = <String>[];
 
-  void subscribe(List<String> tags) => _send({'op': 'subscribe', 'tags': tags});
+  /// The most tags one `subscribe` may carry.
+  ///
+  /// The mailbox refuses a request naming more than this and says so, and the
+  /// refusal is the whole subscription: none of the tags are taken. The set
+  /// this client asks for is the lookback window multiplied by the number of
+  /// epochs whose keys it still holds, so it grows faster than it looks, and a
+  /// window wide enough to be useful crosses the limit easily.
+  static const _tagsPerRequest = 64;
+
+  void subscribe(List<String> tags) {
+    for (var i = 0; i < tags.length; i += _tagsPerRequest) {
+      final end =
+          i + _tagsPerRequest < tags.length ? i + _tagsPerRequest : tags.length;
+      _send({'op': 'subscribe', 'tags': tags.sublist(i, end)});
+    }
+  }
 
   /// Stop listening on these tags.
   ///
