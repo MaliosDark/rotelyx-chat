@@ -189,9 +189,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           !_connected
                               ? 'Off: messages arrive when you open the app'
                               : rotelyx.canBeWoken
-                                  ? 'The system wakes this device on a fixed '
-                                      'schedule and learns only that, never '
-                                      'that a message arrived'
+                                  ? 'Your phone is woken to look. What arrived '
+                                      'is read here, on this device'
                                   : 'Shows a permanent notice and uses battery',
                           style: Type.small.copyWith(color: t.faint)),
                     ),
@@ -212,16 +211,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       },
                       activeThumbColor: Tone.accent,
                       contentPadding: EdgeInsets.zero,
-                      title: Text('Tell me straight away',
+                      title: Text('Notify me as soon as it arrives',
                           style: Type.body.copyWith(color: t.text)),
                       subtitle: Text(
                           _immediate
-                              ? 'Arrives at once. Your phone is then woken '
-                                  'when somebody writes to you, and the push '
-                                  'service can see those times'
-                              : 'Arrives on a fixed schedule. Every phone is '
-                                  'woken on the same rhythm, so the push '
-                                  'service cannot tell yours apart',
+                              ? 'On: you are told the moment a message lands'
+                              : 'Off: your phone checks on a regular rhythm, '
+                                  'shared with every other phone, so yours '
+                                  'cannot be told apart by when it checks',
                           style: Type.small.copyWith(color: t.faint)),
                     ),
 
