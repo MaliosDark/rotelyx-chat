@@ -712,6 +712,16 @@ class RotelyxService {
     if (state == RotelyxState.joined) {
       _mailbox?.registerWake(
           PushGrant(token: token, secret: store.wakeSecret));
+
+      // And a ticket under every tag already being listened on.
+      //
+      // The token arrives here, when somebody turns notifications on, and by
+      // then the conversation has usually been subscribed for a while.
+      // `_resubscribe` leaves tickets only for tags it has just added, so
+      // without this the tags that existed before this moment never got one:
+      // the device registered for the schedule, waited five minutes for every
+      // message, and nothing anywhere said why.
+      _leaveTicketsFor(_listening.toList());
     }
     return true;
   }
@@ -775,6 +785,12 @@ class RotelyxService {
       if (token != null) {
         _mailbox?.registerWake(
             PushGrant(token: token, secret: store.wakeSecret));
+
+        // Tickets go the same way as the registration and for the same
+        // reason: the mailbox forgets both when the socket closes on its side,
+        // and a device that believes it left one and did not is a device that
+        // waits for the schedule without knowing it.
+        _leaveTicketsFor(_listening.toList());
       }
     }
   }
