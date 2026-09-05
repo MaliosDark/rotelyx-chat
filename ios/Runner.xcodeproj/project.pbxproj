@@ -577,8 +577,8 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				"OTHER_LDFLAGS[sdk=iphoneos*]" = "$(inherited) -framework SystemConfiguration -Wl,-u,_rotelyx_call -Wl,-u,_rotelyx_string_free -Wl,-u,_rotelyx_abi_version -force_load $(SRCROOT)/Frameworks/RotelyxEngine.xcframework/ios-arm64/librotelyx_mobile.a";
-				"OTHER_LDFLAGS[sdk=iphonesimulator*]" = "$(inherited) -framework SystemConfiguration -Wl,-u,_rotelyx_call -Wl,-u,_rotelyx_string_free -Wl,-u,_rotelyx_abi_version -force_load $(SRCROOT)/Frameworks/RotelyxEngine.xcframework/ios-arm64_x86_64-simulator/librotelyx_mobile.a";
+				"OTHER_LDFLAGS[sdk=iphoneos*]" = "$(inherited) -framework SystemConfiguration -Wl,-u,_rotelyx_abi_version -Wl,-u,_rotelyx_call -Wl,-u,_rotelyx_call_capture -Wl,-u,_rotelyx_call_close -Wl,-u,_rotelyx_call_deliver -Wl,-u,_rotelyx_call_open -Wl,-u,_rotelyx_call_playback -Wl,-u,_rotelyx_call_stats -Wl,-u,_rotelyx_net_accept -Wl,-u,_rotelyx_net_addr -Wl,-u,_rotelyx_net_close -Wl,-u,_rotelyx_net_connect -Wl,-u,_rotelyx_net_last_error -Wl,-u,_rotelyx_net_open -Wl,-u,_rotelyx_net_recv -Wl,-u,_rotelyx_net_send -Wl,-u,_rotelyx_net_shutdown -Wl,-u,_rotelyx_string_free -force_load $(SRCROOT)/Frameworks/RotelyxEngine.xcframework/ios-arm64/librotelyx_mobile.a";
+				"OTHER_LDFLAGS[sdk=iphonesimulator*]" = "$(inherited) -framework SystemConfiguration -Wl,-u,_rotelyx_abi_version -Wl,-u,_rotelyx_call -Wl,-u,_rotelyx_call_capture -Wl,-u,_rotelyx_call_close -Wl,-u,_rotelyx_call_deliver -Wl,-u,_rotelyx_call_open -Wl,-u,_rotelyx_call_playback -Wl,-u,_rotelyx_call_stats -Wl,-u,_rotelyx_net_accept -Wl,-u,_rotelyx_net_addr -Wl,-u,_rotelyx_net_close -Wl,-u,_rotelyx_net_connect -Wl,-u,_rotelyx_net_last_error -Wl,-u,_rotelyx_net_open -Wl,-u,_rotelyx_net_recv -Wl,-u,_rotelyx_net_send -Wl,-u,_rotelyx_net_shutdown -Wl,-u,_rotelyx_string_free -force_load $(SRCROOT)/Frameworks/RotelyxEngine.xcframework/ios-arm64_x86_64-simulator/librotelyx_mobile.a";
 				PRODUCT_BUNDLE_IDENTIFIER = com.rotelyx.ios;
 				STRIP_STYLE = "non-global";
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -763,8 +763,8 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				"OTHER_LDFLAGS[sdk=iphoneos*]" = "$(inherited) -framework SystemConfiguration -Wl,-u,_rotelyx_call -Wl,-u,_rotelyx_string_free -Wl,-u,_rotelyx_abi_version -force_load $(SRCROOT)/Frameworks/RotelyxEngine.xcframework/ios-arm64/librotelyx_mobile.a";
-				"OTHER_LDFLAGS[sdk=iphonesimulator*]" = "$(inherited) -framework SystemConfiguration -Wl,-u,_rotelyx_call -Wl,-u,_rotelyx_string_free -Wl,-u,_rotelyx_abi_version -force_load $(SRCROOT)/Frameworks/RotelyxEngine.xcframework/ios-arm64_x86_64-simulator/librotelyx_mobile.a";
+				"OTHER_LDFLAGS[sdk=iphoneos*]" = "$(inherited) -framework SystemConfiguration -Wl,-u,_rotelyx_abi_version -Wl,-u,_rotelyx_call -Wl,-u,_rotelyx_call_capture -Wl,-u,_rotelyx_call_close -Wl,-u,_rotelyx_call_deliver -Wl,-u,_rotelyx_call_open -Wl,-u,_rotelyx_call_playback -Wl,-u,_rotelyx_call_stats -Wl,-u,_rotelyx_net_accept -Wl,-u,_rotelyx_net_addr -Wl,-u,_rotelyx_net_close -Wl,-u,_rotelyx_net_connect -Wl,-u,_rotelyx_net_last_error -Wl,-u,_rotelyx_net_open -Wl,-u,_rotelyx_net_recv -Wl,-u,_rotelyx_net_send -Wl,-u,_rotelyx_net_shutdown -Wl,-u,_rotelyx_string_free -force_load $(SRCROOT)/Frameworks/RotelyxEngine.xcframework/ios-arm64/librotelyx_mobile.a";
+				"OTHER_LDFLAGS[sdk=iphonesimulator*]" = "$(inherited) -framework SystemConfiguration -Wl,-u,_rotelyx_abi_version -Wl,-u,_rotelyx_call -Wl,-u,_rotelyx_call_capture -Wl,-u,_rotelyx_call_close -Wl,-u,_rotelyx_call_deliver -Wl,-u,_rotelyx_call_open -Wl,-u,_rotelyx_call_playback -Wl,-u,_rotelyx_call_stats -Wl,-u,_rotelyx_net_accept -Wl,-u,_rotelyx_net_addr -Wl,-u,_rotelyx_net_close -Wl,-u,_rotelyx_net_connect -Wl,-u,_rotelyx_net_last_error -Wl,-u,_rotelyx_net_open -Wl,-u,_rotelyx_net_recv -Wl,-u,_rotelyx_net_send -Wl,-u,_rotelyx_net_shutdown -Wl,-u,_rotelyx_string_free -force_load $(SRCROOT)/Frameworks/RotelyxEngine.xcframework/ios-arm64_x86_64-simulator/librotelyx_mobile.a";
 				PRODUCT_BUNDLE_IDENTIFIER = com.rotelyx.ios;
 				STRIP_STYLE = "non-global";
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -790,8 +790,8 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				"OTHER_LDFLAGS[sdk=iphoneos*]" = "$(inherited) -framework SystemConfiguration -Wl,-u,_rotelyx_call -Wl,-u,_rotelyx_string_free -Wl,-u,_rotelyx_abi_version -force_load $(SRCROOT)/Frameworks/RotelyxEngine.xcframework/ios-arm64/librotelyx_mobile.a";
-				"OTHER_LDFLAGS[sdk=iphonesimulator*]" = "$(inherited) -framework SystemConfiguration -Wl,-u,_rotelyx_call -Wl,-u,_rotelyx_string_free -Wl,-u,_rotelyx_abi_version -force_load $(SRCROOT)/Frameworks/RotelyxEngine.xcframework/ios-arm64_x86_64-simulator/librotelyx_mobile.a";
+				"OTHER_LDFLAGS[sdk=iphoneos*]" = "$(inherited) -framework SystemConfiguration -Wl,-u,_rotelyx_abi_version -Wl,-u,_rotelyx_call -Wl,-u,_rotelyx_call_capture -Wl,-u,_rotelyx_call_close -Wl,-u,_rotelyx_call_deliver -Wl,-u,_rotelyx_call_open -Wl,-u,_rotelyx_call_playback -Wl,-u,_rotelyx_call_stats -Wl,-u,_rotelyx_net_accept -Wl,-u,_rotelyx_net_addr -Wl,-u,_rotelyx_net_close -Wl,-u,_rotelyx_net_connect -Wl,-u,_rotelyx_net_last_error -Wl,-u,_rotelyx_net_open -Wl,-u,_rotelyx_net_recv -Wl,-u,_rotelyx_net_send -Wl,-u,_rotelyx_net_shutdown -Wl,-u,_rotelyx_string_free -force_load $(SRCROOT)/Frameworks/RotelyxEngine.xcframework/ios-arm64/librotelyx_mobile.a";
+				"OTHER_LDFLAGS[sdk=iphonesimulator*]" = "$(inherited) -framework SystemConfiguration -Wl,-u,_rotelyx_abi_version -Wl,-u,_rotelyx_call -Wl,-u,_rotelyx_call_capture -Wl,-u,_rotelyx_call_close -Wl,-u,_rotelyx_call_deliver -Wl,-u,_rotelyx_call_open -Wl,-u,_rotelyx_call_playback -Wl,-u,_rotelyx_call_stats -Wl,-u,_rotelyx_net_accept -Wl,-u,_rotelyx_net_addr -Wl,-u,_rotelyx_net_close -Wl,-u,_rotelyx_net_connect -Wl,-u,_rotelyx_net_last_error -Wl,-u,_rotelyx_net_open -Wl,-u,_rotelyx_net_recv -Wl,-u,_rotelyx_net_send -Wl,-u,_rotelyx_net_shutdown -Wl,-u,_rotelyx_string_free -force_load $(SRCROOT)/Frameworks/RotelyxEngine.xcframework/ios-arm64_x86_64-simulator/librotelyx_mobile.a";
 				PRODUCT_BUNDLE_IDENTIFIER = com.rotelyx.ios;
 				STRIP_STYLE = "non-global";
 				PRODUCT_NAME = "$(TARGET_NAME)";

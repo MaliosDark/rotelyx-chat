@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.0.0+3
+version: 1.0.0+9
 
 environment:
   sdk: '>=3.4.4 <4.0.0'
@@ -87,6 +87,21 @@ flutter:
   #   - images/a_dot_ham.jpeg
   assets:
     - assets/images/
+
+    # The two call tones, and only these two.
+    #
+    # The folder is not declared, for the reason below: Android plays its copy
+    # as a resource and a second identical copy in every package is waste. iOS
+    # has no resource system to copy them into, and adding them to the Xcode
+    # target means editing `project.pbxproj` for a file rather than for a
+    # feature. Declared as assets they arrive in the application bundle, where
+    # `CallAudio.swift` finds them through `FlutterDartProject.lookupKey`.
+    #
+    # `message.wav` stays out. It is the notification sound, which on iOS is
+    # played by the system from the notification itself and never by this
+    # application.
+    - assets/sound/connected.wav
+    - assets/sound/failed.wav
 
     # `assets/sound/` is deliberately NOT declared.
     #

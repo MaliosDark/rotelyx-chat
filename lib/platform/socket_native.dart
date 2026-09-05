@@ -17,6 +17,22 @@ Future<TextSocket> connectSocket(String url,
   final WebSocket socket;
   try {
     socket = await WebSocket.connect(url).timeout(timeout);
+
+    // Ping frames, every thirty seconds, and the whole reason is what sits in
+    // front of the mailbox rather than the mailbox itself.
+    //
+    // A WebSocket through Cloudflare is closed after a hundred seconds with no
+    // traffic in either direction, and a conversation with nothing being typed
+    // is exactly that. The socket went away, the application went on believing
+    // it was connected, and a chat left alone for two minutes stopped
+    // receiving. SimpleX solves the same problem the same way, with a ping its
+    // server answers; this is one layer lower and needs nothing of the server,
+    // because the frames are part of the WebSocket protocol.
+    //
+    // `pingInterval` also closes the socket when a pong does not come back,
+    // which is what turns a connection that has silently died into one the
+    // reconnection in `rotelyx_service.dart` is told about.
+    socket.pingInterval = const Duration(seconds: 30);
   } on TimeoutException {
     throw SocketRefused('$url did not accept a connection');
   } on Object catch (e) {

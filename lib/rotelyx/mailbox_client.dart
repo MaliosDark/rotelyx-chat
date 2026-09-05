@@ -80,6 +80,16 @@ class MailboxClient {
   /// Errors the mailbox reported, and transport failures.
   Stream<String> get errors => _errors.stream;
 
+  /// One event when the socket goes away, carrying why.
+  ///
+  /// Deliberately not on [errors]. A closed socket is a condition and not an
+  /// incident, and putting it there failed conversations that were merely being
+  /// left. But it is not nothing either: without somebody listening, `isOpen`
+  /// goes on answering true and the service goes on reporting `joined` while
+  /// nothing is delivered. This is the signal that a reconnection is owed.
+  Stream<String> get closes => _closes.stream;
+  final _closes = StreamController<String>.broadcast();
+
   /// One event per envelope the mailbox accepted.
   ///
   /// This is the only delivery signal that exists, and it is worth being exact
@@ -134,6 +144,15 @@ class MailboxClient {
 
     socket.messages.listen(_onFrame);
 
+    socket.closed.listen((why) {
+      // A later `connect` may already have replaced this socket, in which case
+      // the closure being reported is of one nothing is using.
+      if (!identical(_socket, socket)) return;
+      // Dropped rather than kept, so `isOpen` stops claiming otherwise.
+      _socket = null;
+      if (!_closes.isClosed) _closes.add(why);
+    });
+
     // A closed socket is not put on `errors`, and that is deliberate.
     //
     // This stream means "something did not happen": a deposit the allowance
@@ -148,9 +167,8 @@ class MailboxClient {
     // landed a moment before the session had finished joining it failed the
     // conversation outright. Leaving a chat and coming back was enough.
     //
-    // Whether there is a live connection is already carried by the state the
-    // header draws from, which says `reconnecting` and then `offline`. That is
-    // the honest place for it: a condition, not an incident.
+    // It goes on `closes` instead, which `rotelyx_service.dart` answers by
+    // reopening the mailbox. A condition, and something that acts on it.
   }
 
   /// Feed one frame in, without a socket.
@@ -394,6 +412,7 @@ class MailboxClient {
     _socket = null;
     await _envelopes.close();
     await _errors.close();
+    await _closes.close();
     await _accepted.close();
     await _subscribed.close();
     await _wakeInterval.close();

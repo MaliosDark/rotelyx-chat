@@ -113,6 +113,11 @@ Future<void> playTone(String name) async {
   } on PlatformException {
     // A tone is an announcement, never the thing itself. A device that will
     // not play one still places the call.
+  } on MissingPluginException {
+    // iOS answers this channel without a `tone` case, and an unimplemented
+    // method is a MissingPluginException rather than a PlatformException. Both
+    // callers use `unawaited`, so this was an unhandled asynchronous error on
+    // every connect and every failure.
   }
 }
 

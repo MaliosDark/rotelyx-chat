@@ -45,6 +45,17 @@
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>
+		<!-- Without this a call ends the moment the screen locks, which is when
+		     most calls are actually held. `CallAudio.swift` says the session
+		     category keeps the call alive through a lock; the category is
+		     necessary and this is the other half, and the comment was written
+		     on a machine with no way to try it.
+
+		     Declared honestly: this application really does play and capture
+		     audio while it is not in front, and only during a call. There is no
+		     background playback of anything else, which is the use App Review
+		     looks for when this key is present. -->
+		<string>audio</string>
 	</array>
 	<!-- What iOS shows the person when it asks.
 

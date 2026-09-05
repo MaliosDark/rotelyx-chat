@@ -88,8 +88,13 @@ class Alerts {
 
   /// Whether this platform can receive while the application is not in front,
   /// by either of the two mechanisms there are.
+  ///
+  /// A mailbox that has said it cannot wake anybody is left out, so the switch
+  /// is absent rather than present and apologetic. Offering a setting that
+  /// cannot do what it says is worse than not offering it.
   bool get canStayConnected =>
-      _notifier.canStayConnected || rotelyx.canBeWoken;
+      _notifier.canStayConnected ||
+      (rotelyx.canBeWoken && rotelyx.mailboxCanWake);
 
   /// Receive while the application is closed, or stop.
   ///

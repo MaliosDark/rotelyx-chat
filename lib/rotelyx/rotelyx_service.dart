@@ -696,8 +696,14 @@ class RotelyxService {
   /// Returns false when the platform has no push, when the user refused
   /// notifications, or when there is no connection yet. None of those is an
   /// error: the application still receives when it is opened.
+  /// Whether the mailbox this device talks to can wake it at all.
+  ///
+  /// False once the mailbox has said so. Asking again every time a
+  /// conversation is opened produces the same refusal and nothing else.
+  bool mailboxCanWake = true;
+
   Future<bool> askToBeWoken() async {
-    if (!canBeWoken) return false;
+    if (!canBeWoken || !mailboxCanWake) return false;
 
     final token = await pushTransport.obtainToken();
     if (token == null) return false;
@@ -971,6 +977,61 @@ class RotelyxService {
     }
   }
 
+  /// Whether a reconnection is already under way.
+  bool _reopening = false;
+
+  /// The socket went away. Open another one and listen where we were listening.
+  ///
+  /// A socket closes whenever the screen is left, the network moves, or the
+  /// mailbox restarts. None of those is an error, and none of them used to be
+  /// noticed either: the state stayed `joined`, `_live` in `chat.dart` stayed
+  /// true, and `_resumeIfNeeded` therefore returned without reopening
+  /// anything. Leaving a conversation and coming back was enough to stop
+  /// receiving, with nothing on screen saying why.
+  ///
+  /// When the reopen fails the state drops to `idle` rather than `failed`.
+  /// Nothing is unrecoverable here: the session is still sealed on the device
+  /// and the next `resume` rebuilds it. What matters is that `joined` stops
+  /// being claimed while nothing is delivered, because that claim is what made
+  /// the screen skip the reopen.
+  Future<void> _mailboxClosed() async {
+    if (_reopening || state != RotelyxState.joined) return;
+    _reopening = true;
+
+    // Backing off rather than retrying on a fixed beat, because the mailbox
+    // limits by address: `PER_ADDRESS_PER_MINUTE` is sixty with a burst of
+    // twenty, and every attempt is a fresh socket. A reconnection that fires
+    // every two seconds through an outage spends that allowance and then the
+    // mailbox refuses the connection that would have worked, which looks from
+    // the phone like the application breaking permanently.
+    for (final wait in const [2, 6, 20]) {
+      await Future<void>.delayed(Duration(seconds: wait));
+      if (state != RotelyxState.joined) break;
+
+      try {
+        await _openMailbox();
+        _resubscribe();
+
+        // The meeting place too, for a host. `_resubscribe` covers the
+        // conversation's own tags and knows nothing about this one, so without
+        // it a newcomer knocks at nobody after a reconnection.
+        final meeting = _meetingTag;
+        if (meeting != null && _role == PairingRole.host) {
+          _mailbox?.subscribe([meeting]);
+        }
+        _reopening = false;
+        return;
+      } on Object {
+        // Keep trying, then stop. Falling out of this loop is not a failure of
+        // the conversation: the session is sealed on the device and the next
+        // time the screen is opened `resume` rebuilds it.
+      }
+    }
+
+    _moveTo(RotelyxState.idle);
+    _reopening = false;
+  }
+
   Future<void> _openMailbox() async {
     // Close any previous attempt first.
     //
@@ -987,6 +1048,13 @@ class RotelyxService {
     _mailbox = null;
     _listening.clear();
 
+    // A fresh connection is a fresh question. Whether a mailbox can wake a
+    // device is a property of how the operator started it, and one that is
+    // fixed by adding a key and restarting: without this the answer would be
+    // remembered as "no" for the life of the application, and the setting
+    // would stay hidden on a mailbox that had since gained the key.
+    mailboxCanWake = true;
+
     final mailbox = MailboxClient(mailboxUrl);
     _mailbox = mailbox;
 
@@ -997,6 +1065,7 @@ class RotelyxService {
     if (token != null) mailbox.holdToken(token);
 
     _mailboxListeners.add(mailbox.envelopes.listen(_onEnvelope));
+    _mailboxListeners.add(mailbox.closes.listen((_) => _mailboxClosed()));
     _mailboxListeners.add(mailbox.accepted.listen((count) {
       var left = count;
       while (left > 0 && _pending.isNotEmpty) {
@@ -1015,6 +1084,25 @@ class RotelyxService {
     }));
 
     _mailboxListeners.add(mailbox.errors.listen((message) {
+      // A mailbox that cannot wake anybody is a mailbox missing a push key,
+      // which is a thing the operator has not set up rather than a broken
+      // conversation. It used to arrive here like any other refusal and fail
+      // the session outright, so switching on "receive while the app is
+      // closed" against a server with no key stopped messages, notes to self
+      // and calls, all at once and permanently. The server's own tests key on
+      // this wording.
+      if (message.contains('cannot wake anyone')) {
+        // Recorded and not shown. Moving it off the error stream stopped it
+        // failing the session; putting it on `notices` still put it over the
+        // message box, where it reads as this conversation being broken. It is
+        // neither: it is a mailbox the operator started without a push key,
+        // which nobody holding the phone can act on. The one place it belongs
+        // is the setting that offers the feature, and Settings says it there.
+        mailboxCanWake = false;
+        _wakeToken = null;
+        return;
+      }
+
       if (state != RotelyxState.joined) {
         _moveTo(RotelyxState.failed, error: message);
         return;

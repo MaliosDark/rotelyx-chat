@@ -156,7 +156,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       value: _connected,
                       onChanged: (want) async {
                         final on = await alerts.stayConnected(want);
-                        if (mounted) setState(() => _connected = on);
+                        if (!context.mounted) return;
+                        setState(() => _connected = on);
+
+                        // A switch that turns itself back off and says nothing
+                        // is the worst of both: the feature does not work and
+                        // the person cannot find out why. The commonest reason
+                        // is a mailbox started without a push key, which is
+                        // the operator's to fix and not theirs.
+                        if (want && !on) {
+                          ScaffoldMessenger.of(context)
+                              .showSnackBar(const SnackBar(
+                            content: Text(
+                                'This mailbox does not offer delivery while '
+                                'the app is closed. Messages arrive when you '
+                                'open it.'),
+                          ));
+                        }
                       },
                       activeThumbColor: Tone.accent,
                       contentPadding: EdgeInsets.zero,

@@ -61,15 +61,31 @@ class CallAudio {
             try session.setCategory(.playAndRecord,
                                     mode: .voiceChat,
                                     options: [.allowBluetooth])
-            try session.setPreferredSampleRate(CallAudio.rate)
-            try session.setPreferredIOBufferDuration(0.02)
             try session.setActive(true)
-        } catch {
+        } catch let error as NSError {
+            // The code, not just the sentence. `localizedDescription` for an
+            // audio session error is "The operation couldn’t be completed",
+            // which names nothing: every one of these failures reads the same
+            // and there is no way to tell them apart from a phone.
             result(FlutterError(code: "audio",
-                                message: "the audio session would not start: \(error.localizedDescription)",
+                                message: "the audio session would not start: "
+                                       + "\(error.domain) \(error.code) "
+                                       + "\(error.localizedDescription)",
                                 details: nil))
             return
         }
+
+        // Preferences, and the name is the whole point: iOS is free to refuse
+        // them and usually does. `.voiceChat` sets its own sample rate and its
+        // own buffer duration, and asking for 48 kHz or twenty milliseconds on
+        // top of it throws on hardware that has already decided otherwise.
+        //
+        // These used to sit in the block above, so a device that would not take
+        // a hint failed the whole call with "the audio session would not
+        // start". The rate the device actually gives is handled either way:
+        // `captured` converts whatever arrives into the codec's format.
+        try? session.setPreferredSampleRate(CallAudio.rate)
+        try? session.setPreferredIOBufferDuration(0.02)
 
         guard let format = AVAudioFormat(commonFormat: .pcmFormatInt16,
                                          sampleRate: CallAudio.rate,
@@ -111,13 +127,35 @@ class CallAudio {
 
     /// Convert whatever the device gave us into frames of exactly `frame`.
     private func captured(_ buffer: AVAudioPCMBuffer, into target: AVAudioFormat) {
+        // Capacity scaled by the rate change rather than copied from the input.
+        // Converting 16 kHz up to 48 produces three times the frames, and a
+        // buffer sized for the input silently truncates two thirds of every
+        // one.
+        let ratio = target.sampleRate / buffer.format.sampleRate
+        let room = AVAudioFrameCount((Double(buffer.frameLength) * ratio).rounded(.up)) + 1
+
         guard let converter = AVAudioConverter(from: buffer.format, to: target),
-              let out = AVAudioPCMBuffer(pcmFormat: target,
-                                         frameCapacity: buffer.frameCapacity)
+              let out = AVAudioPCMBuffer(pcmFormat: target, frameCapacity: room)
         else { return }
 
+        // Handed over once, and then nothing.
+        //
+        // The block is called whenever the converter wants more input, which is
+        // more than once as soon as the device's rate differs from the codec's
+        // and the conversion needs additional frames to fill the output. It
+        // used to answer `.haveData` with the same buffer every time, so the
+        // same twenty milliseconds of microphone was fed in repeatedly and came
+        // out as a stutter. `setPreferredSampleRate` is only a request and
+        // `.voiceChat` overrides it, so a device running at anything other than
+        // 48 kHz met this every frame.
+        var given = false
         var error: NSError?
         converter.convert(to: out, error: &error) { _, status in
+            if given {
+                status.pointee = .noDataNow
+                return nil
+            }
+            given = true
             status.pointee = .haveData
             return buffer
         }
@@ -204,6 +242,49 @@ class CallAudio {
         try? AVAudioSession.sharedInstance().setActive(false)
     }
 
+    /// Held for the length of the sound, because an `AVAudioPlayer` that goes
+    /// out of scope stops playing.
+    private var tonePlayer: AVAudioPlayer?
+
+    /// The announcement that a call is through, or that it is not.
+    ///
+    /// Android answers this by playing a resource; there is no resource system
+    /// here, so the same two files arrive as Flutter assets and are found by
+    /// the key the engine assigns them. Played through the shared session,
+    /// which during a call is `.playAndRecord` in `.voiceChat`, so the tone
+    /// comes out of whichever the call is using: the earpiece against an ear,
+    /// the loudspeaker on speakerphone.
+    ///
+    /// This case did not exist, and the Dart side caught only
+    /// `PlatformException`. An unimplemented method is a
+    /// `MissingPluginException`, so every connect and every failure threw
+    /// instead of sounding.
+    private func tone(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
+        guard let args = call.arguments as? [String: Any],
+              let name = args["name"] as? String,
+              name == "connected" || name == "failed" else {
+            result(false)
+            return
+        }
+
+        let key = FlutterDartProject.lookupKey(forAsset: "assets/sound/\(name).wav")
+        guard let path = Bundle.main.path(forResource: key, ofType: nil) else {
+            result(false)
+            return
+        }
+
+        do {
+            let player = try AVAudioPlayer(contentsOf: URL(fileURLWithPath: path))
+            tonePlayer = player
+            player.play()
+            result(true)
+        } catch {
+            // A tone is an announcement and never the call itself. Saying no is
+            // the whole of the failure.
+            result(false)
+        }
+    }
+
     func handle(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
         switch call.method {
         case "permit":
@@ -216,6 +297,7 @@ class CallAudio {
         case "take": take(result)
         case "play": play(call, result)
         case "route": route(call, result)
+        case "tone": tone(call, result)
         case "dropped": result(dropped)
         case "stop":
             stop()
