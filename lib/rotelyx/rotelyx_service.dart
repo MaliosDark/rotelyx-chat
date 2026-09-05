@@ -24,6 +24,7 @@ import 'dart:math';
 
 import 'burn_clock.dart';
 import 'mailbox_client.dart';
+import '../platform/apple_push.dart';
 import 'push.dart';
 import 'rotelyx_config.dart';
 import 'rotelyx_store.dart';
@@ -1541,6 +1542,7 @@ class RotelyxService {
       _listening.addAll(fresh);
     }
     _subscribedBucket = _bucket();
+    unawaited(_publishTagsForTheExtension());
   }
 
   /// Leave a wake ticket under each tag just subscribed to.
@@ -1587,6 +1589,37 @@ class RotelyxService {
     }
 
     if (byTag.isNotEmpty) _mailbox?.leaveTickets(byTag);
+  }
+
+  /// Write the tags being listened on where the notification extension can
+  /// read them.
+  ///
+  /// # Why the extension needs them
+  ///
+  /// A push carries nothing, deliberately: a payload with the message in it is
+  /// a message handed to Apple. So the extension has to find out for itself
+  /// whether anything actually arrived, and to ask the mailbox that it needs
+  /// to name the tags to ask about.
+  ///
+  /// Without this it cannot ask, and it did the only thing left: show a
+  /// notification for every wake. Since the mailbox wakes on a schedule
+  /// whether or not anything arrived, that is a notification every few minutes
+  /// saying nothing, which is what a person actually holding the phone sees.
+  ///
+  /// # What is written, and what is not
+  ///
+  /// The tags, which are what the mailbox already sees on every subscription,
+  /// and nothing else. No keys, no message, no name. A tag is a rotating
+  /// pseudonym that says nothing on its own, and this file sits in a container
+  /// only this application and its own extension can open.
+  Future<void> _publishTagsForTheExtension() async {
+    if (_listening.isEmpty) return;
+    try {
+      await publishListeningTags(_config.mailbox, _listening.toList());
+    } on Object {
+      // A phone whose extension cannot be told is a phone that shows the
+      // notification it would have shown before. Worth no interruption.
+    }
   }
 
   /// Re-subscribe when the hour rolls over.

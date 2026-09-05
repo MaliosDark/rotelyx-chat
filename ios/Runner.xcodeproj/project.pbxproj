@@ -18,6 +18,7 @@
 		97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */; };
 		BA9D42EB8B87FD6836C29523 /* Pods_RunnerTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = AE3FF8EED1E4A08FF6CE998E /* Pods_RunnerTests.framework */; };
 		E5A1B2C3D4E5F6000000000C /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5A1B2C3D4E5F6000000000B /* NotificationService.swift */; };
+		E5A1B2C3D4E5F60000000091 /* Waiting.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5A1B2C3D4E5F60000000090 /* Waiting.swift */; };
 		E5A1B2C3D4E5F60000000011 /* NotificationService.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = E5A1B2C3D4E5F60000000002 /* NotificationService.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		E5A1B2C3D4E5F60000000015 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = E5A1B2C3D4E5F60000000014 /* PrivacyInfo.xcprivacy */; };
 		E5A1B2C3D4E5F60000000017 /* SharedContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5A1B2C3D4E5F60000000016 /* SharedContainer.swift */; };
@@ -94,6 +95,7 @@
 		E337E32E104F17118E4D2C54 /* Pods-RunnerTests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.debug.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.debug.xcconfig"; sourceTree = "<group>"; };
 		E5A1B2C3D4E5F60000000002 /* NotificationService.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = NotificationService.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		E5A1B2C3D4E5F6000000000B /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
+		E5A1B2C3D4E5F60000000090 /* Waiting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Waiting.swift; sourceTree = "<group>"; };
 		E5A1B2C3D4E5F6000000000D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		E5A1B2C3D4E5F6000000000E /* NotificationService.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = NotificationService.entitlements; sourceTree = "<group>"; };
 		E5A1B2C3D4E5F6000000000F /* Runner.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Runner.entitlements; sourceTree = "<group>"; };
@@ -223,6 +225,7 @@
 			isa = PBXGroup;
 			children = (
 				E5A1B2C3D4E5F6000000000B /* NotificationService.swift */,
+				E5A1B2C3D4E5F60000000090 /* Waiting.swift */,
 				E5A1B2C3D4E5F6000000000D /* Info.plist */,
 				E5A1B2C3D4E5F6000000000E /* NotificationService.entitlements */,
 			);
@@ -474,6 +477,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				E5A1B2C3D4E5F6000000000C /* NotificationService.swift in Sources */,
+				E5A1B2C3D4E5F60000000091 /* Waiting.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

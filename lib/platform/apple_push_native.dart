@@ -1,7 +1,8 @@
 /// Asking iOS for a push token, through the method channel in AppDelegate.swift.
 library;
 
-import 'dart:io' show Platform;
+import 'dart:convert';
+import 'dart:io' show File, Platform;
 
 import 'package:flutter/services.dart';
 
@@ -50,3 +51,32 @@ Future<String?> sharedContainerPath() async {
 /// so it uses Apple and says so in Settings.
 PushTransport pushForThisPlatform() =>
     Platform.isIOS ? const ApnsPush() : const NoPush();
+
+/// Leave the tags being listened on where the notification extension can read
+/// them.
+///
+/// # Why the extension is told anything at all
+///
+/// A push carries nothing, on purpose: a payload with the message in it is a
+/// message handed to Apple. So the extension has to find out for itself
+/// whether anything actually arrived, and to ask the mailbox that, it has to
+/// be able to name the tags.
+///
+/// Without this it cannot ask and has to guess, and the only guess available
+/// is "show something for every wake". The mailbox wakes on a schedule whether
+/// or not anything arrived, so that guess is a notification every few minutes
+/// that says nothing.
+///
+/// # What is written
+///
+/// The mailbox URL and the tags, which is what the mailbox already sees on
+/// every subscription this application makes. No key, no message, no name.
+/// The file lives in the App Group container, which only this application and
+/// its own extension can open.
+Future<void> publishListeningTags(String mailbox, List<String> tags) async {
+  if (!Platform.isIOS) return;
+  final path = await sharedContainerPath();
+  if (path == null) return;
+  await File('$path/listening.json')
+      .writeAsString(jsonEncode({'mailbox': mailbox, 'tags': tags}));
+}

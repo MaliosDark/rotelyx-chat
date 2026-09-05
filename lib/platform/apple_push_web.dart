@@ -10,3 +10,6 @@ Future<String?> applePushToken() async => null;
 Future<String?> sharedContainerPath() async => null;
 
 PushTransport pushForThisPlatform() => const NoPush();
+
+/// A browser has no extension to tell, and no container to tell it in.
+Future<void> publishListeningTags(String mailbox, List<String> tags) async {}
