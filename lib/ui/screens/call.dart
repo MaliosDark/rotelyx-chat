@@ -18,6 +18,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import 'package:flutter/services.dart';
 import '../../rotelyx/dtmf.dart';
@@ -127,19 +128,19 @@ class _CallScreenState extends State<CallScreen> {
           children: [
             const Spacer(flex: 2),
 
-            // The avatar inside the ring rather than beside it: the circle is
-            // who the call is with, and the two voices are drawn around it.
-            _VoiceRing(
-              size: 200,
-              speaking: widget.loop?.speaking ?? _quiet,
-              hearing: widget.loop?.hearing ?? _quiet,
-              child: RxAvatar(widget.who, size: 96),
-            ),
+            RxAvatar(widget.who, size: 96),
             const SizedBox(height: Metrics.gap),
             Text(widget.who,
                 style: Type.display.copyWith(color: t.text, fontSize: 26)),
             const SizedBox(height: 6),
             _Status(state: widget.state, health: _health, because: widget.because),
+
+            const SizedBox(height: 26),
+            // The two voices, under the person they belong to.
+            _VoiceWave(
+              speaking: widget.loop?.speaking ?? _quiet,
+              hearing: widget.loop?.hearing ?? _quiet,
+            ),
             const Spacer(flex: 3),
 
             // Only while a call is up. There is nothing to send a tone into
@@ -439,131 +440,169 @@ class _Keypad extends StatelessWidget {
   }
 }
 
-/// The two voices in a call, drawn as one ring around the avatar.
+/// The two voices in a call, drawn as one wave.
 ///
 /// # What it shows, and why this shape
 ///
 /// A call has exactly two things worth watching and they are not the same
-/// thing: what this person is sending, and what is arriving. Two rings around
-/// one circle says that without a label, because the circle between them is
-/// who they are talking to.
+/// thing: what is arriving, and what this device is sending. They are drawn as
+/// one mirrored wave, the far end above the line and this device below it, so
+/// the two are told apart by side rather than by a label and the space between
+/// them is the conversation.
 ///
-/// The outer ring is the other side and the inner one is this device. That way
-/// round because the outer has more room to move, and the far end is the one
-/// somebody is actually trying to hear: a call where the outer ring is flat is
-/// a call where the other person has stopped, which is the thing worth
-/// noticing at a glance.
+/// This replaced two rings around the avatar. The rings said the same thing
+/// and said it in polar coordinates, where a loud moment is a bulge whose size
+/// depends on which way round the circle it happened to fall, and where the
+/// two voices were told apart by radius, which is the hardest length for an
+/// eye to compare. A bar has one dimension and it is the one being measured.
 ///
-/// Time runs clockwise from the top, oldest to newest, so the newest sample is
-/// always arriving back at twelve o'clock and a word looks like a wave that
-/// travels round.
-class _VoiceRing extends StatelessWidget {
-  const _VoiceRing({
-    required this.speaking,
-    required this.hearing,
-    required this.size,
-    required this.child,
-  });
+/// # The far end is on top
+///
+/// The same reason it was the outer ring: the far end is what somebody is
+/// actually trying to hear, and a flat top is a call where the other person
+/// has stopped, which is the thing worth noticing without looking for it.
+///
+/// # Time runs to the right
+///
+/// Newest at the right edge, the way every waveform anybody has seen reads, so
+/// a word is a shape that travels off the end rather than one that arrives
+/// back where it started.
+class _VoiceWave extends StatelessWidget {
+  const _VoiceWave({required this.speaking, required this.hearing});
 
   final Float64List speaking;
   final Float64List hearing;
-  final double size;
-  final Widget child;
 
   @override
   Widget build(BuildContext context) {
     final t = RotelyxThemeScope.of(context);
 
-    return SizedBox(
-      width: size,
-      height: size,
-      child: CustomPaint(
-        painter: _RingPainter(
-          speaking: speaking,
-          hearing: hearing,
-          mine: Tone.accent,
-          theirs: t.text,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 32),
+      child: SizedBox(
+        height: 92,
+        width: double.infinity,
+        child: CustomPaint(
+          painter: _WavePainter(
+            speaking: speaking,
+            hearing: hearing,
+            mine: Tone.accent,
+            theirs: t.text,
+            rest: t.line,
+          ),
         ),
-        child: Center(child: child),
       ),
     );
   }
 }
 
-class _RingPainter extends CustomPainter {
-  _RingPainter({
+class _WavePainter extends CustomPainter {
+  _WavePainter({
     required this.speaking,
     required this.hearing,
     required this.mine,
     required this.theirs,
+    required this.rest,
   });
 
   final Float64List speaking;
   final Float64List hearing;
   final Color mine;
   final Color theirs;
+  final Color rest;
 
-  /// Where each ring sits, as a fraction of the half width, and how far a full
-  /// scale sample pushes it. The inner ring is given less room than the outer
-  /// so that two loud voices at once stay two rings rather than one band.
-  static const _innerRadius = 0.60;
-  static const _innerReach = 0.10;
-  static const _outerRadius = 0.78;
-  static const _outerReach = 0.20;
+  /// How wide a bar is and how much air sits between two of them.
+  ///
+  /// Three and two rather than one and one: a bar thinner than the gap reads as
+  /// a comb, and one wider than it reads as a block with notches. Rounded caps
+  /// need something to round.
+  static const _bar = 3.0;
+  static const _gap = 2.0;
+
+  /// The shortest a bar is ever drawn, in logical pixels.
+  ///
+  /// A silent call still shows a line of stubs rather than nothing at all. The
+  /// screen that goes blank when nobody speaks is the screen somebody reads as
+  /// broken, and a call is mostly silence.
+  static const _floor = 2.0;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final centre = Offset(size.width / 2, size.height / 2);
-    final half = size.width / 2;
+    final middle = size.height / 2;
+    final reach = middle - 6;
+    final step = _bar + _gap;
+    final columns = (size.width / step).floor();
+    if (columns <= 0) return;
 
-    _ring(canvas, centre, half, hearing, _outerRadius, _outerReach, theirs);
-    _ring(canvas, centre, half, speaking, _innerRadius, _innerReach, mine);
-  }
-
-  void _ring(
-    Canvas canvas,
-    Offset centre,
-    double half,
-    Float64List history,
-    double radius,
-    double reach,
-    Color colour,
-  ) {
-    if (history.isEmpty) return;
-
-    final base = half * radius;
-    final path = Path();
-
-    // Closed and filled rather than stroked, because a stroke of varying width
-    // has to be built as a polygon anyway and a filled ring reads as a single
-    // body of sound instead of a line that happens to wobble.
-    for (var i = 0; i < history.length; i++) {
-      final turn = i / history.length * 2 * math.pi - math.pi / 2;
-      final r = base + half * reach * history[i];
-      final point = Offset(
-        centre.dx + math.cos(turn) * r,
-        centre.dy + math.sin(turn) * r,
-      );
-      i == 0 ? path.moveTo(point.dx, point.dy) : path.lineTo(point.dx, point.dy);
-    }
-    path.close();
-
-    // The quiet ring is still there, at rest, so a silent call looks like a
-    // call rather than like a failure.
-    canvas.drawPath(
-      path,
+    // The line the two voices are mirrored about. Drawn first and faintly, so
+    // it is there when both sides are quiet and never competes when they are
+    // not.
+    canvas.drawLine(
+      Offset(0, middle),
+      Offset(size.width, middle),
       Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2
-        ..strokeJoin = StrokeJoin.round
-        ..color = colour.withOpacity(0.75),
+        ..color = rest.withValues(alpha: 0.5)
+        ..strokeWidth = 1,
     );
 
-    // A faint fill under it, which is what stops two overlapping rings reading
-    // as a tangle of lines.
-    canvas.drawPath(path, Paint()..color = colour.withOpacity(0.07));
+    for (var column = 0; column < columns; column++) {
+      final x = column * step;
+
+      // Older to the left, newest at the right edge.
+      final at = columns == 1 ? 1.0 : column / (columns - 1);
+
+      // Fades into the left edge rather than stopping at it, so the oldest
+      // sample leaves rather than being cut off.
+      final fade = (0.25 + at * 0.75).clamp(0.0, 1.0);
+
+      _column(canvas, x, middle, -1, reach, _sample(hearing, at), theirs, fade);
+      _column(canvas, x, middle, 1, reach, _sample(speaking, at), mine, fade);
+    }
+  }
+
+  /// The level at `at`, where 0 is the oldest sample held and 1 the newest.
+  ///
+  /// Read rather than indexed, because the number of bars follows the width of
+  /// the screen and the number of samples follows the audio, and neither is
+  /// the other's business.
+  double _sample(Float64List history, double at) {
+    if (history.isEmpty) return 0;
+    final i = (at * (history.length - 1)).round().clamp(0, history.length - 1);
+    return history[i].abs().clamp(0.0, 1.0);
+  }
+
+  void _column(
+    Canvas canvas,
+    double x,
+    double middle,
+    double direction,
+    double reach,
+    double level,
+    Color colour,
+    double fade,
+  ) {
+    // The square root rather than the level itself. Loudness is not linear in
+    // amplitude, and a bar drawn linearly spends most of a normal voice in the
+    // bottom fifth of the space it was given: the wave looks flat while
+    // somebody is plainly talking.
+    final height = _floor + (reach - _floor) * math.sqrt(level);
+
+    final top = direction < 0 ? middle - height : middle;
+    final rect = Rect.fromLTWH(x, top, _bar, height);
+
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(rect, const Radius.circular(_bar / 2)),
+      Paint()
+        // Brighter at the tip than at the line, which is what stops a wall of
+        // bars reading as a solid block.
+        ..shader = ui.Gradient.linear(
+          Offset(x, middle),
+          Offset(x, direction < 0 ? middle - reach : middle + reach),
+          [colour.withValues(alpha: 0.35 * fade), colour.withValues(alpha: fade)],
+        ),
+    );
   }
 
   @override
-  bool shouldRepaint(_RingPainter old) => true;
+  bool shouldRepaint(_WavePainter old) => true;
 }
