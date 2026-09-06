@@ -9,12 +9,16 @@
 /// decide to notify while it is not running: what shows a notification there is
 /// the extension in `ios/NotificationService/`, when a push arrives.
 ///
-/// So `show` and `clear` are Android's, and so are `connect` and `disconnect`,
-/// which are the foreground service. `permitted` and `request` are both
-/// platforms', because both have a permission and asking about it is the same
-/// question. Returning false on iOS instead, which is what this did, made the
-/// settings switch dead and told the person to change a setting they had never
-/// been asked for.
+/// `connect` and `disconnect` are the foreground service, which iOS has no
+/// equivalent of. Everything else is both platforms'.
+///
+/// `show` and `clear` were Android's, and that was wrong rather than a limit.
+/// The extension is what posts a notification when the application is not
+/// running, and it cannot open a message; but when the application *is*
+/// running it has already decrypted one, and posting the notification itself is
+/// exactly what Android does. Gating them on Android meant an iPhone with the
+/// application open posted nothing at all, and the only notification it ever
+/// showed was the extension's contentless one.
 library;
 
 import 'dart:io' show Platform;
@@ -30,11 +34,11 @@ const MethodChannel _channel = MethodChannel('rotelyx/notifications');
 class PlatformNotifier implements Notifier {
   const PlatformNotifier();
 
-  /// Whether this platform posts notifications from here.
+  /// Whether this platform holds its own background connection, which is the
+  /// only thing left that is Android's alone.
   bool get _wired => Platform.isAndroid;
 
-  /// Whether this platform has a notification permission to ask about. Both
-  /// mobile ones do; only one of them posts.
+  /// Whether this platform answers on the channel at all.
   bool get _asks => Platform.isAndroid || Platform.isIOS;
 
   @override
@@ -65,7 +69,7 @@ class PlatformNotifier implements Notifier {
 
   @override
   Future<void> show(Notice notice) async {
-    if (!_wired) return;
+    if (!_asks) return;
     try {
       await _channel.invokeMethod<void>('show', {
         // The channel carries integers, and a conversation id is a timestamp
@@ -87,7 +91,7 @@ class PlatformNotifier implements Notifier {
 
   @override
   Future<void> clear(String conversationId) async {
-    if (!_wired) return;
+    if (!_asks) return;
     try {
       await _channel.invokeMethod<void>('clear', {'id': _slot(conversationId)});
     } on PlatformException {

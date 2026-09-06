@@ -85,6 +85,8 @@ import UserNotifications
       )
       notify.setMethodCallHandler { call, result in
         switch call.method {
+        case "show": Notifications.show(call, result)
+        case "clear": Notifications.clear(call, result)
         case "permitted":
           // What iOS currently allows, which is not what was asked for: a
           // person can grant at the prompt and revoke in Settings afterwards,
