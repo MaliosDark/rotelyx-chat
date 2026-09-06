@@ -48,7 +48,11 @@ struct Glance: Codable {
     static func write(_ glance: Glance) {
         guard let data = try? JSONEncoder().encode(glance) else { return }
         store?.set(data, forKey: key)
-        WidgetCenter.shared.reloadAllTimelines()
+        // `WidgetCenter` is watchOS 9. A watch older than that has no
+        // complications to reload.
+        if #available(watchOS 9.0, *) {
+            WidgetCenter.shared.reloadAllTimelines()
+        }
     }
 
     /// Read it, or the empty one. A face with nothing to say still has to draw.

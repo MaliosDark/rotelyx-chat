@@ -80,12 +80,19 @@ struct ConversationList: View {
             showingCode = ProcessInfo.processInfo.arguments.contains("-showCode")
             #endif
         }
-        .onChange(of: phone.conversations.count) { openFirstForAScreenshot() }
-        .navigationDestination(isPresented: $showingFirst) {
-            if let first = phone.conversations.first {
-                Transcript(conversation: first)
+        .onChange(of: phone.conversations.count) { _ in openFirstForAScreenshot() }
+        // Hidden links rather than `navigationDestination`, which is watchOS 9.
+        .background(
+            Group {
+                NavigationLink(isActive: $showingFirst) {
+                    if let first = phone.conversations.first {
+                        Transcript(conversation: first)
+                    }
+                } label: { EmptyView() }
+
+                NavigationLink(isActive: $showingCode) { MyCode() } label: { EmptyView() }
             }
-        }
-        .navigationDestination(isPresented: $showingCode) { MyCode() }
+            .hidden()
+        )
     }
 }

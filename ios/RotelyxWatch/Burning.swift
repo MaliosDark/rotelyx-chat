@@ -244,10 +244,10 @@ struct Burning<Content: View>: View {
 
     private func start() async {
         Haptics.burning()
-        try? await Task.sleep(for: .milliseconds(30))
+        try? await Task.sleep(nanoseconds: 30_000_000)
         began = .now
 
-        try? await Task.sleep(for: .seconds(burnDuration + 0.2))
+        try? await Task.sleep(nanoseconds: UInt64((burnDuration + 0.2) * 1_000_000_000))
         onGone()
     }
 }

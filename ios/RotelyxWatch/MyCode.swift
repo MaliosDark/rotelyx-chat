@@ -150,8 +150,8 @@ struct MyCode: View {
         .onDisappear { phone.stopCode() }
         // Somebody scanned it. Say so on the wrist, because the phone is in a
         // pocket and this screen is the only thing the person is looking at.
-        .onChange(of: phone.paired) {
-            guard phone.paired else { return }
+        .onChange(of: phone.paired) { paired in
+            guard paired else { return }
             Haptics.paired()
             dismiss()
         }

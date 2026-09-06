@@ -897,6 +897,15 @@ class RotelyxService {
   /// who was invited is answering the key package they were given, and a new
   /// member would be a different one.
   Future<bool> resumeWaiting() async {
+    // Never over a conversation.
+    //
+    // This took the session and subscribed to the meeting's tag instead of the
+    // conversation's, so unlocking the application with an invitation
+    // outstanding left every chat disconnected: they were not broken, nothing
+    // was listening for them. One session, one thing at a time, and a
+    // conversation somebody is having beats an invitation nobody has answered.
+    if (state != RotelyxState.idle) return false;
+
     final held = store.waiting;
     if (held == null) return false;
 

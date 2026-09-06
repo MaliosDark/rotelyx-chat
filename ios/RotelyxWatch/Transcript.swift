@@ -27,6 +27,36 @@ private struct BurnWhenDue: ViewModifier {
     }
 }
 
+/// The bubble's outline. `UnevenRoundedRectangle` is watchOS 9, and one
+/// corner is not a reason to leave a Series 3 without the application.
+private struct Tail: Shape {
+    let mine: Bool
+
+    func path(in rect: CGRect) -> Path {
+        let r: CGFloat = 12
+        let tail: CGFloat = 4
+        let bl = mine ? r : tail
+        let br = mine ? tail : r
+
+        var p = Path()
+        p.move(to: CGPoint(x: rect.minX + r, y: rect.minY))
+        p.addLine(to: CGPoint(x: rect.maxX - r, y: rect.minY))
+        p.addArc(center: CGPoint(x: rect.maxX - r, y: rect.minY + r), radius: r,
+                 startAngle: .degrees(-90), endAngle: .zero, clockwise: false)
+        p.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - br))
+        p.addArc(center: CGPoint(x: rect.maxX - br, y: rect.maxY - br), radius: br,
+                 startAngle: .zero, endAngle: .degrees(90), clockwise: false)
+        p.addLine(to: CGPoint(x: rect.minX + bl, y: rect.maxY))
+        p.addArc(center: CGPoint(x: rect.minX + bl, y: rect.maxY - bl), radius: bl,
+                 startAngle: .degrees(90), endAngle: .degrees(180), clockwise: false)
+        p.addLine(to: CGPoint(x: rect.minX, y: rect.minY + r))
+        p.addArc(center: CGPoint(x: rect.minX + r, y: rect.minY + r), radius: r,
+                 startAngle: .degrees(180), endAngle: .degrees(270), clockwise: false)
+        p.closeSubpath()
+        return p
+    }
+}
+
 /// What is left before a message goes.
 ///
 /// Redrawn once a second by a schedule the system owns rather than by a timer
@@ -81,6 +111,11 @@ struct Transcript: View {
     /// time it comes and goes.
     @State private var composerRoom: CGFloat = 60
 
+    /// Whether the newest message is on screen, which is when the way to answer
+    /// appears. Reading back through what somebody said is not the moment to
+    /// reply, and a watch screen is too small to park a control on.
+    @State private var lastIsShowing = true
+
     /// The end of the transcript, as somewhere to scroll to.
     private static let foot = "foot"
 
@@ -99,7 +134,15 @@ struct Transcript: View {
             ZStack(alignment: .bottom) {
                 ScrollViewReader { scroll in
                     ScrollView {
-                        VStack(spacing: 3) {
+                        // Lazy, and that is the whole of it.
+                        //
+                        // A plain `VStack` builds every row at once and keeps
+                        // it, so a row that scrolls out of sight never
+                        // disappears as far as SwiftUI is concerned and
+                        // `onDisappear` never fires. Lazily, rows come and go
+                        // with the screen, which is exactly the question being
+                        // asked: is the newest message in front of you.
+                        LazyVStack(spacing: 3) {
                             if let problem = phone.problem {
                                 Text(problem)
                                     .font(.caption2)
@@ -109,6 +152,27 @@ struct Transcript: View {
                             ForEach(phone.messages) { message in
                                 Bubble(message: message)
                                     .id(message.id)
+                                    // The newest message says when it is on
+                                    // screen and when it goes.
+                                    //
+                                    // No geometry. Every attempt at measuring
+                                    // failed the same way: a scroll view's
+                                    // coordinate space follows its content, so
+                                    // the numbers do not move when you scroll
+                                    // and the answer is stuck at whatever it
+                                    // was. `onAppear` and `onDisappear` on a
+                                    // row are fired by the scroll view itself,
+                                    // which is the only thing that knows.
+                                    .onAppear {
+                                        if message.id == phone.messages.last?.id {
+                                            lastIsShowing = true
+                                        }
+                                    }
+                                    .onDisappear {
+                                        if message.id == phone.messages.last?.id {
+                                            lastIsShowing = false
+                                        }
+                                    }
                                     // Arriving from the side it is spoken from,
                                     // so the movement says who is talking
                                     // before the eye has read a word. A message
@@ -133,16 +197,7 @@ struct Transcript: View {
 
                             // Two jobs. It is the room the button sits over, so
                             // the last thing said is readable rather than
-                            // underneath it, and it is what reports where the
-                            // end of the conversation has got to.
-                            //
-                            // A `ScrollView` over a plain `VStack` rather than a
-                            // `List`, because a list builds its rows as they
-                            // come into view and drops them as they leave: this
-                            // one would stop reporting the moment it scrolled
-                            // off, which is precisely when it is needed. The
-                            // watch is handed twenty messages at most, so
-                            // building all of them costs nothing.
+                            // underneath it, and it is somewhere to scroll to.
                             Color.clear
                                 .frame(height: composerRoom)
                                 .id(Transcript.foot)
@@ -177,7 +232,7 @@ struct Transcript: View {
                     .animation(.spring(duration: 0.28), value: phone.messages.count)
                     .task(id: phone.messages.count) {
                         for wait in [80, 250, 600] {
-                            try? await Task.sleep(for: .milliseconds(wait))
+                            try? await Task.sleep(nanoseconds: UInt64(wait) * 1_000_000)
                             guard !Task.isCancelled else { return }
 
                             // To the foot, which sits below the last message
@@ -207,17 +262,21 @@ struct Transcript: View {
                 //
                 // The transcript reserves its room instead, so nothing is ever
                 // covered, and the way to answer is where it was last time.
-                composer
-                    .padding(.horizontal, 6)
-                    .padding(.bottom, 10)
+                if lastIsShowing {
+                    composer
+                        .padding(.horizontal, 6)
+                        .padding(.bottom, 10)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
                     .background(
                         GeometryReader { box in
                             Color.clear.preference(
                                 key: ComposerHeight.self,
                                 value: box.size.height + 10)
                         })
+                }
             }
             .onPreferenceChange(ComposerHeight.self) { composerRoom = $0 }
+            .animation(.easeOut(duration: 0.18), value: lastIsShowing)
         }
         // Down into the curve at the bottom of the screen, which the system
         // otherwise keeps clear. The button sits ten points up from the edge
@@ -241,6 +300,10 @@ struct Transcript: View {
     /// still landed on the chooser, and an icon that names one of four options
     /// and then does not take you to it is worse than one that names none.
     private var composer: some View {
+        // Your control, untouched, wherever it exists. `TextFieldLink` is
+        // watchOS 9; older than that gets a plain field.
+        Group {
+        if #available(watchOS 9.0, *) {
         TextFieldLink(prompt: Text("Message")) {
             HStack(spacing: 5) {
                 Image(systemName: "arrow.up")
@@ -261,7 +324,16 @@ struct Transcript: View {
         // `.bottomBar` this replaced used a blurred material, and a violet
         // button over a blurred bubble reads as a colour neither of them is.
         .background(Color.black.opacity(0.9), in: Capsule())
+        } else {
+            TextField("Reply", text: $reply)
+                .font(.system(size: 13))
+                .onSubmit { send(reply); reply = "" }
+        }
+        }
     }
+
+    /// What is being written on a watch too old for `TextFieldLink`.
+    @State private var reply = ""
 
     /// One message, in the shape and the colours the phone gives it.
     ///
@@ -290,7 +362,7 @@ struct Transcript: View {
         /// counting down for a conversation nobody is looking at.
         private func waitForTheDeadline() async {
             guard let left = message.burnsIn else { return }
-            try? await Task.sleep(for: .seconds(left))
+            try? await Task.sleep(nanoseconds: UInt64(max(0, left) * 1_000_000_000))
             guard !Task.isCancelled else { return }
             going = true
         }
@@ -335,11 +407,7 @@ struct Transcript: View {
                     .padding(.horizontal, 9)
                     .padding(.vertical, 5)
                     .background(message.mine ? Tone.accent : Tone.raised)
-                    .clipShape(.rect(
-                        topLeadingRadius: 12,
-                        bottomLeadingRadius: message.mine ? 12 : 4,
-                        bottomTrailingRadius: message.mine ? 4 : 12,
-                        topTrailingRadius: 12))
+                    .clipShape(Tail(mine: message.mine))
                     // The fire is given the capsule and nothing else.
                     //
                     // It used to wrap this whole row, which spans the width of

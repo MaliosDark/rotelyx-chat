@@ -20,7 +20,8 @@ struct RotelyxWatchApp: App {
 
     var body: some Scene {
         WindowGroup {
-            NavigationStack {
+            // `NavigationView`, not `NavigationStack`, which is watchOS 9.
+            NavigationView {
                 ConversationList()
             }
             .environmentObject(phone)
