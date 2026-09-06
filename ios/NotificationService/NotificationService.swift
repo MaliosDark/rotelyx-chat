@@ -53,6 +53,35 @@ class NotificationService: UNNotificationServiceExtension {
   private var handler: ((UNNotificationContent) -> Void)?
   private var content: UNMutableNotificationContent?
 
+  /// What a wake that found nothing is filed under.
+  ///
+  /// It exists so those can be told apart from real ones and taken away again.
+  /// Handing back empty content does not drop a notification, which is what
+  /// this code believed and `docs/PUSH.md` still said: iOS posts it with no
+  /// title and no body, and that blank Rotelyx banner every few minutes is
+  /// what people were getting. Dropping one outright needs
+  /// `com.apple.developer.usernotifications.filtering`, which Apple grants by
+  /// hand and this application has not been given.
+  ///
+  /// So the blank is made as quiet as the system allows and does not
+  /// accumulate. That is the floor until the entitlement arrives.
+  static let quietThread = "rotelyx.wake.nothing"
+
+  /// Clear the blanks left by earlier wakes.
+  ///
+  /// Delivered notifications are shared with the application, so this reaches
+  /// them from the extension as readily as from the app itself.
+  static func sweepQuiet() {
+    let centre = UNUserNotificationCenter.current()
+    centre.getDeliveredNotifications { delivered in
+      let blanks = delivered
+        .filter { $0.request.content.threadIdentifier == NotificationService.quietThread }
+        .map { $0.request.identifier }
+      guard !blanks.isEmpty else { return }
+      centre.removeDeliveredNotifications(withIdentifiers: blanks)
+    }
+  }
+
   override func didReceive(
     _ request: UNNotificationRequest,
     withContentHandler contentHandler: @escaping (UNNotificationContent) -> Void
@@ -60,21 +89,74 @@ class NotificationService: UNNotificationServiceExtension {
     handler = contentHandler
     content = request.content.mutableCopy() as? UNMutableNotificationContent
 
+    // Take away the last blank one before adding to the pile.
+    //
+    // A wake arrives every few minutes whether or not anything is waiting, so
+    // without this a phone left alone overnight collects a few hundred empty
+    // lines. Each run clears what the run before it left, which holds the
+    // total at one.
+    NotificationService.sweepQuiet()
+
     guard let content = content else {
       contentHandler(request.content)
       return
     }
 
-    // Ask the mailbox whether anything is actually waiting.
+    // A wake that is not from the sweep is a message that exists.
     //
-    // `decoy` on the payload means "you may find nothing", not "there is
-    // nothing": the server cannot tell, and sends the same wake either way on
-    // purpose. Only the mailbox knows, and only this device can ask it.
+    // `decoy` says which this is. The mailbox's clock wakes every registered
+    // device whether or not anything arrived, and those may find nothing. A
+    // wake handed on by the notifier came from a ticket, and a ticket only
+    // opens for something that was actually deposited, so there is nothing to
+    // ask and nothing that could come back empty.
+    //
+    // This is the whole of the blank notification problem. The flag used to be
+    // a constant `true` on the server, so a real arrival arrived saying it
+    // might be nothing; the extension asked the mailbox, and answered zero
+    // whenever the application had already collected the message or the
+    // network was not there. Zero meant empty content, and empty content is a
+    // blank banner rather than silence.
+    //
+    // Told which it is, a real arrival never asks and so can never be blank,
+    // even with no signal at all.
+    let sweep = request.content.userInfo["decoy"] as? Bool
+      ?? (request.content.userInfo["decoy"] as? String).map { $0 == "true" }
+      ?? true
+
+    guard sweep else {
+      content.title = "Rotelyx"
+      content.body = "New message"
+      contentHandler(content)
+      return
+    }
+
+    // From here down it is the sweep, which genuinely may find nothing.
     Waiting.check { waiting in
       guard waiting > 0 else {
-        // Nothing there. Silence rather than a notification about nothing,
-        // which is what every wake used to produce.
-        contentHandler(UNMutableNotificationContent())
+        // Nothing there.
+        //
+        // Silence is what this wants and is not what iOS gives. Handing back
+        // empty content does not drop the notification, it posts one with no
+        // title and no text, which is the blank Rotelyx banner people were
+        // getting. Dropping it needs
+        // `com.apple.developer.usernotifications.filtering`, which Apple grants
+        // by hand and this application does not have.
+        //
+        // So it is made as close to silence as the system allows: no sound, no
+        // wrist tap, no screen waking, no place in a summary. It is still a
+        // line in Notification Centre, and until the entitlement arrives that
+        // is the floor.
+        //
+        // Worth being plain about why these wakes happen at all: the server
+        // sends the same one whether a message is waiting or not, on purpose,
+        // so that somebody watching the traffic cannot tell when you are being
+        // written to. The blank ones are that promise being kept.
+        let quiet = UNMutableNotificationContent()
+        quiet.sound = nil
+        quiet.interruptionLevel = .passive
+        quiet.relevanceScore = 0
+        quiet.threadIdentifier = NotificationService.quietThread
+        contentHandler(quiet)
         return
       }
 

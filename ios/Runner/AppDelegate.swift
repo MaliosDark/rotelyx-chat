@@ -295,6 +295,32 @@ import UserNotifications
     )
   }
 
+  /// What the notification extension files a wake that found nothing under.
+  ///
+  /// Spelled again here rather than shared, because the extension is a separate
+  /// binary and one string is a smaller price than a framework between them.
+  /// It has to match `NotificationService.quietThread`.
+  private static let quietThread = "rotelyx.wake.nothing"
+
+  override func applicationDidBecomeActive(_ application: UIApplication) {
+    // Clear the blank wakes on the way in.
+    //
+    // The extension already takes away the one before it each time it runs, so
+    // there is rarely more than one. This is for the person who opens the
+    // application and should not be shown a leftover notification about
+    // nothing while they are looking at the thing it was about.
+    let centre = UNUserNotificationCenter.current()
+    centre.getDeliveredNotifications { delivered in
+      let blanks = delivered
+        .filter { $0.request.content.threadIdentifier == AppDelegate.quietThread }
+        .map { $0.request.identifier }
+      guard !blanks.isEmpty else { return }
+      centre.removeDeliveredNotifications(withIdentifiers: blanks)
+    }
+
+    super.applicationDidBecomeActive(application)
+  }
+
   override func application(
     _ application: UIApplication,
     didFailToRegisterForRemoteNotificationsWithError error: Error

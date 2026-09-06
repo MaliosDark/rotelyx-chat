@@ -503,7 +503,18 @@ class RotelyxStore {
   /// Kept beside `stayConnected` rather than in the vault, because the
   /// registration happens before anybody has typed a password and a preference
   /// about rhythm is not a secret.
-  bool get wakeOnSchedule => _box.read(_kOnSchedule) as bool? ?? true;
+  /// Null where nobody has chosen, which is not the same as choosing the
+  /// schedule.
+  ///
+  /// This used to answer `true` when unset, so every installation registered
+  /// for the schedule and was woken every five minutes for the life of the
+  /// application whether or not anything had arrived. That is 288 calls to
+  /// Apple per phone per day, nearly all of them about nothing, and it is what
+  /// produced the blank notifications. It also was not a choice anybody made.
+  ///
+  /// What the default should be depends on whether there is a notifier to
+  /// leave a ticket with, which this does not know and `RotelyxService` does.
+  bool? get wakeOnScheduleChoice => _box.read(_kOnSchedule) as bool?;
 
   set wakeOnSchedule(bool value) => _box.write(_kOnSchedule, value);
 

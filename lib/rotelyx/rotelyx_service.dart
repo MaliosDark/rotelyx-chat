@@ -688,6 +688,20 @@ class RotelyxService {
   /// the one platform that has to ask Apple.
   bool get canBeWoken => pushTransport is! NoPush;
 
+  /// Whether this device asks to be woken on the mailbox's clock.
+  ///
+  /// Only where there is nothing better. A ticket wakes this phone the moment
+  /// something arrives, tells the mailbox nothing it could use to link the
+  /// phone to a conversation, and costs one call to Apple per message. The
+  /// schedule costs one every five minutes forever, and the ones that find
+  /// nothing are the blank notifications people were getting.
+  ///
+  /// So the schedule is the fallback for a build with no notifier pinned, and
+  /// not the default it had become. Somebody who has moved the switch keeps
+  /// what they chose either way.
+  bool get wakeOnSchedule =>
+      store.wakeOnScheduleChoice ?? (_config.notifierKey == null);
+
   /// Ask the mailbox to wake this device on its schedule.
   ///
   /// The registration carries a push token and **no tag**. Binding a wake to a
@@ -716,7 +730,7 @@ class RotelyxService {
           PushGrant(
             token: token,
             secret: store.wakeSecret,
-            onSchedule: store.wakeOnSchedule,
+            onSchedule: wakeOnSchedule,
           ));
 
       // And a ticket under every tag already being listened on.
@@ -793,7 +807,7 @@ class RotelyxService {
             PushGrant(
             token: token,
             secret: store.wakeSecret,
-            onSchedule: store.wakeOnSchedule,
+            onSchedule: wakeOnSchedule,
           ));
 
         // Tickets go the same way as the registration and for the same

@@ -95,9 +95,19 @@ Apple throttles silent pushes: `content-available` with no alert is best-effort
 and may be delayed or dropped. A push carrying an alert is not throttled.
 
 So every wake carries an alert, and the notification service extension decides
-what to do with it: show the decrypted message, or hand back empty content,
-which suppresses it. A wake that finds nothing shows nothing and the user never
-learns it happened. The `decoy` flag in the payload is what marks those.
+what to do with it: show the decrypted message, or hand back empty content. The
+`decoy` flag in the payload is what marks the ones that may find nothing.
+
+**Empty content does not suppress a notification, and this document used to say
+it did.** iOS posts it anyway, with no title and no body, so a phone was getting
+a blank Rotelyx banner every five minutes around the clock. Suppressing one
+outright needs `com.apple.developer.usernotifications.filtering`, which Apple
+grants by request and this application has not been given.
+
+Until it is, a wake that finds nothing is made as close to silence as the system
+allows: no sound, no wrist tap, no screen waking, no place in a summary, and
+filed under a thread of its own so that each wake can take away the blank the
+one before it left. One quiet line at most, rather than a few hundred.
 
 ## The contract, which both sides now implement
 
@@ -296,8 +306,9 @@ is not casual, but "the key is not on the device" and "the key is on the device
 behind the Secure Enclave" are different sentences and only one of them is true
 afterwards.
 
-Until that is decided, the extension suppresses decoys and shows "New message",
-which is exactly what a locked screen with previews switched off shows anyway.
+Until that is decided, the extension quiets decoys as described above and shows
+"New message", which is exactly what a locked screen with previews switched off
+shows anyway.
 
 ## What still needs a Mac
 

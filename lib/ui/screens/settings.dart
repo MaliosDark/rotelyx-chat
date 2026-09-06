@@ -55,7 +55,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   /// The inverse of what is stored: the setting is written as "on a schedule",
   /// which is the private default, and the switch is phrased as the thing a
   /// person wants rather than as the mechanism.
-  bool _immediate = !store.wakeOnSchedule;
+  bool _immediate = !rotelyx.wakeOnSchedule;
 
   /// Whether the background connection is being held.
   bool _connected = false;
