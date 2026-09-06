@@ -49,6 +49,37 @@ import UserNotifications
   /// registration has finished.
   private var waiting: [FlutterResult] = []
 
+  /// Held for the life of the application, because `WCSession` keeps a weak
+  /// delegate and a bridge that goes out of scope is a watch that stops being
+  /// answered.
+  private var watch: WatchBridge?
+
+  /// The channel that carries a link to Dart, and the one this launch began
+  /// with while nothing is listening yet.
+  ///
+  /// A launch from cold reaches `open url:` before the engine exists, so the
+  /// link is held rather than pushed into nothing — a widget that does nothing
+  /// the first time it is tapped is a widget people tap once.
+  private var links: FlutterMethodChannel?
+  private var launchedBy: String?
+
+  override func application(
+    _ app: UIApplication,
+    open url: URL,
+    options: [UIApplication.OpenURLOptionsKey: Any] = [:]
+  ) -> Bool {
+    guard url.scheme == "rotelyx" else {
+      return super.application(app, open: url, options: options)
+    }
+
+    if let links = links {
+      links.invokeMethod("link", arguments: url.absoluteString)
+    } else {
+      launchedBy = url.absoluteString
+    }
+    return true
+  }
+
   private var audio: CallAudio?
   private var camera: QrCamera?
   private var files: FilePicker?
@@ -58,6 +89,11 @@ import UserNotifications
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
     GeneratedPluginRegistrant.register(with: self)
+
+    // Replying from the shade, and the only place a delegate can be set: iOS
+    // reads it at launch and ignores one installed later.
+    UNUserNotificationCenter.current().delegate = self
+    Notifications.registerCategory()
 
     if let controller = window?.rootViewController as? FlutterViewController {
       let channel = FlutterMethodChannel(
@@ -128,6 +164,36 @@ import UserNotifications
                            binaryMessenger: controller.binaryMessenger)
         .setMethodCallHandler { call, result in scanner.handle(call, result) }
 
+      let bridge = WatchBridge()
+      watch = bridge
+      bridge.start(controller.binaryMessenger)
+
+      Widgets.start(controller.binaryMessenger)
+      BurnActivityChannel.start(controller.binaryMessenger)
+
+      // Links from outside: an invitation somebody tapped, or the home screen
+      // widget's `rotelyx://meet`.
+      //
+      // The contract is `lib/platform/incoming_link.dart`'s and was already
+      // here for Android: `initial` is asked once for whatever started this
+      // launch, and `link` is pushed for anything arriving while it runs.
+      // Inventing a second channel would have replaced that handler and taken
+      // invitations away from the platform where they already worked.
+      let links = FlutterMethodChannel(name: "rotelyx/links",
+                                       binaryMessenger: controller.binaryMessenger)
+      self.links = links
+      links.setMethodCallHandler { [weak self] call, result in
+        guard call.method == "initial" else {
+          result(FlutterMethodNotImplemented)
+          return
+        }
+        // Answers once. A second call gets nothing even if the first found
+        // something, which is what the Dart side documents.
+        let waiting = self?.launchedBy
+        self?.launchedBy = nil
+        result(waiting)
+      }
+
       let picker = FilePicker(host: controller)
       files = picker
       FlutterMethodChannel(name: FilePicker.channel,
@@ -168,6 +234,50 @@ import UserNotifications
         UIApplication.shared.registerForRemoteNotifications()
       }
     }
+  }
+
+  /// A reply typed into the notification itself.
+  ///
+  /// The application is running, because it is the one that posted this, so the
+  /// text goes straight into the conversation. Nothing is opened and nothing is
+  /// shown: a reply from the shade that pushes a screen in front of somebody is
+  /// a reply nobody sends twice.
+  override func userNotificationCenter(
+    _ center: UNUserNotificationCenter,
+    didReceive response: UNNotificationResponse,
+    withCompletionHandler completionHandler: @escaping () -> Void
+  ) {
+    guard response.actionIdentifier == Notifications.replyAction,
+          let typed = response as? UNTextInputNotificationResponse,
+          let conversation = response.notification.request.content
+            .userInfo["conversation"] as? String,
+          !conversation.isEmpty,
+          let controller = window?.rootViewController as? FlutterViewController
+    else {
+      completionHandler()
+      return
+    }
+
+    FlutterMethodChannel(name: AppDelegate.notifyChannelName,
+                         binaryMessenger: controller.binaryMessenger)
+      .invokeMethod("replied", arguments: [
+        "conversationId": conversation,
+        "text": typed.userText,
+      ]) { _ in completionHandler() }
+  }
+
+  /// Shown even with the application in front.
+  ///
+  /// `alerts.dart` already decides whether a message is worth interrupting for,
+  /// and it withholds the ones that are not. Letting iOS suppress the rest
+  /// would overrule a decision made with more to go on.
+  override func userNotificationCenter(
+    _ center: UNUserNotificationCenter,
+    willPresent notification: UNNotification,
+    withCompletionHandler completionHandler:
+      @escaping (UNNotificationPresentationOptions) -> Void
+  ) {
+    completionHandler([.banner, .sound])
   }
 
   override func application(

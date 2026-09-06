@@ -7,34 +7,86 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		00071A990F2915CBFF556687 /* message.wav in Resources */ = {isa = PBXBuildFile; fileRef = 5F3E37B9296B4C15AF581DE2 /* message.wav */; };
+		020112AB344DA23E17B3CF0E /* RotelyxComplication.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DACF0305DB6837A83ADA2E1 /* RotelyxComplication.swift */; };
 		1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */ = {isa = PBXBuildFile; fileRef = 1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */; };
+		1740FB7275572FD514BE28D6 /* Transcript.swift in Sources */ = {isa = PBXBuildFile; fileRef = E508695B0DE88B78A4F1F016 /* Transcript.swift */; };
+		1A3B927E7276C4A6D71F13C9 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C977393DE23CAA03BF2CC6D1 /* Foundation.framework */; };
+		23FA75CC89D84E5E4E8BAD53 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 629E8267766669EC8D547282 /* Assets.xcassets */; };
+		2C1877063878776EDCDE9870 /* MyCode.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD02A575DC05B50C34B02B13 /* MyCode.swift */; };
 		331C808B294A63AB00263BE5 /* RunnerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 331C807B294A618700263BE5 /* RunnerTests.swift */; };
+		338F09183679C6D1D8D06642 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 629E8267766669EC8D547282 /* Assets.xcassets */; };
 		3B3967161E833CAA004F5970 /* AppFrameworkInfo.plist in Resources */ = {isa = PBXBuildFile; fileRef = 3B3967151E833CAA004F5970 /* AppFrameworkInfo.plist */; };
+		3B471E06FCF4C2F45153F39A /* RotelyxWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8025441F0DB2858E29E52133 /* RotelyxWidgets.swift */; };
+		5074781BD487500C006ED782 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 629E8267766669EC8D547282 /* Assets.xcassets */; };
+		52FF48C396EEE66C8B7F4567 /* BurnAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B0CC4EE6F9855822208E9B1 /* BurnAttributes.swift */; };
 		59D777D750F32679F75560D1 /* Pods_Runner.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8ED3CC0E13E6AB1D6FFAFD9A /* Pods_Runner.framework */; };
+		5C21C6E0B8898913B0F1A879 /* BurnActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0572B1ABE92B549B83CD652A /* BurnActivity.swift */; };
+		5EEC57E9D16B387E87C117F6 /* Burning.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DD7DCC0A2DBB9B9C147D19E /* Burning.swift */; };
+		6221BAC4A4B0301BE748A2EB /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 43586CC55033BAD74DE488F1 /* Foundation.framework */; };
+		6386BB498AE17AF5C4D21887 /* RotelyxWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 0EF1F33AD6CB3A8090713BE2 /* RotelyxWatch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		64BD7236C8F34491350D3F53 /* message.wav in Resources */ = {isa = PBXBuildFile; fileRef = F0C2D411AB9E1F1A0A86C50C /* message.wav */; };
+		72E5AF77B1DA339DF65F1B74 /* BurnAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B0CC4EE6F9855822208E9B1 /* BurnAttributes.swift */; };
 		74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74858FAE1ED2DC5600515810 /* AppDelegate.swift */; };
 		78A318202AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage in Frameworks */ = {isa = PBXBuildFile; productRef = 78A3181F2AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage */; };
+		7A4C6AB1E0EF3BAAA898F11C /* ConversationList.swift in Sources */ = {isa = PBXBuildFile; fileRef = 499D60B5DE7223D824A916CA /* ConversationList.swift */; };
+		8C74FC4633A1E7A3A076E8A1 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 43586CC55033BAD74DE488F1 /* Foundation.framework */; };
+		94F05B4AEA65844DAB43F236 /* RotelyxComplication.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = F6CE433D5F05C82E8205F0B9 /* RotelyxComplication.appex */; };
 		97C146FC1CF9000F007C117D /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FA1CF9000F007C117D /* Main.storyboard */; };
 		97C146FE1CF9000F007C117D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FD1CF9000F007C117D /* Assets.xcassets */; };
 		97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */; };
+		A7A4A58B4B530C42E6B82C3A /* Burning.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E74F359202168F7ABDD843B /* Burning.swift */; };
 		BA9D42EB8B87FD6836C29523 /* Pods_RunnerTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = AE3FF8EED1E4A08FF6CE998E /* Pods_RunnerTests.framework */; };
+		BB88B107F84734A23DFB07AF /* Shared.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62942105A39BB4B4B62B1A8F /* Shared.swift */; };
+		BC13F4394019F5B7D3C8991A /* Haptics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3582D7913784AB77315935D8 /* Haptics.swift */; };
+		C3C92990B31F9EF777D87D62 /* Tone.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CC9497FA63B9DFCC4794BBD /* Tone.swift */; };
+		C930CC0838D0BFC57FBCCD00 /* Glance.swift in Sources */ = {isa = PBXBuildFile; fileRef = 638E3ABC18C196EB66C286E0 /* Glance.swift */; };
+		CDAD21A20D90D89BC3E2F0F9 /* Sound.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0901852B2DF5BBE54DEB824C /* Sound.swift */; };
+		D2F2CDF37EA3F0136BC4BC41 /* RotelyxWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 9CE6D4C77B4EC2883C5FC8D0 /* RotelyxWidgets.appex */; };
+		D56F4B3B964B1394DB0ECEFB /* Widgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDB2A7BE97D35CAECB0701E5 /* Widgets.swift */; };
+		DF9E02B2A3DB96D8691F855B /* Phone.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB15C9E6DAB683B83DFFCBDE /* Phone.swift */; };
+		DFA8F422F304648DAF6254F1 /* RotelyxWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B294A1694FBA18D9A4F9056 /* RotelyxWatchApp.swift */; };
 		E5A1B2C3D4E5F6000000000C /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5A1B2C3D4E5F6000000000B /* NotificationService.swift */; };
-		E5A1B2C3D4E5F60000000031 /* Notifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5A1B2C3D4E5F60000000030 /* Notifications.swift */; };
-		E5A1B2C3D4E5F60000000091 /* Waiting.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5A1B2C3D4E5F60000000090 /* Waiting.swift */; };
 		E5A1B2C3D4E5F60000000011 /* NotificationService.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = E5A1B2C3D4E5F60000000002 /* NotificationService.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		E5A1B2C3D4E5F60000000015 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = E5A1B2C3D4E5F60000000014 /* PrivacyInfo.xcprivacy */; };
 		E5A1B2C3D4E5F60000000017 /* SharedContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5A1B2C3D4E5F60000000016 /* SharedContainer.swift */; };
 		E5A1B2C3D4E5F60000000021 /* CallAudio.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5A1B2C3D4E5F60000000020 /* CallAudio.swift */; };
 		E5A1B2C3D4E5F60000000023 /* QrCamera.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5A1B2C3D4E5F60000000022 /* QrCamera.swift */; };
 		E5A1B2C3D4E5F60000000025 /* FilePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5A1B2C3D4E5F60000000024 /* FilePicker.swift */; };
+		E5A1B2C3D4E5F60000000031 /* Notifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5A1B2C3D4E5F60000000030 /* Notifications.swift */; };
+		E5A1B2C3D4E5F60000000033 /* WatchBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5A1B2C3D4E5F60000000032 /* WatchBridge.swift */; };
+		E5A1B2C3D4E5F60000000091 /* Waiting.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5A1B2C3D4E5F60000000090 /* Waiting.swift */; };
+		E729C131CC29BBF794ADADC5 /* Glance.swift in Sources */ = {isa = PBXBuildFile; fileRef = 638E3ABC18C196EB66C286E0 /* Glance.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		0B770FB8416F9F250819463B /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 97C146E61CF9000F007C117D /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 09FA37ED20B4651A488AF873;
+			remoteInfo = RotelyxWidgets;
+		};
 		331C8085294A63A400263BE5 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 97C146E61CF9000F007C117D /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = 97C146ED1CF9000F007C117D;
 			remoteInfo = Runner;
+		};
+		634CA879D80FE5C663635BBE /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 97C146E61CF9000F007C117D /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = E2FBCF31821405F71027F5CD;
+			remoteInfo = RotelyxComplication;
+		};
+		D7B1358F16881780B54A2B50 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 97C146E61CF9000F007C117D /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = E62A179F9623F3F558906FF8;
+			remoteInfo = RotelyxWatch;
 		};
 		E5A1B2C3D4E5F60000000013 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -46,6 +98,17 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
+		510274EBDCE5991E835796C1 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				94F05B4AEA65844DAB43F236 /* RotelyxComplication.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		9705A1C41CF9048500538489 /* Embed Frameworks */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
@@ -56,6 +119,17 @@
 			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		D4841E116114A241A728C2B1 /* Embed Watch Content */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "$(CONTENTS_FOLDER_PATH)/Watch";
+			dstSubfolderSpec = 16;
+			files = (
+				6386BB498AE17AF5C4D21887 /* RotelyxWatch.app in Embed Watch Content */,
+			);
+			name = "Embed Watch Content";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		E5A1B2C3D4E5F60000000010 /* Embed Foundation Extensions */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
@@ -63,6 +137,7 @@
 			dstSubfolderSpec = 13;
 			files = (
 				E5A1B2C3D4E5F60000000011 /* NotificationService.appex in Embed Foundation Extensions */,
+				D2F2CDF37EA3F0136BC4BC41 /* RotelyxWidgets.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -70,19 +145,37 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		0572B1ABE92B549B83CD652A /* BurnActivity.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BurnActivity.swift; sourceTree = "<group>"; };
+		0901852B2DF5BBE54DEB824C /* Sound.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Sound.swift; sourceTree = "<group>"; };
 		0C023C214090D3929002BE8E /* Pods-RunnerTests.profile.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.profile.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.profile.xcconfig"; sourceTree = "<group>"; };
+		0EF1F33AD6CB3A8090713BE2 /* RotelyxWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; name = RotelyxWatch.app; path = RotelyxWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		1498D2321E8E86230040F4C2 /* GeneratedPluginRegistrant.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = GeneratedPluginRegistrant.h; sourceTree = "<group>"; };
 		1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = GeneratedPluginRegistrant.m; sourceTree = "<group>"; };
+		24BB717C4247AF781764F695 /* Embedded.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = Embedded.xcconfig; path = Flutter/Embedded.xcconfig; sourceTree = "<group>"; };
 		331C807B294A618700263BE5 /* RunnerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunnerTests.swift; sourceTree = "<group>"; };
 		331C8081294A63A400263BE5 /* RunnerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RunnerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		33F75392671FF1915EAB475B /* Pods-Runner.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.debug.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.debug.xcconfig"; sourceTree = "<group>"; };
+		3582D7913784AB77315935D8 /* Haptics.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Haptics.swift; path = Haptics.swift; sourceTree = "<group>"; };
 		3B3967151E833CAA004F5970 /* AppFrameworkInfo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = AppFrameworkInfo.plist; path = Flutter/AppFrameworkInfo.plist; sourceTree = "<group>"; };
+		3E74F359202168F7ABDD843B /* Burning.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Burning.swift; sourceTree = "<group>"; };
+		43586CC55033BAD74DE488F1 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/WatchOS.platform/Developer/SDKs/WatchOS11.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
+		464E404AF8399F961A0CE98B /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		499D60B5DE7223D824A916CA /* ConversationList.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ConversationList.swift; sourceTree = "<group>"; };
+		4DACF0305DB6837A83ADA2E1 /* RotelyxComplication.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RotelyxComplication.swift; sourceTree = "<group>"; };
+		4DD7DCC0A2DBB9B9C147D19E /* Burning.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Burning.swift; sourceTree = "<group>"; };
+		5B0CC4EE6F9855822208E9B1 /* BurnAttributes.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BurnAttributes.swift; sourceTree = "<group>"; };
 		5BA3A8533E8E4FF08EBE8C9D /* Pods-Runner.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.release.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.release.xcconfig"; sourceTree = "<group>"; };
+		5F3E37B9296B4C15AF581DE2 /* message.wav */ = {isa = PBXFileReference; includeInIndex = 1; name = message.wav; path = ../../assets/sound/message.wav; sourceTree = "<group>"; };
+		62942105A39BB4B4B62B1A8F /* Shared.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Shared.swift; sourceTree = "<group>"; };
+		629E8267766669EC8D547282 /* Assets.xcassets */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		638E3ABC18C196EB66C286E0 /* Glance.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Glance.swift; sourceTree = "<group>"; };
 		74858FAD1ED2DC5600515810 /* Runner-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "Runner-Bridging-Header.h"; sourceTree = "<group>"; };
 		74858FAE1ED2DC5600515810 /* AppDelegate.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		78E0A7A72DC9AD7400C4905E /* FlutterGeneratedPluginSwiftPackage */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = FlutterGeneratedPluginSwiftPackage; path = Flutter/ephemeral/Packages/FlutterGeneratedPluginSwiftPackage; sourceTree = "<group>"; };
 		79C3ED10A3E4AFB3EB702C1C /* Pods-RunnerTests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.release.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.release.xcconfig"; sourceTree = "<group>"; };
 		7AFA3C8E1D35360C0083082E /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Release.xcconfig; path = Flutter/Release.xcconfig; sourceTree = "<group>"; };
+		8025441F0DB2858E29E52133 /* RotelyxWidgets.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RotelyxWidgets.swift; sourceTree = "<group>"; };
+		8CC9497FA63B9DFCC4794BBD /* Tone.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Tone.swift; path = Tone.swift; sourceTree = "<group>"; };
 		8ED3CC0E13E6AB1D6FFAFD9A /* Pods_Runner.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Runner.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		9740EEB21CF90195004384FC /* Debug.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; name = Debug.xcconfig; path = Flutter/Debug.xcconfig; sourceTree = "<group>"; };
 		9740EEB31CF90195004384FC /* Generated.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; name = Generated.xcconfig; path = Flutter/Generated.xcconfig; sourceTree = "<group>"; };
@@ -91,13 +184,20 @@
 		97C146FD1CF9000F007C117D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		97C147001CF9000F007C117D /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		97C147021CF9000F007C117D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		9B294A1694FBA18D9A4F9056 /* RotelyxWatchApp.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RotelyxWatchApp.swift; sourceTree = "<group>"; };
+		9CE6D4C77B4EC2883C5FC8D0 /* RotelyxWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = RotelyxWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		A9D2F5FEF603668631071C53 /* RotelyxComplication.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = RotelyxComplication.entitlements; sourceTree = "<group>"; };
+		AC38AE99E7B43E5CD333CE35 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		AE3FF8EED1E4A08FF6CE998E /* Pods_RunnerTests.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_RunnerTests.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		B26350D6EC17FE83F5E199A7 /* Pods-Runner.profile.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.profile.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.profile.xcconfig"; sourceTree = "<group>"; };
+		BB2E23FE5DBAA73965CDF425 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		C977393DE23CAA03BF2CC6D1 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
+		CD02A575DC05B50C34B02B13 /* MyCode.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = MyCode.swift; path = MyCode.swift; sourceTree = "<group>"; };
+		D84F68DBD32A4A606E5429E7 /* RotelyxWidgets.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = RotelyxWidgets.entitlements; sourceTree = "<group>"; };
 		E337E32E104F17118E4D2C54 /* Pods-RunnerTests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.debug.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.debug.xcconfig"; sourceTree = "<group>"; };
+		E508695B0DE88B78A4F1F016 /* Transcript.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Transcript.swift; sourceTree = "<group>"; };
 		E5A1B2C3D4E5F60000000002 /* NotificationService.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = NotificationService.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		E5A1B2C3D4E5F6000000000B /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
-		E5A1B2C3D4E5F60000000030 /* Notifications.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Notifications.swift; sourceTree = "<group>"; };
-		E5A1B2C3D4E5F60000000090 /* Waiting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Waiting.swift; sourceTree = "<group>"; };
 		E5A1B2C3D4E5F6000000000D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		E5A1B2C3D4E5F6000000000E /* NotificationService.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = NotificationService.entitlements; sourceTree = "<group>"; };
 		E5A1B2C3D4E5F6000000000F /* Runner.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Runner.entitlements; sourceTree = "<group>"; };
@@ -106,9 +206,24 @@
 		E5A1B2C3D4E5F60000000020 /* CallAudio.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallAudio.swift; sourceTree = "<group>"; };
 		E5A1B2C3D4E5F60000000022 /* QrCamera.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QrCamera.swift; sourceTree = "<group>"; };
 		E5A1B2C3D4E5F60000000024 /* FilePicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilePicker.swift; sourceTree = "<group>"; };
+		E5A1B2C3D4E5F60000000030 /* Notifications.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Notifications.swift; sourceTree = "<group>"; };
+		E5A1B2C3D4E5F60000000032 /* WatchBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchBridge.swift; sourceTree = "<group>"; };
+		E5A1B2C3D4E5F60000000090 /* Waiting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Waiting.swift; sourceTree = "<group>"; };
+		EDB2A7BE97D35CAECB0701E5 /* Widgets.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Widgets.swift; sourceTree = "<group>"; };
+		F0C2D411AB9E1F1A0A86C50C /* message.wav */ = {isa = PBXFileReference; includeInIndex = 1; name = message.wav; path = ../../assets/sound/message.wav; sourceTree = "<group>"; };
+		F6CE433D5F05C82E8205F0B9 /* RotelyxComplication.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = RotelyxComplication.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		FB15C9E6DAB683B83DFFCBDE /* Phone.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Phone.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		1DE83F9FB1AE0ABC4AB94717 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1A3B927E7276C4A6D71F13C9 /* Foundation.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		97C146EB1CF9000F007C117D /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -126,10 +241,26 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A901299CA35A41A90C10BB15 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				6221BAC4A4B0301BE748A2EB /* Foundation.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		E5A1B2C3D4E5F60000000005 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E9021EFE169ADB221FBECEA6 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8C74FC4633A1E7A3A076E8A1 /* Foundation.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -141,8 +272,18 @@
 			children = (
 				8ED3CC0E13E6AB1D6FFAFD9A /* Pods_Runner.framework */,
 				AE3FF8EED1E4A08FF6CE998E /* Pods_RunnerTests.framework */,
+				3409685BF0BE513C5D8BFD2A /* watchOS */,
+				1B28AD37D9600B947CB746BF /* iOS */,
 			);
 			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		1B28AD37D9600B947CB746BF /* iOS */ = {
+			isa = PBXGroup;
+			children = (
+				C977393DE23CAA03BF2CC6D1 /* Foundation.framework */,
+			);
+			name = iOS;
 			sourceTree = "<group>";
 		};
 		331C8082294A63A400263BE5 /* RunnerTests */ = {
@@ -153,6 +294,28 @@
 			path = RunnerTests;
 			sourceTree = "<group>";
 		};
+		3409685BF0BE513C5D8BFD2A /* watchOS */ = {
+			isa = PBXGroup;
+			children = (
+				43586CC55033BAD74DE488F1 /* Foundation.framework */,
+			);
+			name = watchOS;
+			sourceTree = "<group>";
+		};
+		3481E0C3894EAEBE7123D5AA /* RotelyxWidgets */ = {
+			isa = PBXGroup;
+			children = (
+				8025441F0DB2858E29E52133 /* RotelyxWidgets.swift */,
+				62942105A39BB4B4B62B1A8F /* Shared.swift */,
+				AC38AE99E7B43E5CD333CE35 /* Info.plist */,
+				D84F68DBD32A4A606E5429E7 /* RotelyxWidgets.entitlements */,
+				4DD7DCC0A2DBB9B9C147D19E /* Burning.swift */,
+				5B0CC4EE6F9855822208E9B1 /* BurnAttributes.swift */,
+			);
+			name = RotelyxWidgets;
+			path = RotelyxWidgets;
+			sourceTree = "<group>";
+		};
 		9740EEB11CF90186004384FC /* Flutter */ = {
 			isa = PBXGroup;
 			children = (
@@ -161,6 +324,7 @@
 				9740EEB21CF90195004384FC /* Debug.xcconfig */,
 				7AFA3C8E1D35360C0083082E /* Release.xcconfig */,
 				9740EEB31CF90195004384FC /* Generated.xcconfig */,
+				24BB717C4247AF781764F695 /* Embedded.xcconfig */,
 			);
 			name = Flutter;
 			sourceTree = "<group>";
@@ -175,6 +339,9 @@
 				E5A1B2C3D4E5F60000000003 /* NotificationService */,
 				AE9681F338831B449685D962 /* Pods */,
 				0D333FEB5C2FE05DDF86277D /* Frameworks */,
+				C84B35F6DC0E0702C09CE133 /* RotelyxWatch */,
+				CDF2E2DD6C519D2564A3B3CB /* RotelyxComplication */,
+				3481E0C3894EAEBE7123D5AA /* RotelyxWidgets */,
 			);
 			sourceTree = "<group>";
 		};
@@ -184,6 +351,9 @@
 				97C146EE1CF9000F007C117D /* Runner.app */,
 				331C8081294A63A400263BE5 /* RunnerTests.xctest */,
 				E5A1B2C3D4E5F60000000002 /* NotificationService.appex */,
+				0EF1F33AD6CB3A8090713BE2 /* RotelyxWatch.app */,
+				F6CE433D5F05C82E8205F0B9 /* RotelyxComplication.appex */,
+				9CE6D4C77B4EC2883C5FC8D0 /* RotelyxWidgets.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -200,12 +370,16 @@
 				74858FAE1ED2DC5600515810 /* AppDelegate.swift */,
 				E5A1B2C3D4E5F60000000020 /* CallAudio.swift */,
 				E5A1B2C3D4E5F60000000030 /* Notifications.swift */,
+				E5A1B2C3D4E5F60000000032 /* WatchBridge.swift */,
 				E5A1B2C3D4E5F60000000022 /* QrCamera.swift */,
 				E5A1B2C3D4E5F60000000024 /* FilePicker.swift */,
 				E5A1B2C3D4E5F60000000016 /* SharedContainer.swift */,
 				74858FAD1ED2DC5600515810 /* Runner-Bridging-Header.h */,
 				E5A1B2C3D4E5F6000000000F /* Runner.entitlements */,
 				E5A1B2C3D4E5F60000000014 /* PrivacyInfo.xcprivacy */,
+				5F3E37B9296B4C15AF581DE2 /* message.wav */,
+				EDB2A7BE97D35CAECB0701E5 /* Widgets.swift */,
+				0572B1ABE92B549B83CD652A /* BurnActivity.swift */,
 			);
 			path = Runner;
 			sourceTree = "<group>";
@@ -224,6 +398,38 @@
 			path = Pods;
 			sourceTree = "<group>";
 		};
+		C84B35F6DC0E0702C09CE133 /* RotelyxWatch */ = {
+			isa = PBXGroup;
+			children = (
+				9B294A1694FBA18D9A4F9056 /* RotelyxWatchApp.swift */,
+				FB15C9E6DAB683B83DFFCBDE /* Phone.swift */,
+				499D60B5DE7223D824A916CA /* ConversationList.swift */,
+				E508695B0DE88B78A4F1F016 /* Transcript.swift */,
+				BB2E23FE5DBAA73965CDF425 /* Info.plist */,
+				CD02A575DC05B50C34B02B13 /* MyCode.swift */,
+				3582D7913784AB77315935D8 /* Haptics.swift */,
+				8CC9497FA63B9DFCC4794BBD /* Tone.swift */,
+				629E8267766669EC8D547282 /* Assets.xcassets */,
+				0901852B2DF5BBE54DEB824C /* Sound.swift */,
+				F0C2D411AB9E1F1A0A86C50C /* message.wav */,
+				638E3ABC18C196EB66C286E0 /* Glance.swift */,
+				3E74F359202168F7ABDD843B /* Burning.swift */,
+			);
+			name = RotelyxWatch;
+			path = RotelyxWatch;
+			sourceTree = "<group>";
+		};
+		CDF2E2DD6C519D2564A3B3CB /* RotelyxComplication */ = {
+			isa = PBXGroup;
+			children = (
+				4DACF0305DB6837A83ADA2E1 /* RotelyxComplication.swift */,
+				464E404AF8399F961A0CE98B /* Info.plist */,
+				A9D2F5FEF603668631071C53 /* RotelyxComplication.entitlements */,
+			);
+			name = RotelyxComplication;
+			path = RotelyxComplication;
+			sourceTree = "<group>";
+		};
 		E5A1B2C3D4E5F60000000003 /* NotificationService */ = {
 			isa = PBXGroup;
 			children = (
@@ -238,6 +444,23 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		09FA37ED20B4651A488AF873 /* RotelyxWidgets */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A595E3904847C83B4C215BF7 /* Build configuration list for PBXNativeTarget "RotelyxWidgets" */;
+			buildPhases = (
+				24B280D4091FCB47B2D81CE2 /* Sources */,
+				1DE83F9FB1AE0ABC4AB94717 /* Frameworks */,
+				E4D2688F9909457CC152B075 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = RotelyxWidgets;
+			productName = RotelyxWidgets;
+			productReference = 9CE6D4C77B4EC2883C5FC8D0 /* RotelyxWidgets.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		331C8080294A63A400263BE5 /* RunnerTests */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 331C8087294A63A400263BE5 /* Build configuration list for PBXNativeTarget "RunnerTests" */;
@@ -268,12 +491,15 @@
 				97C146EC1CF9000F007C117D /* Resources */,
 				9705A1C41CF9048500538489 /* Embed Frameworks */,
 				E5A1B2C3D4E5F60000000010 /* Embed Foundation Extensions */,
+				D4841E116114A241A728C2B1 /* Embed Watch Content */,
 				3B06AD1E1E4923F5004D2608 /* Thin Binary */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 				E5A1B2C3D4E5F60000000012 /* PBXTargetDependency */,
+				A86A4F34820E21DA888560B1 /* PBXTargetDependency */,
+				1D47B120838432248B6F98B0 /* PBXTargetDependency */,
 			);
 			name = Runner;
 			packageProductDependencies = (
@@ -282,6 +508,23 @@
 			productName = Runner;
 			productReference = 97C146EE1CF9000F007C117D /* Runner.app */;
 			productType = "com.apple.product-type.application";
+		};
+		E2FBCF31821405F71027F5CD /* RotelyxComplication */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AEB7A51D2E730A2CE65073CB /* Build configuration list for PBXNativeTarget "RotelyxComplication" */;
+			buildPhases = (
+				780EE33076536731927B45E8 /* Sources */,
+				A901299CA35A41A90C10BB15 /* Frameworks */,
+				7D3A5AE0C9CB38CE54EAAF9C /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = RotelyxComplication;
+			productName = RotelyxComplication;
+			productReference = F6CE433D5F05C82E8205F0B9 /* RotelyxComplication.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 		E5A1B2C3D4E5F60000000001 /* NotificationService */ = {
 			isa = PBXNativeTarget;
@@ -299,6 +542,25 @@
 			productName = NotificationService;
 			productReference = E5A1B2C3D4E5F60000000002 /* NotificationService.appex */;
 			productType = "com.apple.product-type.app-extension";
+		};
+		E62A179F9623F3F558906FF8 /* RotelyxWatch */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CFDEB8E7EEB5FD19C80C3D53 /* Build configuration list for PBXNativeTarget "RotelyxWatch" */;
+			buildPhases = (
+				7F1DC9FD128FE6A5E36FD81F /* Sources */,
+				E9021EFE169ADB221FBECEA6 /* Frameworks */,
+				CAA819F9B40D562B0F81C36B /* Resources */,
+				510274EBDCE5991E835796C1 /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				3CC6B55D0A408012A0E302DA /* PBXTargetDependency */,
+			);
+			name = RotelyxWatch;
+			productName = RotelyxWatch;
+			productReference = 0EF1F33AD6CB3A8090713BE2 /* RotelyxWatch.app */;
+			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
 
@@ -342,6 +604,9 @@
 				97C146ED1CF9000F007C117D /* Runner */,
 				331C8080294A63A400263BE5 /* RunnerTests */,
 				E5A1B2C3D4E5F60000000001 /* NotificationService */,
+				E62A179F9623F3F558906FF8 /* RotelyxWatch */,
+				E2FBCF31821405F71027F5CD /* RotelyxComplication */,
+				09FA37ED20B4651A488AF873 /* RotelyxWidgets */,
 			);
 		};
 /* End PBXProject section */
@@ -354,6 +619,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		7D3A5AE0C9CB38CE54EAAF9C /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				338F09183679C6D1D8D06642 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		97C146EC1CF9000F007C117D /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -363,6 +636,24 @@
 				3B3967161E833CAA004F5970 /* AppFrameworkInfo.plist in Resources */,
 				97C146FE1CF9000F007C117D /* Assets.xcassets in Resources */,
 				97C146FC1CF9000F007C117D /* Main.storyboard in Resources */,
+				00071A990F2915CBFF556687 /* message.wav in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CAA819F9B40D562B0F81C36B /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				23FA75CC89D84E5E4E8BAD53 /* Assets.xcassets in Resources */,
+				64BD7236C8F34491350D3F53 /* message.wav in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E4D2688F9909457CC152B075 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5074781BD487500C006ED782 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -454,11 +745,48 @@
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		24B280D4091FCB47B2D81CE2 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				3B471E06FCF4C2F45153F39A /* RotelyxWidgets.swift in Sources */,
+				BB88B107F84734A23DFB07AF /* Shared.swift in Sources */,
+				5EEC57E9D16B387E87C117F6 /* Burning.swift in Sources */,
+				72E5AF77B1DA339DF65F1B74 /* BurnAttributes.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		331C807D294A63A400263BE5 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 				331C808B294A63AB00263BE5 /* RunnerTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		780EE33076536731927B45E8 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				020112AB344DA23E17B3CF0E /* RotelyxComplication.swift in Sources */,
+				C930CC0838D0BFC57FBCCD00 /* Glance.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		7F1DC9FD128FE6A5E36FD81F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				DFA8F422F304648DAF6254F1 /* RotelyxWatchApp.swift in Sources */,
+				DF9E02B2A3DB96D8691F855B /* Phone.swift in Sources */,
+				7A4C6AB1E0EF3BAAA898F11C /* ConversationList.swift in Sources */,
+				1740FB7275572FD514BE28D6 /* Transcript.swift in Sources */,
+				2C1877063878776EDCDE9870 /* MyCode.swift in Sources */,
+				BC13F4394019F5B7D3C8991A /* Haptics.swift in Sources */,
+				C3C92990B31F9EF777D87D62 /* Tone.swift in Sources */,
+				CDAD21A20D90D89BC3E2F0F9 /* Sound.swift in Sources */,
+				E729C131CC29BBF794ADADC5 /* Glance.swift in Sources */,
+				A7A4A58B4B530C42E6B82C3A /* Burning.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -468,11 +796,15 @@
 			files = (
 				E5A1B2C3D4E5F60000000021 /* CallAudio.swift in Sources */,
 				E5A1B2C3D4E5F60000000031 /* Notifications.swift in Sources */,
+				E5A1B2C3D4E5F60000000033 /* WatchBridge.swift in Sources */,
 				E5A1B2C3D4E5F60000000023 /* QrCamera.swift in Sources */,
 				E5A1B2C3D4E5F60000000025 /* FilePicker.swift in Sources */,
 				E5A1B2C3D4E5F60000000017 /* SharedContainer.swift in Sources */,
 				74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */,
 				1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */,
+				D56F4B3B964B1394DB0ECEFB /* Widgets.swift in Sources */,
+				5C21C6E0B8898913B0F1A879 /* BurnActivity.swift in Sources */,
+				52FF48C396EEE66C8B7F4567 /* BurnAttributes.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -488,10 +820,28 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		1D47B120838432248B6F98B0 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = RotelyxWidgets;
+			target = 09FA37ED20B4651A488AF873 /* RotelyxWidgets */;
+			targetProxy = 0B770FB8416F9F250819463B /* PBXContainerItemProxy */;
+		};
 		331C8086294A63A400263BE5 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 97C146ED1CF9000F007C117D /* Runner */;
 			targetProxy = 331C8085294A63A400263BE5 /* PBXContainerItemProxy */;
+		};
+		3CC6B55D0A408012A0E302DA /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = RotelyxComplication;
+			target = E2FBCF31821405F71027F5CD /* RotelyxComplication */;
+			targetProxy = 634CA879D80FE5C663635BBE /* PBXContainerItemProxy */;
+		};
+		A86A4F34820E21DA888560B1 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = RotelyxWatch;
+			target = E62A179F9623F3F558906FF8 /* RotelyxWatch */;
+			targetProxy = D7B1358F16881780B54A2B50 /* PBXContainerItemProxy */;
 		};
 		E5A1B2C3D4E5F60000000012 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
@@ -578,18 +928,65 @@
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;
 				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
-				DEVELOPMENT_TEAM = WV2C9Q74L6;
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = Runner/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				"OTHER_LDFLAGS[sdk=iphoneos*]" = "$(inherited) -framework SystemConfiguration -Wl,-u,_rotelyx_abi_version -Wl,-u,_rotelyx_call -Wl,-u,_rotelyx_call_capture -Wl,-u,_rotelyx_call_close -Wl,-u,_rotelyx_call_deliver -Wl,-u,_rotelyx_call_open -Wl,-u,_rotelyx_call_playback -Wl,-u,_rotelyx_call_stats -Wl,-u,_rotelyx_net_accept -Wl,-u,_rotelyx_net_addr -Wl,-u,_rotelyx_net_close -Wl,-u,_rotelyx_net_connect -Wl,-u,_rotelyx_net_last_error -Wl,-u,_rotelyx_net_open -Wl,-u,_rotelyx_net_recv -Wl,-u,_rotelyx_net_send -Wl,-u,_rotelyx_net_shutdown -Wl,-u,_rotelyx_string_free -force_load $(SRCROOT)/Frameworks/RotelyxEngine.xcframework/ios-arm64/librotelyx_mobile.a";
-				"OTHER_LDFLAGS[sdk=iphonesimulator*]" = "$(inherited) -framework SystemConfiguration -Wl,-u,_rotelyx_abi_version -Wl,-u,_rotelyx_call -Wl,-u,_rotelyx_call_capture -Wl,-u,_rotelyx_call_close -Wl,-u,_rotelyx_call_deliver -Wl,-u,_rotelyx_call_open -Wl,-u,_rotelyx_call_playback -Wl,-u,_rotelyx_call_stats -Wl,-u,_rotelyx_net_accept -Wl,-u,_rotelyx_net_addr -Wl,-u,_rotelyx_net_close -Wl,-u,_rotelyx_net_connect -Wl,-u,_rotelyx_net_last_error -Wl,-u,_rotelyx_net_open -Wl,-u,_rotelyx_net_recv -Wl,-u,_rotelyx_net_send -Wl,-u,_rotelyx_net_shutdown -Wl,-u,_rotelyx_string_free -force_load $(SRCROOT)/Frameworks/RotelyxEngine.xcframework/ios-arm64_x86_64-simulator/librotelyx_mobile.a";
+				"OTHER_LDFLAGS[sdk=iphoneos*]" = (
+					"$(inherited)",
+					"-framework",
+					SystemConfiguration,
+					"-Wl,-u,_rotelyx_abi_version",
+					"-Wl,-u,_rotelyx_call",
+					"-Wl,-u,_rotelyx_call_capture",
+					"-Wl,-u,_rotelyx_call_close",
+					"-Wl,-u,_rotelyx_call_deliver",
+					"-Wl,-u,_rotelyx_call_open",
+					"-Wl,-u,_rotelyx_call_playback",
+					"-Wl,-u,_rotelyx_call_stats",
+					"-Wl,-u,_rotelyx_net_accept",
+					"-Wl,-u,_rotelyx_net_addr",
+					"-Wl,-u,_rotelyx_net_close",
+					"-Wl,-u,_rotelyx_net_connect",
+					"-Wl,-u,_rotelyx_net_last_error",
+					"-Wl,-u,_rotelyx_net_open",
+					"-Wl,-u,_rotelyx_net_recv",
+					"-Wl,-u,_rotelyx_net_send",
+					"-Wl,-u,_rotelyx_net_shutdown",
+					"-Wl,-u,_rotelyx_string_free",
+					"-force_load",
+					"$(SRCROOT)/Frameworks/RotelyxEngine.xcframework/ios-arm64/librotelyx_mobile.a",
+				);
+				"OTHER_LDFLAGS[sdk=iphonesimulator*]" = (
+					"$(inherited)",
+					"-framework",
+					SystemConfiguration,
+					"-Wl,-u,_rotelyx_abi_version",
+					"-Wl,-u,_rotelyx_call",
+					"-Wl,-u,_rotelyx_call_capture",
+					"-Wl,-u,_rotelyx_call_close",
+					"-Wl,-u,_rotelyx_call_deliver",
+					"-Wl,-u,_rotelyx_call_open",
+					"-Wl,-u,_rotelyx_call_playback",
+					"-Wl,-u,_rotelyx_call_stats",
+					"-Wl,-u,_rotelyx_net_accept",
+					"-Wl,-u,_rotelyx_net_addr",
+					"-Wl,-u,_rotelyx_net_close",
+					"-Wl,-u,_rotelyx_net_connect",
+					"-Wl,-u,_rotelyx_net_last_error",
+					"-Wl,-u,_rotelyx_net_open",
+					"-Wl,-u,_rotelyx_net_recv",
+					"-Wl,-u,_rotelyx_net_send",
+					"-Wl,-u,_rotelyx_net_shutdown",
+					"-Wl,-u,_rotelyx_string_free",
+					"-force_load",
+					"$(SRCROOT)/Frameworks/RotelyxEngine.xcframework/ios-arm64_x86_64-simulator/librotelyx_mobile.a",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.rotelyx.ios;
-				STRIP_STYLE = "non-global";
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRIP_STYLE = "non-global";
 				SWIFT_OBJC_BRIDGING_HEADER = "Runner/Runner-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 				VERSIONING_SYSTEM = "apple-generic";
@@ -603,7 +1000,6 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = WV2C9Q74L6;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rotelyx.ios.RunnerTests;
@@ -622,7 +1018,6 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = WV2C9Q74L6;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rotelyx.ios.RunnerTests;
@@ -639,7 +1034,6 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = WV2C9Q74L6;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rotelyx.ios.RunnerTests;
@@ -648,6 +1042,58 @@
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Runner.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Runner";
 			};
 			name = Profile;
+		};
+		38F7E108163D6A781BF9E4D0 /* Profile */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 24BB717C4247AF781764F695 /* Embedded.xcconfig */;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = NO;
+				CODE_SIGN_ENTITLEMENTS = RotelyxWidgets/RotelyxWidgets.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = RotelyxWidgets/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.rotelyx.ios.widgets;
+				PRODUCT_NAME = RotelyxWidgets;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Profile;
+		};
+		3BDDAB0077B628C414CAEA14 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 24BB717C4247AF781764F695 /* Embedded.xcconfig */;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = NO;
+				CODE_SIGN_ENTITLEMENTS = RotelyxComplication/RotelyxComplication.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = RotelyxComplication/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.rotelyx.ios.watchkitapp.glance;
+				PRODUCT_NAME = RotelyxComplication;
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "watchos watchsimulator";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				VALIDATE_PRODUCT = YES;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Release;
 		};
 		97C147031CF9000F007C117D /* Debug */ = {
 			isa = XCBuildConfiguration;
@@ -764,18 +1210,65 @@
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;
 				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
-				DEVELOPMENT_TEAM = WV2C9Q74L6;
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = Runner/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				"OTHER_LDFLAGS[sdk=iphoneos*]" = "$(inherited) -framework SystemConfiguration -Wl,-u,_rotelyx_abi_version -Wl,-u,_rotelyx_call -Wl,-u,_rotelyx_call_capture -Wl,-u,_rotelyx_call_close -Wl,-u,_rotelyx_call_deliver -Wl,-u,_rotelyx_call_open -Wl,-u,_rotelyx_call_playback -Wl,-u,_rotelyx_call_stats -Wl,-u,_rotelyx_net_accept -Wl,-u,_rotelyx_net_addr -Wl,-u,_rotelyx_net_close -Wl,-u,_rotelyx_net_connect -Wl,-u,_rotelyx_net_last_error -Wl,-u,_rotelyx_net_open -Wl,-u,_rotelyx_net_recv -Wl,-u,_rotelyx_net_send -Wl,-u,_rotelyx_net_shutdown -Wl,-u,_rotelyx_string_free -force_load $(SRCROOT)/Frameworks/RotelyxEngine.xcframework/ios-arm64/librotelyx_mobile.a";
-				"OTHER_LDFLAGS[sdk=iphonesimulator*]" = "$(inherited) -framework SystemConfiguration -Wl,-u,_rotelyx_abi_version -Wl,-u,_rotelyx_call -Wl,-u,_rotelyx_call_capture -Wl,-u,_rotelyx_call_close -Wl,-u,_rotelyx_call_deliver -Wl,-u,_rotelyx_call_open -Wl,-u,_rotelyx_call_playback -Wl,-u,_rotelyx_call_stats -Wl,-u,_rotelyx_net_accept -Wl,-u,_rotelyx_net_addr -Wl,-u,_rotelyx_net_close -Wl,-u,_rotelyx_net_connect -Wl,-u,_rotelyx_net_last_error -Wl,-u,_rotelyx_net_open -Wl,-u,_rotelyx_net_recv -Wl,-u,_rotelyx_net_send -Wl,-u,_rotelyx_net_shutdown -Wl,-u,_rotelyx_string_free -force_load $(SRCROOT)/Frameworks/RotelyxEngine.xcframework/ios-arm64_x86_64-simulator/librotelyx_mobile.a";
+				"OTHER_LDFLAGS[sdk=iphoneos*]" = (
+					"$(inherited)",
+					"-framework",
+					SystemConfiguration,
+					"-Wl,-u,_rotelyx_abi_version",
+					"-Wl,-u,_rotelyx_call",
+					"-Wl,-u,_rotelyx_call_capture",
+					"-Wl,-u,_rotelyx_call_close",
+					"-Wl,-u,_rotelyx_call_deliver",
+					"-Wl,-u,_rotelyx_call_open",
+					"-Wl,-u,_rotelyx_call_playback",
+					"-Wl,-u,_rotelyx_call_stats",
+					"-Wl,-u,_rotelyx_net_accept",
+					"-Wl,-u,_rotelyx_net_addr",
+					"-Wl,-u,_rotelyx_net_close",
+					"-Wl,-u,_rotelyx_net_connect",
+					"-Wl,-u,_rotelyx_net_last_error",
+					"-Wl,-u,_rotelyx_net_open",
+					"-Wl,-u,_rotelyx_net_recv",
+					"-Wl,-u,_rotelyx_net_send",
+					"-Wl,-u,_rotelyx_net_shutdown",
+					"-Wl,-u,_rotelyx_string_free",
+					"-force_load",
+					"$(SRCROOT)/Frameworks/RotelyxEngine.xcframework/ios-arm64/librotelyx_mobile.a",
+				);
+				"OTHER_LDFLAGS[sdk=iphonesimulator*]" = (
+					"$(inherited)",
+					"-framework",
+					SystemConfiguration,
+					"-Wl,-u,_rotelyx_abi_version",
+					"-Wl,-u,_rotelyx_call",
+					"-Wl,-u,_rotelyx_call_capture",
+					"-Wl,-u,_rotelyx_call_close",
+					"-Wl,-u,_rotelyx_call_deliver",
+					"-Wl,-u,_rotelyx_call_open",
+					"-Wl,-u,_rotelyx_call_playback",
+					"-Wl,-u,_rotelyx_call_stats",
+					"-Wl,-u,_rotelyx_net_accept",
+					"-Wl,-u,_rotelyx_net_addr",
+					"-Wl,-u,_rotelyx_net_close",
+					"-Wl,-u,_rotelyx_net_connect",
+					"-Wl,-u,_rotelyx_net_last_error",
+					"-Wl,-u,_rotelyx_net_open",
+					"-Wl,-u,_rotelyx_net_recv",
+					"-Wl,-u,_rotelyx_net_send",
+					"-Wl,-u,_rotelyx_net_shutdown",
+					"-Wl,-u,_rotelyx_string_free",
+					"-force_load",
+					"$(SRCROOT)/Frameworks/RotelyxEngine.xcframework/ios-arm64_x86_64-simulator/librotelyx_mobile.a",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.rotelyx.ios;
-				STRIP_STYLE = "non-global";
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRIP_STYLE = "non-global";
 				SWIFT_OBJC_BRIDGING_HEADER = "Runner/Runner-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
@@ -791,33 +1284,209 @@
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;
 				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
-				DEVELOPMENT_TEAM = WV2C9Q74L6;
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = Runner/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				"OTHER_LDFLAGS[sdk=iphoneos*]" = "$(inherited) -framework SystemConfiguration -Wl,-u,_rotelyx_abi_version -Wl,-u,_rotelyx_call -Wl,-u,_rotelyx_call_capture -Wl,-u,_rotelyx_call_close -Wl,-u,_rotelyx_call_deliver -Wl,-u,_rotelyx_call_open -Wl,-u,_rotelyx_call_playback -Wl,-u,_rotelyx_call_stats -Wl,-u,_rotelyx_net_accept -Wl,-u,_rotelyx_net_addr -Wl,-u,_rotelyx_net_close -Wl,-u,_rotelyx_net_connect -Wl,-u,_rotelyx_net_last_error -Wl,-u,_rotelyx_net_open -Wl,-u,_rotelyx_net_recv -Wl,-u,_rotelyx_net_send -Wl,-u,_rotelyx_net_shutdown -Wl,-u,_rotelyx_string_free -force_load $(SRCROOT)/Frameworks/RotelyxEngine.xcframework/ios-arm64/librotelyx_mobile.a";
-				"OTHER_LDFLAGS[sdk=iphonesimulator*]" = "$(inherited) -framework SystemConfiguration -Wl,-u,_rotelyx_abi_version -Wl,-u,_rotelyx_call -Wl,-u,_rotelyx_call_capture -Wl,-u,_rotelyx_call_close -Wl,-u,_rotelyx_call_deliver -Wl,-u,_rotelyx_call_open -Wl,-u,_rotelyx_call_playback -Wl,-u,_rotelyx_call_stats -Wl,-u,_rotelyx_net_accept -Wl,-u,_rotelyx_net_addr -Wl,-u,_rotelyx_net_close -Wl,-u,_rotelyx_net_connect -Wl,-u,_rotelyx_net_last_error -Wl,-u,_rotelyx_net_open -Wl,-u,_rotelyx_net_recv -Wl,-u,_rotelyx_net_send -Wl,-u,_rotelyx_net_shutdown -Wl,-u,_rotelyx_string_free -force_load $(SRCROOT)/Frameworks/RotelyxEngine.xcframework/ios-arm64_x86_64-simulator/librotelyx_mobile.a";
+				"OTHER_LDFLAGS[sdk=iphoneos*]" = (
+					"$(inherited)",
+					"-framework",
+					SystemConfiguration,
+					"-Wl,-u,_rotelyx_abi_version",
+					"-Wl,-u,_rotelyx_call",
+					"-Wl,-u,_rotelyx_call_capture",
+					"-Wl,-u,_rotelyx_call_close",
+					"-Wl,-u,_rotelyx_call_deliver",
+					"-Wl,-u,_rotelyx_call_open",
+					"-Wl,-u,_rotelyx_call_playback",
+					"-Wl,-u,_rotelyx_call_stats",
+					"-Wl,-u,_rotelyx_net_accept",
+					"-Wl,-u,_rotelyx_net_addr",
+					"-Wl,-u,_rotelyx_net_close",
+					"-Wl,-u,_rotelyx_net_connect",
+					"-Wl,-u,_rotelyx_net_last_error",
+					"-Wl,-u,_rotelyx_net_open",
+					"-Wl,-u,_rotelyx_net_recv",
+					"-Wl,-u,_rotelyx_net_send",
+					"-Wl,-u,_rotelyx_net_shutdown",
+					"-Wl,-u,_rotelyx_string_free",
+					"-force_load",
+					"$(SRCROOT)/Frameworks/RotelyxEngine.xcframework/ios-arm64/librotelyx_mobile.a",
+				);
+				"OTHER_LDFLAGS[sdk=iphonesimulator*]" = (
+					"$(inherited)",
+					"-framework",
+					SystemConfiguration,
+					"-Wl,-u,_rotelyx_abi_version",
+					"-Wl,-u,_rotelyx_call",
+					"-Wl,-u,_rotelyx_call_capture",
+					"-Wl,-u,_rotelyx_call_close",
+					"-Wl,-u,_rotelyx_call_deliver",
+					"-Wl,-u,_rotelyx_call_open",
+					"-Wl,-u,_rotelyx_call_playback",
+					"-Wl,-u,_rotelyx_call_stats",
+					"-Wl,-u,_rotelyx_net_accept",
+					"-Wl,-u,_rotelyx_net_addr",
+					"-Wl,-u,_rotelyx_net_close",
+					"-Wl,-u,_rotelyx_net_connect",
+					"-Wl,-u,_rotelyx_net_last_error",
+					"-Wl,-u,_rotelyx_net_open",
+					"-Wl,-u,_rotelyx_net_recv",
+					"-Wl,-u,_rotelyx_net_send",
+					"-Wl,-u,_rotelyx_net_shutdown",
+					"-Wl,-u,_rotelyx_string_free",
+					"-force_load",
+					"$(SRCROOT)/Frameworks/RotelyxEngine.xcframework/ios-arm64_x86_64-simulator/librotelyx_mobile.a",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.rotelyx.ios;
-				STRIP_STYLE = "non-global";
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRIP_STYLE = "non-global";
 				SWIFT_OBJC_BRIDGING_HEADER = "Runner/Runner-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 				VERSIONING_SYSTEM = "apple-generic";
 			};
 			name = Release;
 		};
+		B4F46FC1755C974119311E82 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 24BB717C4247AF781764F695 /* Embedded.xcconfig */;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = NO;
+				CODE_SIGN_ENTITLEMENTS = RotelyxWidgets/RotelyxWidgets.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = RotelyxWidgets/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.rotelyx.ios.widgets;
+				PRODUCT_NAME = RotelyxWidgets;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		CA64EEA571A6EBF5D301371F /* Profile */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 24BB717C4247AF781764F695 /* Embedded.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = RotelyxWatch/RotelyxWatch.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = RotelyxWatch/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Rotelyx;
+				MARKETING_VERSION = "$(FLUTTER_BUILD_NAME)";
+				PRODUCT_BUNDLE_IDENTIFIER = com.rotelyx.ios.watchkitapp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "watchos watchsimulator";
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				VALIDATE_PRODUCT = YES;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Profile;
+		};
+		D89227390C4C18A2EC92E70C /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 24BB717C4247AF781764F695 /* Embedded.xcconfig */;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = NO;
+				CODE_SIGN_ENTITLEMENTS = RotelyxWidgets/RotelyxWidgets.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = RotelyxWidgets/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.rotelyx.ios.widgets;
+				PRODUCT_NAME = RotelyxWidgets;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		DC6B7AA1A381B105DAF1A0FE /* Profile */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 24BB717C4247AF781764F695 /* Embedded.xcconfig */;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = NO;
+				CODE_SIGN_ENTITLEMENTS = RotelyxComplication/RotelyxComplication.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = RotelyxComplication/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.rotelyx.ios.watchkitapp.glance;
+				PRODUCT_NAME = RotelyxComplication;
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "watchos watchsimulator";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				VALIDATE_PRODUCT = YES;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Profile;
+		};
+		DF9D20730F1D1B82568A5F0B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 24BB717C4247AF781764F695 /* Embedded.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = RotelyxWatch/RotelyxWatch.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = RotelyxWatch/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Rotelyx;
+				MARKETING_VERSION = "$(FLUTTER_BUILD_NAME)";
+				PRODUCT_BUNDLE_IDENTIFIER = com.rotelyx.ios.watchkitapp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "watchos watchsimulator";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Debug;
+		};
 		E5A1B2C3D4E5F60000000008 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 9740EEB31CF90195004384FC /* Generated.xcconfig */;
+			baseConfigurationReference = 24BB717C4247AF781764F695 /* Embedded.xcconfig */;
 			buildSettings = {
 				CLANG_ENABLE_OBJC_WEAK = YES;
 				CODE_SIGN_ENTITLEMENTS = NotificationService/NotificationService.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
-				DEVELOPMENT_TEAM = WV2C9Q74L6;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = NotificationService/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
@@ -840,13 +1509,12 @@
 		};
 		E5A1B2C3D4E5F60000000009 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 9740EEB31CF90195004384FC /* Generated.xcconfig */;
+			baseConfigurationReference = 24BB717C4247AF781764F695 /* Embedded.xcconfig */;
 			buildSettings = {
 				CLANG_ENABLE_OBJC_WEAK = YES;
 				CODE_SIGN_ENTITLEMENTS = NotificationService/NotificationService.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
-				DEVELOPMENT_TEAM = WV2C9Q74L6;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = NotificationService/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
@@ -867,13 +1535,12 @@
 		};
 		E5A1B2C3D4E5F6000000000A /* Profile */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 9740EEB31CF90195004384FC /* Generated.xcconfig */;
+			baseConfigurationReference = 24BB717C4247AF781764F695 /* Embedded.xcconfig */;
 			buildSettings = {
 				CLANG_ENABLE_OBJC_WEAK = YES;
 				CODE_SIGN_ENTITLEMENTS = NotificationService/NotificationService.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
-				DEVELOPMENT_TEAM = WV2C9Q74L6;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = NotificationService/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
@@ -891,6 +1558,58 @@
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Profile;
+		};
+		F5B6792CDC6C6384541DB064 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 24BB717C4247AF781764F695 /* Embedded.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = RotelyxWatch/RotelyxWatch.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = RotelyxWatch/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Rotelyx;
+				MARKETING_VERSION = "$(FLUTTER_BUILD_NAME)";
+				PRODUCT_BUNDLE_IDENTIFIER = com.rotelyx.ios.watchkitapp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "watchos watchsimulator";
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				VALIDATE_PRODUCT = YES;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Release;
+		};
+		FF710F937FD2E245DC2EEA33 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 24BB717C4247AF781764F695 /* Embedded.xcconfig */;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = NO;
+				CODE_SIGN_ENTITLEMENTS = RotelyxComplication/RotelyxComplication.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = RotelyxComplication/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.rotelyx.ios.watchkitapp.glance;
+				PRODUCT_NAME = RotelyxComplication;
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "watchos watchsimulator";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Debug;
 		};
 /* End XCBuildConfiguration section */
 
@@ -921,6 +1640,36 @@
 				97C147061CF9000F007C117D /* Debug */,
 				97C147071CF9000F007C117D /* Release */,
 				249021D4217E4FDB00AE95B9 /* Profile */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A595E3904847C83B4C215BF7 /* Build configuration list for PBXNativeTarget "RotelyxWidgets" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D89227390C4C18A2EC92E70C /* Release */,
+				B4F46FC1755C974119311E82 /* Debug */,
+				38F7E108163D6A781BF9E4D0 /* Profile */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		AEB7A51D2E730A2CE65073CB /* Build configuration list for PBXNativeTarget "RotelyxComplication" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				3BDDAB0077B628C414CAEA14 /* Release */,
+				FF710F937FD2E245DC2EEA33 /* Debug */,
+				DC6B7AA1A381B105DAF1A0FE /* Profile */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		CFDEB8E7EEB5FD19C80C3D53 /* Build configuration list for PBXNativeTarget "RotelyxWatch" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F5B6792CDC6C6384541DB064 /* Release */,
+				DF9D20730F1D1B82568A5F0B /* Debug */,
+				CA64EEA571A6EBF5D301371F /* Profile */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

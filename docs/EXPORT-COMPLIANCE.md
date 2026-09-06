@@ -70,9 +70,13 @@ answer that moves the classification to a different branch.
 # Rotelyx Chat — App Encryption Documentation
 
 Submitted by: ideoa services uk ltd
-Apple Team ID: WV2C9Q74L6
-Apple ID: 6808406187
 Bundle ID: com.rotelyx.ios
+
+The Apple team and application identifiers are filled in when this is turned
+into the PDF, and are not kept here: this file is in a public repository and
+those numbers identify the company rather than the software. App Store Connect
+already knows both, so the copy uploaded there loses nothing by leaving them
+to the person uploading it.
 
 ## 1. Summary
 

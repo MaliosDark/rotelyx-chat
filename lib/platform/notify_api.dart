@@ -77,6 +77,10 @@ abstract class Notifier {
   /// Ask, if the platform has something to ask.
   Future<bool> request();
 
+  /// Begin taking replies typed into a notification, where the platform offers
+  /// them. Nothing where it does not.
+  void listenForReplies();
+
   /// Show one.
   Future<void> show(Notice notice);
 

@@ -125,6 +125,28 @@ class _RotelyxAppState extends State<RotelyxApp> with WidgetsBindingObserver {
   /// Nothing happens while the application is locked. A PIN that can be walked
   /// past by sending somebody a link is not a PIN, so the link is held and the
   /// unlock screen keeps the floor.
+  /// A link the system opened us with.
+  ///
+  /// One destination so far: `rotelyx://meet`, which the home screen widget
+  /// carries. Anything else is treated as an invitation, which is what a link
+  /// to this application has always meant.
+  ///
+  /// Nothing happens while the application is locked, for the reason below: a
+  /// PIN that can be walked past by sending somebody a link is not a PIN.
+  void _openLink(String link) {
+    if (!mounted) return;
+
+    if (link.trim().toLowerCase() == 'rotelyx://meet') {
+      setState(() {
+        _arriving = null;
+        if (!_locked) _surface = _Surface.pair;
+      });
+      return;
+    }
+
+    _openInvitation(link);
+  }
+
   void _openInvitation(String link) {
     final code = codeFromLink(link);
     if (code == null || code.isEmpty) return;
@@ -153,9 +175,9 @@ class _RotelyxAppState extends State<RotelyxApp> with WidgetsBindingObserver {
 
     // Invitation links, from both directions: the one this launch was started
     // by, and any tapped while it is running. See platform/incoming_link.dart.
-    _linkArrivals = incomingLinks.listen(_openInvitation);
+    _linkArrivals = incomingLinks.listen(_openLink);
     initialLink().then((link) {
-      if (link != null) _openInvitation(link);
+      if (link != null) _openLink(link);
     });
     alerts.start();
 

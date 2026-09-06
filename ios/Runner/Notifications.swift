@@ -24,6 +24,59 @@ import UserNotifications
 /// ever showed was the extension's contentless one.
 enum Notifications {
 
+    /// The category that carries the reply box, and the action inside it.
+    ///
+    /// Registered once at launch rather than per notification: iOS keys a
+    /// notification to a category by name, and a name it has never been told
+    /// about arrives with no actions and no way to say why.
+    static let category = "rotelyx.message"
+    static let replyAction = "rotelyx.reply"
+
+    /// Tell iOS what a message notification can do.
+    ///
+    /// Replying from the shade is what every other messenger does and what a
+    /// person reaches for first. It is cheap here because the application is
+    /// the one that posted the notification, so it is running and holds the
+    /// session: the text goes straight into the conversation without a screen
+    /// being opened.
+    static func registerCategory() {
+        let reply = UNTextInputNotificationAction(
+            identifier: replyAction,
+            title: "Reply",
+            options: [],
+            textInputButtonTitle: "Send",
+            textInputPlaceholder: "Message")
+
+        let category = UNNotificationCategory(
+            identifier: Notifications.category,
+            actions: [reply],
+            intentIdentifiers: [],
+            options: [])
+
+        UNUserNotificationCenter.current().setNotificationCategories([category])
+    }
+
+    /// The sound a message makes.
+    ///
+    /// `tool/sound/build.py` generates it and Android has played it since the
+    /// beginning, through the notification channel. iOS was left on
+    /// `UNNotificationSound.default`, so the same application announced itself
+    /// with its own tone on one platform and with Apple's on the other.
+    ///
+    /// The file is a bundle resource rather than a Flutter asset. A Flutter
+    /// asset lands under `flutter_assets/` with a key only Dart can resolve,
+    /// and `UNNotificationSound` takes a name it looks for in the bundle root
+    /// and in `Library/Sounds`, so it would never have found it there.
+    ///
+    /// It falls back to the system sound if the file is missing, which is the
+    /// right failure: a notification with the wrong tone still tells somebody
+    /// they have a message.
+    static let tone: UNNotificationSound = {
+        guard Bundle.main.url(forResource: "message", withExtension: "wav") != nil
+        else { return .default }
+        return UNNotificationSound(named: UNNotificationSoundName("message.wav"))
+    }()
+
     /// Whether the person allowed them, without asking again.
     static func permitted(_ result: @escaping FlutterResult) {
         UNUserNotificationCenter.current().getNotificationSettings { settings in
@@ -73,12 +126,18 @@ enum Notifications {
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = showContent ? body : "New message"
-        content.sound = silent ? nil : .default
+        content.sound = silent ? nil : Notifications.tone
 
         // Grouped by conversation, so a thread's notifications collapse
         // together the way every other messenger's do rather than stacking one
         // per message.
         content.threadIdentifier = String(id)
+
+        // What makes the reply box appear. The conversation travels with it,
+        // because the shade hands back the action and the notification and
+        // nothing else.
+        content.categoryIdentifier = Notifications.category
+        content.userInfo = ["conversation": args["conversationId"] as? String ?? ""]
 
         if showContent, let picture = (args["picture"] as? FlutterStandardTypedData)?.data,
            let attachment = attach(picture, id: id) {

@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDisplayName</key>
+	<string>Rotelyx</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleVersion</key>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<!-- Which phone application this belongs to. Without it the watch app is
+	     installed as an independent one, which this is not: it holds no key and
+	     cannot reach a mailbox on its own. -->
+	<!-- What tells the installer this bundle is a watch application rather than
+	     a folder that happens to sit under Watch/. Without it installation
+	     fails with "does not have a WKWatchKitApp or WKApplication key set to
+	     true", which names the key and not the file it belongs in.
+
+	     `WKApplication` is the modern one: `WKWatchKitApp` is the two-bundle
+	     WatchKit layout Apple retired, and this is a single SwiftUI bundle. -->
+	<key>WKApplication</key>
+	<true/>
+	<key>WKCompanionAppBundleIdentifier</key>
+	<string>com.rotelyx.ios</string>
+	<key>WKRunsIndependentlyOfCompanionApp</key>
+	<false/>
+	<key>WKWatchOnly</key>
+	<false/>
+</dict>
+</plist>

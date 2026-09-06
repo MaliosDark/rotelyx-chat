@@ -59,6 +59,11 @@ class PlatformNotifier implements Notifier {
   /// substitute, routes through Google's or Mozilla's endpoint and tells it
   /// the same thing Firebase would.
   @override
+  /// A browser notification carries no reply box.
+  @override
+  void listenForReplies() {}
+
+  @override
   bool get canStayConnected => false;
 
   @override

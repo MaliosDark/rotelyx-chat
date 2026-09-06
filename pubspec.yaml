@@ -52,6 +52,13 @@ dependencies:
   get_storage: ^2.1.1
   qr_flutter: ^4.1.0
 
+  # The encoder underneath qr_flutter, named here because two places reach it
+  # directly: `lib/rotelyx/qr_matrix.dart`, which sends a symbol to the watch as
+  # the squares it is made of rather than as a picture, and
+  # `test/qr_decode_test.dart`, which encodes one and hands it to
+  # `lib/qr/decode.dart` to prove the decoder right.
+  qr: ^3.0.2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -64,11 +71,6 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^4.0.0
-
-  # The encoder half of the QR pair. qr_flutter already pulls this in to draw
-  # codes; naming it here lets test/qr_decode_test.dart encode a symbol and hand
-  # it straight to lib/qr/decode.dart, which is what proves the decoder right.
-  qr: ^3.0.2
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

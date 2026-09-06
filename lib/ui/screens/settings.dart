@@ -8,6 +8,8 @@ library;
 import 'package:flutter/material.dart';
 
 import '../../platform/biometrics.dart';
+import '../../platform/os.dart' as os;
+import '../../platform/widgets.dart';
 import '../../rotelyx/mailboxes.dart';
 import '../../rotelyx/alerts.dart';
 import '../../rotelyx/lock.dart';
@@ -101,18 +103,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   child: ListView(
                 padding: const EdgeInsets.all(Metrics.pad),
                 children: [
-                  const _Section('Appearance'),
-                  SwitchListTile(
-                    value: widget.dark,
-                    onChanged: widget.onTheme,
-                    activeThumbColor: Tone.accent,
-                    contentPadding: EdgeInsets.zero,
-                    title: Text('Dark theme',
-                        style: Type.body.copyWith(color: t.text)),
+                  // Folded rather than laid out end to end.
+                  //
+                  // This screen had eight headings and nine hundred lines on
+                  // one scroll, which is a list nobody reads and everybody
+                  // hunts through. `_Fold` was already here and already used
+                  // for the dense half; this is the same idiom applied to the
+                  // rest, so the screen opens as a page of titles and each one
+                  // opens where it stands. Nothing was removed.
+                  const _Section('This phone'),
+                  _Fold(
+                    title: 'Appearance',
+                    summary: widget.dark ? 'Dark' : 'Light',
+                    children: [
+                      SwitchListTile(
+                        value: widget.dark,
+                        onChanged: widget.onTheme,
+                        activeThumbColor: Tone.accent,
+                        contentPadding: EdgeInsets.zero,
+                        title: Text('Dark theme',
+                            style: Type.body.copyWith(color: t.text)),
+                      ),
+                    ],
                   ),
 
-                  const SizedBox(height: Metrics.pad),
-                  const _Section('Notifications'),
+                  _Fold(
+                    title: 'Notifications',
+                    summary: _notify
+                        ? 'On for messages'
+                        : 'Off: nothing interrupts you',
+                    children: [
                   SwitchListTile(
                     value: _notify,
                     onChanged: (want) async {
@@ -231,24 +251,135 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   // condition that makes the second paragraph true.
                   RxNote(
                     rotelyx.canBeWoken
-                        ? 'Apple carries the wake and nothing else. Your phone '
-                            'is woken on a fixed schedule whether or not '
-                            'anything arrived, so what Apple sees is a '
-                            'heartbeat identical to every other phone, never '
-                            'that a message came for you. The message is '
-                            'collected and decrypted here, on this device, and '
-                            'the mailbox never learns which phone belongs to '
-                            'which conversation.'
-                        : 'No outside notification service is involved. This '
-                            'app keeps its own connection to the mailbox, so a '
-                            'message is decrypted on this phone before you are '
+                        ? 'Your phone is woken to go and look. What wakes it '
+                            'carries no message and cannot read one: the '
+                            'message is collected and opened here, on this '
+                            'device. The mailbox never learns which phone '
+                            'belongs to which conversation.'
+                        : 'This app keeps its own connection to the mailbox, so '
+                            'a message is opened on this phone before you are '
                             'told about it, and nothing beyond this device '
                             'learns that one arrived.',
                     title: 'Who tells you',
                   ),
+                    ],
+                  ),
 
-                  const SizedBox(height: Metrics.pad),
-                  const _Section('Lock'),
+                  // iOS only. Android has widgets and no complications, and a
+                  // setting for a face that does not exist is a setting that
+                  // makes somebody look for a feature they do not have.
+                  if (os.isIOS)
+                    _Fold(
+                      title: 'Apple Watch',
+                      summary: switch (store.faceDetail) {
+                        FaceDetail.nothing => 'The face shows nothing',
+                        FaceDetail.count => 'The face shows how many',
+                        FaceDetail.name => 'The face shows who',
+                      },
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: Metrics.gap),
+                          child: Text(
+                            'A watch face is on without being unlocked and it '
+                            'is pointed at whoever is opposite you. Choose how '
+                            'much of it they get to read.\n\n'
+                            'The conversation itself is never on the face. '
+                            'What you decide here is all that leaves this '
+                            'phone for the watch.',
+                            style: Type.small.copyWith(color: t.faint),
+                          ),
+                        ),
+                        RadioGroup<FaceDetail>(
+                          groupValue: store.faceDetail,
+                          onChanged: (picked) {
+                            if (picked == null) return;
+                            setState(() => store.faceDetail = picked);
+                          },
+                          child: Column(children: [
+                            for (final choice in FaceDetail.values)
+                              RadioListTile<FaceDetail>(
+                                value: choice,
+                                activeColor: Tone.accent,
+                                contentPadding: EdgeInsets.zero,
+                                title: Text(
+                                  switch (choice) {
+                                    FaceDetail.nothing => 'Nothing',
+                                    FaceDetail.count => 'How many are waiting',
+                                    FaceDetail.name => 'How many, and who',
+                                  },
+                                  style: Type.body.copyWith(color: t.text),
+                                ),
+                                subtitle: Text(
+                                  switch (choice) {
+                                    FaceDetail.nothing =>
+                                      'Just the mark, as a way back in',
+                                    FaceDetail.count =>
+                                      'A number. Nobody learns who it is with',
+                                    FaceDetail.name =>
+                                      'A glance at your wrist reads the name',
+                                  },
+                                  style: Type.small.copyWith(color: t.faint),
+                                ),
+                              ),
+                          ]),
+                        ),
+                      ],
+                    ),
+
+                  if (os.isIOS)
+                    _Fold(
+                      title: 'Widgets',
+                      summary: switch ((store.homeWidgetDetail,
+                          store.lockWidgetDetail)) {
+                        (FaceDetail.nothing, FaceDetail.nothing) => 'Off',
+                        (_, FaceDetail.nothing) => 'Home screen only',
+                        _ => 'On, including the lock screen',
+                      },
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: Metrics.gap),
+                          child: Text(
+                            'Two screens, two decisions. Your home screen is '
+                            'behind your passcode, so whoever is looking at it '
+                            'could open the app anyway. Your lock screen is '
+                            'read by whoever your phone is lying in front '
+                            'of.\n\n'
+                            'The conversation itself is never on either. What '
+                            'you refuse here is not hidden from the widget, it '
+                            'is never given to it.',
+                            style: Type.small.copyWith(color: t.faint),
+                          ),
+                        ),
+                        _WidgetChoice(
+                          title: 'On the home screen',
+                          value: store.homeWidgetDetail,
+                          onPick: (v) =>
+                              setState(() {
+                            store.homeWidgetDetail = v;
+                            refreshWidgets();
+                          }),
+                          t: t,
+                        ),
+                        const SizedBox(height: Metrics.gap),
+                        _WidgetChoice(
+                          title: 'On the lock screen',
+                          value: store.lockWidgetDetail,
+                          onPick: (v) =>
+                              setState(() {
+                            store.lockWidgetDetail = v;
+                            refreshWidgets();
+                          }),
+                          t: t,
+                        ),
+                      ],
+                    ),
+
+                  _Fold(
+                    title: 'Lock',
+                    summary: lock.isSet
+                        ? 'A PIN is asked for'
+                        : 'Anyone holding this phone can open it',
+                    children: [
                   SwitchListTile(
                     value: lock.isSet,
                     onChanged: (want) async {
@@ -309,9 +440,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     'themselves.',
                     title: 'What a PIN does and does not do',
                   ),
+                    ],
+                  ),
 
-                  const SizedBox(height: Metrics.pad),
-                  const _Section('This device'),
+                  _Fold(
+                    title: 'This device',
+                    summary: '${store.conversationIds.length} conversations',
+                    children: [
                   _Row('History',
                       store.isUnlocked ? 'Kept, encrypted' : 'Not kept'),
                   _Row('Conversations', '${store.conversationIds.length}'),
@@ -322,6 +457,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     'expires on its own. This phone holds the only copy of '
                     'anything you can still read.',
                     title: 'Where your messages live',
+                  ),
+                    ],
                   ),
 
                   const SizedBox(height: Metrics.pad),
@@ -335,7 +472,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   // that reads as is a settings screen with a developer's
                   // console mixed into it, and the effect is that the settings
                   // people actually came for are harder to find.
-                  const SizedBox(height: Metrics.pad),
                   const _Section('Privacy and protocol'),
                   _Fold(
                     title: 'Where your messages wait',
@@ -426,6 +562,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                   const SizedBox(height: Metrics.pad),
                   const _Section('About'),
+
+                  // Two rows rather than a fold: a heading called About holding
+                  // one fold called Version is the same word twice to hide two
+                  // lines.
+                  //
+                  // They answer different questions and showing only the
+                  // protocol's answered neither. The application's is what a
+                  // person compares with the store and quotes in a bug report;
+                  // the protocol's is what says whether two devices can speak
+                  // at all. Both are read from the compile-time defines Flutter
+                  // already injects from `pubspec.yaml`, rather than by taking
+                  // a dependency to ask the bundle what the build knows.
+                  _Row('Application', _appVersion),
+                  _Row('Protocol',
+                      ready ? RotelyxWasm.protocolVersion : 'not loaded'),
+
+                  const SizedBox(height: Metrics.gap),
                   const _Vendor(),
 
                   const SizedBox(height: Metrics.pad),
@@ -533,6 +686,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
 ///
 /// The mark is Rotelyx's. Ideoa Labs has no artwork in this repository, so its
 /// name is set rather than drawn, and swapping in a logo is one widget here.
+/// What `pubspec.yaml` said when this was built, as the store shows it.
+///
+/// `flutter build` puts both of these in `DART_DEFINES` for every platform, so
+/// there is nothing to install and nothing to keep in step by hand: changing
+/// the version in `pubspec.yaml` changes this.
+const _buildName = String.fromEnvironment('FLUTTER_BUILD_NAME');
+const _buildNumber = String.fromEnvironment('FLUTTER_BUILD_NUMBER');
+
+String get _appVersion {
+  if (_buildName.isEmpty) return 'development build';
+  return _buildNumber.isEmpty ? _buildName : '$_buildName ($_buildNumber)';
+}
+
 class _Vendor extends StatelessWidget {
   const _Vendor();
 
@@ -583,6 +749,57 @@ class _Vendor extends StatelessWidget {
 /// was built for somebody else. So they are one tap away rather than gone, and
 /// the summary line says in ordinary words what the rows underneath say
 /// precisely.
+/// One of the two widget surfaces, and how much it may say.
+///
+/// The same three choices as the watch face, because it is the same question
+/// asked about a different screen: nothing, a number, or a number and a name.
+class _WidgetChoice extends StatelessWidget {
+  const _WidgetChoice({
+    required this.title,
+    required this.value,
+    required this.onPick,
+    required this.t,
+  });
+
+  final String title;
+  final FaceDetail value;
+  final void Function(FaceDetail) onPick;
+  final RotelyxTheme t;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: Type.label.copyWith(color: t.text)),
+        RadioGroup<FaceDetail>(
+          groupValue: value,
+          onChanged: (picked) {
+            if (picked != null) onPick(picked);
+          },
+          child: Column(children: [
+            for (final choice in FaceDetail.values)
+              RadioListTile<FaceDetail>(
+                value: choice,
+                activeColor: Tone.accent,
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                title: Text(
+                  switch (choice) {
+                    FaceDetail.nothing => 'Nothing',
+                    FaceDetail.count => 'How many are waiting',
+                    FaceDetail.name => 'How many, and who',
+                  },
+                  style: Type.body.copyWith(color: t.text),
+                ),
+              ),
+          ]),
+        ),
+      ],
+    );
+  }
+}
+
 class _Fold extends StatefulWidget {
   const _Fold({required this.title, required this.summary, required this.children});
 

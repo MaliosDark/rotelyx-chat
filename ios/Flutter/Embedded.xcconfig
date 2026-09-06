@@ -1,0 +1,9 @@
+// What an embedded target inherits: the extension and the watch application.
+//
+// `Generated.xcconfig` is written by `flutter build` and carries the version
+// the two of them stamp into their own bundles, so both have to include it or
+// they ship with no CFBundleVersion at all. `Local.xcconfig` carries the
+// signing identity and is not committed, which is why the include is optional:
+// a checkout without it builds, and only signing fails.
+#include "Generated.xcconfig"
+#include? "Local.xcconfig"

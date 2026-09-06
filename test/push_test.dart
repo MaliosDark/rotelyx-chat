@@ -59,12 +59,23 @@ void main() {
     expect(await const NoPush().obtainToken(), isNull);
     expect(const NoPush().name, isNotEmpty);
 
-    // Settings still names the path, including what is not in it. This is a
-    // settings line, which is where `PushTransport.name` says users deserve to
-    // know whether Google is in the path; the wording that was taken out on
-    // 1 September 2026 was in the ongoing notification, where naming somebody
-    // else's service reads as an argument rather than a description.
-    expect(const ApnsPush().name, contains('Firebase'));
+    // Settings names the path, and now says who carries it rather than who
+    // does not.
+    //
+    // It used to end "Not through Firebase", and the property that wording
+    // stood for is still true: no Google service is in this path, and no
+    // Firebase library is in the binary. What changed is where that is said. A
+    // settings line naming a company the application does not use reads as an
+    // argument about somebody else rather than a description of this, and it
+    // is the kind of sentence App Review stops to weigh. The absence is
+    // asserted in `web_build_test.dart` and stated in the store listing, which
+    // are both places wording cannot quietly drift.
+    //
+    // What has to survive here is that the line says something, and that it
+    // names the two parties that really are in the path.
+    final name = const ApnsPush().name;
+    expect(name, contains('Apple'));
+    expect(name, contains('mailbox'));
   });
 
   test('nothing offers a per-tag registration', () {

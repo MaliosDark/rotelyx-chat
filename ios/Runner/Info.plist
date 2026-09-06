@@ -12,6 +12,28 @@
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
+	<!-- Live Activities. Without this the system refuses to start one and says
+	     nothing about why. See ios/Runner/BurnActivity.swift for what it
+	     carries, which is a deadline and a count and no more: it is drawn on a
+	     locked screen, which is the most public surface this phone has. -->
+	<!-- The scheme the widget opens. `rotelyx://meet` goes straight to the
+	     pairing screen with a code showing, which is what the home screen
+	     widget is for. It carries nothing: a meeting code is minted when that
+	     screen opens, never before, because one sitting in a URL is a meeting
+	     anybody who saw the URL could attend. -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>rotelyx</string>
+			</array>
+		</dict>
+	</array>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 	<key>CFBundleName</key>
 	<string>Rotelyx Chat</string>
 	<key>CFBundlePackageType</key>

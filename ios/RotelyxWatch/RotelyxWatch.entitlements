@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- The container this application and its complication share.
+	     A complication is a separate process on a timeline of its own: it is
+	     drawn when the face is drawn, long after the watch application last
+	     ran, and it cannot ask the phone anything. So the application writes
+	     what the face should say and the complication reads it. See
+	     `Glance.swift` for what is written, which is deliberately the least
+	     that can fill a complication. -->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.com.rotelyx.ios</string>
+	</array>
+</dict>
+</plist>

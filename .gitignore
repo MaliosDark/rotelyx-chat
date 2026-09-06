@@ -91,6 +91,9 @@ android/app/release/
 # committed: the lock file is what makes two machines build the same thing.
 ios/Pods/
 ios/.symlinks/
+# Where a plain `xcodebuild` puts its output, as opposed to the `build/` above
+# that `flutter build` uses. 128 MB of it, and every byte reproducible.
+ios/build/
 ios/Flutter/App.framework
 ios/Flutter/Flutter.framework
 ios/Flutter/Flutter.podspec
@@ -191,3 +194,15 @@ __pycache__/
 /rotelyx-regions.geojson
 /App-Review-Notes.txt
 /NOTAS-REVISION.txt
+
+# The signing identity for this machine. See Flutter/Embedded.xcconfig.
+/ios/Flutter/Local.xcconfig
+
+# Frames captured while working on an animation.
+#
+# A burn takes eight seconds and a screenshot takes half of one, so seeing it at
+# all means firing dozens and keeping the two that landed on the moment. The two
+# belong in `docs/screens/`; the dozens are scaffolding, and scaffolding that
+# has to be remembered about is scaffolding that eventually is not.
+docs/screens/**/frames/
+docs/screens/**/burn/

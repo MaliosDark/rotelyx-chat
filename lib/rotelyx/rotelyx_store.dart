@@ -177,6 +177,24 @@ class StoredMessage {
 }
 
 /// What comparing the safety number has established for one conversation.
+/// How much a watch face may say.
+///
+/// A face is public in a way no other screen in this application is: it is on
+/// with no unlock and it is pointed at whoever is opposite. So this exists at
+/// all, and it is the person's to set.
+enum FaceDetail {
+  /// The mark, and nothing else. The complication is a way back into the
+  /// application and says nothing about whether anybody wants you.
+  nothing,
+
+  /// How many conversations are waiting. Something is happening; who it is
+  /// with stays on the phone.
+  count,
+
+  /// The count and the most recent name.
+  name,
+}
+
 enum Verification {
   /// Nobody has compared it, and nobody has been asked to. The application
   /// interrupts once, before the first message leaves, and never again.
@@ -345,6 +363,9 @@ class RotelyxStore {
 
   static const _kProbe = 'rotelyx.probe';
   static const _kPreviews = 'rotelyx.previews';
+  static const _kFace = 'rotelyx.face';
+  static const _kHomeWidget = 'rotelyx.widget.home';
+  static const _kLockWidget = 'rotelyx.widget.lock';
   static const _kConnected = 'rotelyx.connected';
   static const _kOnSchedule = 'rotelyx.wakeOnSchedule';
   static const _kMailbox = 'rotelyx.mailbox';
@@ -391,6 +412,62 @@ class RotelyxStore {
   bool get showPreviews => _box.read(_kPreviews) as bool? ?? true;
 
   set showPreviews(bool value) => _box.write(_kPreviews, value);
+
+  /// What a watch face is allowed to show.
+  ///
+  /// A complication is read by whoever is standing next to the wrist: no
+  /// unlock, no passphrase, no intent. Some people want their watch to say who
+  /// is waiting and some want it to say nothing, and neither is this
+  /// application's decision — the one thing it should not do is choose for
+  /// them and not mention it.
+  ///
+  /// The middle setting is the default. A number says something is waiting
+  /// without saying who, which is what most people mean when they put a
+  /// messenger on a watch face.
+  ///
+  /// See `ios/RotelyxWatch/Glance.swift` for what is actually written to the
+  /// watch, which is only ever what this permits.
+  FaceDetail get faceDetail {
+    final stored = _box.read(_kFace) as String?;
+    return FaceDetail.values.firstWhere(
+      (d) => d.name == stored,
+      orElse: () => FaceDetail.count,
+    );
+  }
+
+  set faceDetail(FaceDetail value) => _box.write(_kFace, value.name);
+
+  /// What a widget on the home screen may show.
+  ///
+  /// The home screen is behind the lock, so somebody looking at it has already
+  /// been let in. A name there is a name the person holding the phone can
+  /// already read by opening the application.
+  ///
+  /// Off by default all the same. A widget nobody asked for is a decision made
+  /// about somebody's home screen on their behalf.
+  FaceDetail get homeWidgetDetail => _detail(_kHomeWidget);
+
+  set homeWidgetDetail(FaceDetail value) =>
+      _box.write(_kHomeWidget, value.name);
+
+  /// What a widget on the lock screen may show.
+  ///
+  /// A different question from the one above, and the reason there are two
+  /// settings rather than one. A locked screen is read by whoever the phone is
+  /// lying in front of: no passcode, no face, no intent. It is the most public
+  /// surface this application has.
+  FaceDetail get lockWidgetDetail => _detail(_kLockWidget);
+
+  set lockWidgetDetail(FaceDetail value) =>
+      _box.write(_kLockWidget, value.name);
+
+  FaceDetail _detail(String key) {
+    final stored = _box.read(key) as String?;
+    return FaceDetail.values.firstWhere(
+      (d) => d.name == stored,
+      orElse: () => FaceDetail.nothing,
+    );
+  }
 
   /// Whether to hold the connection while the application is not in front.
   ///

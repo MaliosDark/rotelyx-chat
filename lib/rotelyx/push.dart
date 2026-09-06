@@ -183,7 +183,7 @@ class ApnsPush implements PushTransport {
   const ApnsPush();
 
   @override
-  String get name => 'Apple, directly. Not through Firebase';
+  String get name => 'Apple, called by the mailbox directly';
 
   @override
   Future<String?> obtainToken() => applePushToken();

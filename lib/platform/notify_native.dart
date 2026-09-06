@@ -34,6 +34,28 @@ const MethodChannel _channel = MethodChannel('rotelyx/notifications');
 class PlatformNotifier implements Notifier {
   const PlatformNotifier();
 
+  /// What to do with a reply typed into a notification.
+  ///
+  /// Set by `alerts.dart`, which is the only thing above here that knows how a
+  /// message gets sent. Static because the platform calls in once and there is
+  /// one of these.
+  static Future<void> Function(String conversationId, String text)? onReply;
+
+  /// Begin taking replies from the shade. Safe to call twice.
+  @override
+  void listenForReplies() {
+    if (!_asks) return;
+    _channel.setMethodCallHandler((call) async {
+      if (call.method != 'replied') return null;
+      final args = call.arguments as Map?;
+      final id = args?['conversationId'] as String?;
+      final text = (args?['text'] as String?)?.trim() ?? '';
+      if (id == null || text.isEmpty) return null;
+      await onReply?.call(id, text);
+      return null;
+    });
+  }
+
   /// Whether this platform holds its own background connection, which is the
   /// only thing left that is Android's alone.
   bool get _wired => Platform.isAndroid;
@@ -77,6 +99,10 @@ class PlatformNotifier implements Notifier {
         // truncated: two conversations created in the same second would share
         // a truncated id and replace each other's notifications.
         'id': _slot(notice.conversationId),
+        // The real identifier as well as the slot. iOS hands a reply back with
+        // the notification it came from and nothing else, so the conversation
+        // has to travel inside it: a hash cannot be turned back into an id.
+        'conversationId': notice.conversationId,
         'title': notice.sender,
         'body': notice.body,
         'picture': notice.picture,

@@ -24,6 +24,8 @@ library;
 import 'dart:async';
 
 import '../platform/notify.dart';
+import '../platform/watch.dart';
+import '../platform/widgets.dart';
 import 'ephemeral.dart';
 import 'quoted.dart';
 import 'rotelyx_service.dart';
@@ -35,6 +37,7 @@ class Alerts {
   Alerts({Notifier? notifier}) : _notifier = notifier ?? const PlatformNotifier();
 
   final Notifier _notifier;
+  final Watch _watch = PlatformWatch();
   StreamSubscription<RotelyxMessage>? _messages;
 
   /// The conversation on screen, or null when none is.
@@ -64,6 +67,19 @@ class Alerts {
   /// Begin watching. Safe to call twice.
   void start() {
     _messages ??= rotelyx.messages.listen(_arrived);
+
+    // The watch asks this application for what it shows, so somebody has to be
+    // listening before a wrist is raised. It holds no key and reaches no
+    // server: see `lib/platform/watch_native.dart`.
+    _watch.listen();
+
+    // Replying from the notification itself, which is the thing a person
+    // reaches for before opening anything. It goes through `rotelyx.send` like
+    // any other message, and refuses the same way a screen would: a
+    // conversation that is not the live one is resumed first, and one that
+    // cannot be resumed is not written to.
+    PlatformNotifier.onReply = _reply;
+    _notifier.listenForReplies();
     showContentOnLockScreen = store.showPreviews;
     if (store.stayConnected) {
       _notifier.connect();
@@ -124,8 +140,27 @@ class Alerts {
     return held || woken;
   }
 
+  /// Send what somebody typed into a notification.
+  ///
+  /// The same refusal the conversation screen makes, for the same reason:
+  /// acting on a session that belongs to another conversation sends the words
+  /// to whoever that is.
+  Future<void> _reply(String conversationId, String text) async {
+    if (rotelyx.state != RotelyxState.joined ||
+        rotelyx.conversationId != conversationId) {
+      if (!await rotelyx.resume(conversationId)) return;
+    }
+    rotelyx.send(text);
+    await read(conversationId);
+  }
+
   /// A conversation has been read here, so whatever was showing for it goes.
-  Future<void> read(String conversationId) => _notifier.clear(conversationId);
+  Future<void> read(String conversationId) {
+    // The count has moved. A badge that only ever goes up is a badge people
+    // learn to ignore.
+    refreshWidgets();
+    return _notifier.clear(conversationId);
+  }
 
   Future<void> _arrived(RotelyxMessage message) async {
     // Ours. Sending a message from this device is not news to it.
@@ -141,6 +176,22 @@ class Alerts {
 
     final conversation = store.load(id);
     if (conversation == null) return;
+
+    // The wrist, before the decision below. A watch is told even when this
+    // conversation is open on the phone, because "open on the phone" is
+    // precisely the case where the phone is in a hand and the watch is not the
+    // thing being looked at — and being told is what keeps its list current.
+    //
+    // Muted travels with it. This used to be a bare call, so a conversation
+    // somebody had deliberately silenced went on tapping their arm: the phone
+    // was quiet about it and the watch was not, which is the half that is
+    // actually attached to the person.
+    _watch.arrived(silent: conversation.muted);
+
+    // The home and lock screens, which cannot ask. What each is allowed to
+    // carry is decided in `refreshWidgets`, and what it refuses is never
+    // written rather than written and hidden.
+    refreshWidgets();
 
     // Being looked at. The message is already on screen, and the phone
     // buzzing about it is noise.
@@ -163,10 +214,24 @@ class Alerts {
   /// The markers come off in the order they were put on, so a reply that
   /// expires reads as what was written rather than as its wrapping. An
   /// attachment has no text to show and is named by its kind instead.
+  ///
+  /// # The flame
+  ///
+  /// A message that destroys itself is one somebody has a limited time to read,
+  /// and a notification that looks like every other notification is one that
+  /// gets opened tomorrow. So it says so.
+  ///
+  /// It goes inside the text rather than beside the sender, and that placement
+  /// is the whole safeguard: the text is what a locked screen withholds when
+  /// previews are off. Put next to the name it would survive that setting, and
+  /// a flame on a lock screen tells whoever is glancing at it which message is
+  /// the one worth reading over your shoulder — which is the fact that setting
+  /// exists to keep.
   static String preview(String text) {
+    final burns = Ephemeral.isEphemeral(text);
     final body = Quoted.plain(Ephemeral.plain(text));
-    if (body.trim().isEmpty) return 'Attachment';
-    return body;
+    if (body.trim().isEmpty) return burns ? '🔥 Attachment' : 'Attachment';
+    return burns ? '🔥 $body' : body;
   }
 }
 

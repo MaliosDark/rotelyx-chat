@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- The container the application and its widgets share. The widgets read
+	     only: they are drawn by a separate process long after the application
+	     last ran, and nothing they show is decided here. -->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.com.rotelyx.ios</string>
+	</array>
+</dict>
+</plist>
