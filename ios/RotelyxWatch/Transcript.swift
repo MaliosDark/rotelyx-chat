@@ -13,7 +13,7 @@ private struct ComposerHeight: PreferenceKey {
 ///
 /// A modifier rather than a branch in the body, so that the fire wraps the
 /// capsule alone. Written as an `if` around the whole row, it took the row's
-/// size — and the row is as wide as the watch.
+/// size, and the row is as wide as the watch.
 private struct BurnWhenDue: ViewModifier {
     let going: Bool
     let onGone: () -> Void
@@ -31,7 +31,7 @@ private struct BurnWhenDue: ViewModifier {
 ///
 /// Redrawn once a second by a schedule the system owns rather than by a timer
 /// of ours, so a conversation full of expiring messages costs one clock rather
-/// than one each — which on a wrist is the difference between a feature and a
+/// than one each, which on a wrist is the difference between a feature and a
 /// flat battery.
 private struct Countdown: View {
     let to: Date
@@ -200,9 +200,9 @@ struct Transcript: View {
                 //
                 // It came and went with the scroll for a while, on the argument
                 // that a watch screen is too small to park a control on. Three
-                // separate bugs came out of that — it hid once and never
+                // separate bugs came out of that: it hid once and never
                 // returned, it appeared over the last message, it stayed away
-                // at the end of the conversation — and every one of them was a
+                // at the end of the conversation, and every one of them was a
                 // measurement racing another measurement.
                 //
                 // The transcript reserves its room instead, so nothing is ever
@@ -237,7 +237,7 @@ struct Transcript: View {
     ///
     /// Dictation is in there and this does not advertise it. A microphone was
     /// tried and taken out again: watchOS gives no way to open dictation
-    /// directly, so the icon promised a thing it could not do — tapping it
+    /// directly, so the icon promised a thing it could not do: tapping it
     /// still landed on the chooser, and an icon that names one of four options
     /// and then does not take you to it is worse than one that names none.
     private var composer: some View {
@@ -302,7 +302,7 @@ struct Transcript: View {
 
                 // The flame beside the words, the way the phone marks the same
                 // message. Without it a message that destroys itself looked
-                // exactly like one that does not, right up until it vanished —
+                // exactly like one that does not, right up until it vanished,
                 // and by then knowing is no use.
                 HStack(alignment: .top, spacing: 4) {
                     if message.burns {
@@ -318,7 +318,7 @@ struct Transcript: View {
                             // Seconds alone under a minute. `Text(timerInterval:)`
                             // was doing this and always wrote "0:19", which
                             // spends four characters of a very small screen
-                            // saying that no minutes remain — and nineteen
+                            // saying that no minutes remain, and nineteen
                             // seconds is a number, not a time of day.
                             if let deadline = message.deadline {
                                 Countdown(to: deadline)
@@ -348,7 +348,7 @@ struct Transcript: View {
                     // hundred points instead of across the message, and the
                     // tear came out as a line drawn over the conversation with
                     // sparks scattered along it. A fire has to be the size of
-                    // the thing that is burning — `lib/ui/burn.dart` learned
+                    // the thing that is burning: `lib/ui/burn.dart` learned
                     // the same lesson and says so.
                     .modifier(BurnWhenDue(going: going,
                                           onGone: { phone.forget(message) }))

@@ -6,8 +6,8 @@
 /// a wrist is the matrix itself: the wrong orientation, a transposed row, a
 /// symbol that is not square.
 ///
-/// So this feeds the rows to the application's own decoder — the one behind the
-/// camera in `lib/qr/decode.dart` — and checks the code comes back. If the
+/// So this feeds the rows to the application's own decoder: the one behind the
+/// camera in `lib/qr/decode.dart`, and checks the code comes back. If the
 /// watch ever shows something unreadable, this fails first.
 library;
 

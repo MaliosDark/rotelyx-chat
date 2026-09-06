@@ -43,7 +43,7 @@ enum Haptics {
     ///
     /// Three taps, quickening and then stopping dead: something catches, takes,
     /// and is gone. It is the only rhythm in the application that ends rather
-    /// than resolves, which is what makes it recognisable without looking — and
+    /// than resolves, which is what makes it recognisable without looking, and
     /// looking is exactly what somebody may not be doing when a message burns
     /// on their wrist.
     static func burning() {

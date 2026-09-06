@@ -41,7 +41,7 @@ This is the half that was missing, and it fails silently in the worst way: the
 build succeeds, the application launches, and it reports that the engine is not
 loaded. `-force_load` loads the objects; it does not anchor them. Release builds
 run `-dead_strip`, and in an executable a global symbol is not a root of that
-walk — only the entry point and what it reaches. So the linker pulled in 119 MB
+walk: only the entry point and what it reaches. So the linker pulled in 119 MB
 and then threw all of it away, and the finished binary was 400 KB with not one
 engine symbol in it.
 

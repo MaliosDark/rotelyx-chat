@@ -4,7 +4,7 @@
 ///
 /// A widget draws what is in the shared container and nothing else, so a
 /// setting enforced at this end is a setting the widget cannot get wrong.
-/// Choosing "nothing" does not mean a name is written and then hidden — it
+/// Choosing "nothing" does not mean a name is written and then hidden: it
 /// means no name is written. What is refused never leaves the application.
 ///
 /// # Why there are two of everything
@@ -103,7 +103,7 @@ void refreshWidgets() {
 ///
 /// Every other surface here is off until somebody turns it on, because every
 /// other surface says something about who is talking to you. This says how long
-/// is left and nothing else — no name, no conversation, not a word of the
+/// is left and nothing else: no name, no conversation, not a word of the
 /// message. It leaks less than the notification that already arrived.
 ///
 /// And it is the one thing in this application with real urgency. A message you

@@ -16,6 +16,7 @@ import '../rotelyx/alerts.dart';
 import '../rotelyx/call_state.dart';
 import '../rotelyx/calls.dart';
 import '../rotelyx/lock.dart';
+import '../rotelyx/rotelyx_service.dart';
 import '../rotelyx/rotelyx_store.dart';
 import 'screens/home.dart';
 import 'screens/pair.dart';
@@ -145,6 +146,23 @@ class _RotelyxAppState extends State<RotelyxApp> with WidgetsBindingObserver {
     }
 
     _openInvitation(link);
+  }
+
+  /// Listen again at a meeting handed out before this launch.
+  ///
+  /// An invitation used to carry the inviter's keys, so it worked whether or
+  /// not their phone was on. It carries a place now, because keys made a link
+  /// three thousand characters long, and a place only works if somebody is
+  /// standing at it. This is what stands at it.
+  ///
+  /// After the passphrase and not before: the meeting is sealed with the same
+  /// key everything else is, and there is nothing to open until then.
+  ///
+  /// Nothing is shown either way. Somebody who invited a person yesterday is
+  /// not asking about it on the way to their conversations, and a screen that
+  /// announces what it is quietly doing is a screen in the way.
+  void _listenForAnInvitation() {
+    unawaited(rotelyx.resumeWaiting());
   }
 
   void _openInvitation(String link) {
@@ -294,7 +312,10 @@ class _RotelyxAppState extends State<RotelyxApp> with WidgetsBindingObserver {
     if (_surface == _Surface.unlock) {
       return UnlockScreen(
         key: const ValueKey('unlock'),
-        onReady: () => setState(() => _surface = _Surface.home),
+        onReady: () {
+          setState(() => _surface = _Surface.home);
+          _listenForAnInvitation();
+        },
       );
     }
 

@@ -5,9 +5,9 @@ import WatchKit
 ///
 /// # This is `shaders/burn.frag`, arithmetic for arithmetic
 ///
-/// The phone burns a message with a fragment shader. The watch cannot run it —
+/// The phone burns a message with a fragment shader. The watch cannot run it:
 /// `ShaderLibrary` and `colorEffect` are unavailable on watchOS, which the
-/// compiler will tell you plainly — so the same field is evaluated here on the
+/// compiler will tell you plainly, so the same field is evaluated here on the
 /// processor and drawn with `Canvas`.
 ///
 /// Ported rather than reinvented, and the difference matters. An effect written
@@ -45,7 +45,7 @@ struct Burning<Content: View>: View {
     private let seed = CGFloat.random(in: 0...10)
 
     /// When the fire caught. Nil until the view has settled, which keeps the
-    /// first frame out of the same transaction as the view's own insertion —
+    /// first frame out of the same transaction as the view's own insertion:
     /// an earlier version began in `onAppear` and was drawn already finished.
     @State private var began: Date?
 
@@ -54,8 +54,8 @@ struct Burning<Content: View>: View {
         //
         // `withAnimation` was how this ran once, and it is why the fire was
         // invisible: it sets a value and lets SwiftUI interpolate whatever is
-        // animatable between the two ends. A height interpolates — so the
-        // message really was consumed — but anything written as a condition is
+        // animatable between the two ends. A height interpolates, so the
+        // message really was consumed, but anything written as a condition is
         // evaluated at the final value and nowhere in between, and at the end
         // of a burn every ember is out. Eight seconds of fire drawn at zero.
         TimelineView(.animation(paused: began == nil)) { tick in
@@ -92,7 +92,7 @@ struct Burning<Content: View>: View {
     /// The shader asks "is this pixel past the front"; here the question is
     /// turned around and the row is solved for. `front` in the shader is the
     /// row itself, so the equation is `y + wander(x, y) + fray(x, y) =
-    /// threshold`, and two rounds of substitution settle it — the two noise
+    /// threshold`, and two rounds of substitution settle it: the two noise
     /// terms move the answer by less than a third of the height between them,
     /// so there is nothing for a third round to find.
     private func tearRow(atColumn ux: CGFloat, aspect: CGFloat, threshold: CGFloat) -> CGFloat {
@@ -190,7 +190,7 @@ struct Burning<Content: View>: View {
     /// Sparks thrown off the front. `uMode` two.
     ///
     /// Twenty four, each entirely determined by its index and the seed, so
-    /// there is no state to keep and nothing to update per frame — the same
+    /// there is no state to keep and nothing to update per frame: the same
     /// bargain the shader makes.
     private func embers(_ c: GraphicsContext, _ canvas: CGSize, _ bubble: CGSize, _ progress: CGFloat) {
         // Where the message sits inside the larger canvas.

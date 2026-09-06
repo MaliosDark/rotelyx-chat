@@ -5,7 +5,7 @@ import Foundation
 ///
 /// Deliberately thin. A Live Activity sits on a locked screen and in the
 /// Dynamic Island, where anybody near the phone can read it, so what travels is
-/// a deadline and a count — never who it is from and never a word of what it
+/// a deadline and a count: never who it is from and never a word of what it
 /// says. The countdown is drawn by the system from `burnsAt`, which means the
 /// number ticks without this application waking up to move it.
 ///

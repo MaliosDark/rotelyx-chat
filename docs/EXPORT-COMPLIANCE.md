@@ -17,10 +17,10 @@ statement of fact that follows from it. **Neither is legal advice.**
 Apple's own wording lists two triggers, and this application meets the second:
 
   * algorithms that are proprietary or not accepted as standard by an
-    international standards body — **not this application**, everything here is
+    international standards body: **not this application**, everything here is
     an RFC or a FIPS
   * standard algorithms used **instead of, or in addition to**, the encryption
-    inside Apple's operating system — **this one**, because the protocol is
+    inside Apple's operating system: **this one**, because the protocol is
     compiled into the binary rather than called out to the platform
 
 That is the same reason `ITSAppUsesNonExemptEncryption` is true rather than
@@ -67,7 +67,7 @@ answer that moves the classification to a different branch.
 
 ---
 
-# Rotelyx Chat — App Encryption Documentation
+# Rotelyx Chat: App Encryption Documentation
 
 Submitted by: ideoa services uk ltd
 Bundle ID: com.rotelyx.ios
@@ -106,8 +106,8 @@ standards body. None is proprietary and none is unpublished.
 
 There is no cryptography of the submitter's own design and no modification to
 any of the above. "Non-standard cryptography" as the U.S. Export Administration
-Regulations define it — proprietary or unpublished cryptographic functionality
-— is not present in this application.
+Regulations define it, proprietary or unpublished cryptographic functionality,
+is not present in this application.
 
 ## 3. Publicly available source code
 

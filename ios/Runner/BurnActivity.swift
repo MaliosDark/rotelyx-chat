@@ -19,7 +19,7 @@ import Foundation
 ///
 /// The activity is handed a date, and `Text(timerInterval:)` in the extension
 /// counts towards it. So the countdown ticks on a locked phone without this
-/// process waking once a second to move it — which on a battery is the
+/// process waking once a second to move it, which on a battery is the
 /// difference between a feature and a complaint.
 @available(iOS 16.2, *)
 enum BurnActivity {

@@ -22,15 +22,43 @@ import WidgetKit
 private struct Flame: View {
     let size: Font
 
+    /// How many are burning. The number rides on the flame when there is more
+    /// than one, because the compact island is the only thing most people ever
+    /// see: the count was in the expanded view, which nobody opens, so a
+    /// single message and five looked identical.
+    ///
+    /// Nothing at one. A badge reading "1" is a badge that has to be read to
+    /// learn there was nothing to learn.
+    var count: Int = 1
+
     var body: some View {
-        let flame = Image(systemName: "flame.fill")
+        flame
+            .overlay(alignment: .topTrailing) {
+                if count > 1 {
+                    Text("\(count)")
+                        .font(.system(size: 9, weight: .bold, design: .rounded))
+                        .foregroundStyle(.black)
+                        .padding(.horizontal, 3)
+                        .padding(.vertical, 1)
+                        .background(.orange, in: Capsule())
+                        // Off the flame's shoulder rather than over it, so the
+                        // shape underneath still reads as fire at a glance.
+                        .offset(x: 7, y: -5)
+                        .fixedSize()
+                }
+            }
+    }
+
+    @ViewBuilder
+    private var flame: some View {
+        let mark = Image(systemName: "flame.fill")
             .font(size)
             .foregroundStyle(.orange)
 
         if #available(iOS 17.0, *) {
-            flame.symbolEffect(.pulse, options: .repeating)
+            mark.symbolEffect(.pulse, options: .repeating)
         } else {
-            flame
+            mark
         }
     }
 }
@@ -48,7 +76,7 @@ private struct Flame: View {
 ///
 /// Live Activities are used for deliveries, matches, timers and confirmation
 /// codes; Signal uses one for a call in progress. Nothing uses one for a
-/// message that expires — and an expiring message is the exact shape Apple
+/// message that expires, and an expiring message is the exact shape Apple
 /// designed them for, something with a clear beginning and a clear end.
 ///
 /// It is also the one thing in this application with real urgency. A message
@@ -59,7 +87,7 @@ struct BurningActivity: Widget {
         ActivityConfiguration(for: BurnAttributes.self) { context in
             // The lock screen.
             HStack(spacing: 10) {
-                Flame(size: .title3)
+                Flame(size: .title3, count: context.state.waiting)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(context.state.waiting > 1
@@ -86,7 +114,7 @@ struct BurningActivity: Widget {
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    Flame(size: .title2)
+                    Flame(size: .title2, count: context.state.waiting)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
                     Text(timerInterval: Date.now...context.state.burnsAt,
@@ -103,7 +131,7 @@ struct BurningActivity: Widget {
                         .font(.caption)
                 }
             } compactLeading: {
-                Flame(size: .body)
+                Flame(size: .body, count: context.state.waiting)
             } compactTrailing: {
                 Text(timerInterval: Date.now...context.state.burnsAt,
                      countsDown: true)
@@ -111,7 +139,7 @@ struct BurningActivity: Widget {
                     .foregroundStyle(.orange)
                     .frame(width: 38)
             } minimal: {
-                Flame(size: .body)
+                Flame(size: .body, count: context.state.waiting)
             }
         }
     }

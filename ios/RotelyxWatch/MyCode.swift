@@ -14,7 +14,7 @@ import WatchKit
 /// waits at the place it names, does the handshake and keeps the conversation.
 /// This is a surface to point a camera at, which is the whole of what a watch
 /// is for here. Turn the wrist away and the phone is still the only thing
-/// holding a key — the same bargain as the rest of this application.
+/// holding a key: the same bargain as the rest of this application.
 ///
 /// # Why the squares arrive rather than the string
 ///
@@ -32,7 +32,7 @@ struct MyCode: View {
     /// after the phone has minted one and reached a mailbox, so a picture of
     /// this screen would otherwise need a person and a working network. This is
     /// one real symbol for one dead meeting code, produced by the encoder in
-    /// `lib/rotelyx/qr_matrix.dart` — the same rows the phone would have sent.
+    /// `lib/rotelyx/qr_matrix.dart`: the same rows the phone would have sent.
     ///
     /// `#if DEBUG`, so no released build carries it or the flag that shows it.
     #if DEBUG
@@ -162,7 +162,7 @@ struct MyCode: View {
 ///
 /// The mark is not decoration and it is not free either: it covers modules.
 /// `logoShare` on the phone is 0.24 of the width, chosen against error
-/// correction H, and it is the same fraction here — a symbol that looks like
+/// correction H, and it is the same fraction here: a symbol that looks like
 /// the phone's but eats more of itself is one that scans on a desk and fails
 /// in a doorway. The white ring around the mark separates it from the modules
 /// beside it so a scanner reads a boundary rather than a smear.

@@ -84,12 +84,64 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void dispose() {
     _arrivals?.cancel();
+    _nextBurn?.cancel();
     super.dispose();
   }
 
-  void _reload() => setState(() => _conversations = store.loadAll());
+  void _reload() {
+    setState(() => _conversations = store.loadAll());
+    _waitForTheNextBurn();
+  }
 
-  /// Pinned first, then by when something last happened.
+  /// Wakes the list at the moment the soonest message destroys itself.
+  ///
+  /// Without it the order goes stale exactly where it matters. A countdown
+  /// starts when a message is read, not when it arrives, so the reload that
+  /// arrival triggers happens too early to see it; and when the message finally
+  /// goes, nothing tells the list to stop putting that conversation at the top.
+  ///
+  /// One timer, set for the next deadline, rather than a tick every second.
+  /// This screen is open for as long as somebody is deciding who to talk to,
+  /// and a clock running through all of that to change nothing is a clock on a
+  /// battery. When nothing is counting there is no timer at all.
+  Timer? _nextBurn;
+
+  void _waitForTheNextBurn() {
+    _nextBurn?.cancel();
+    _nextBurn = null;
+
+    DateTime? soonest;
+    for (final c in _conversations) {
+      final at = c.burnsAt;
+      if (at == null) continue;
+      if (soonest == null || at.isBefore(soonest)) soonest = at;
+    }
+    if (soonest == null) return;
+
+    // A moment past it, so the message is already gone when the list looks
+    // again rather than caught mid-burn and shown one last time.
+    final wait = soonest.difference(DateTime.now()) +
+        const Duration(milliseconds: 300);
+
+    _nextBurn = Timer(wait.isNegative ? Duration.zero : wait, () {
+      if (mounted) _reload();
+    });
+  }
+
+  /// Pinned first, then whatever is burning, then by when something last
+  /// happened.
+  ///
+  /// # Why a burning conversation climbs
+  ///
+  /// Everything else in this list can be read later. A message counting down
+  /// cannot: when it goes it is gone, and there is no version of it left
+  /// anywhere to go back to. Sorting it by when it arrived puts the one thing
+  /// with a deadline underneath everything without one, which is exactly
+  /// backwards, and on a long list it puts it off the screen.
+  ///
+  /// Soonest first among them, so the order is the order they will disappear
+  /// in. Pinned still wins: pinning is somebody saying where they want a
+  /// conversation, and moving it because of a timer would be overruling them.
   ///
   /// Sorted here rather than in the store, because "pinned" is a fact about
   /// this device's list and the store holds conversations rather than an
@@ -98,6 +150,12 @@ class _HomeScreenState extends State<HomeScreen> {
     final out = List<StoredConversation>.of(all);
     out.sort((a, b) {
       if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
+
+      final burnA = a.burnsAt;
+      final burnB = b.burnsAt;
+      if ((burnA == null) != (burnB == null)) return burnA != null ? -1 : 1;
+      if (burnA != null && burnB != null) return burnA.compareTo(burnB);
+
       return b.lastActivity.compareTo(a.lastActivity);
     });
     return out;

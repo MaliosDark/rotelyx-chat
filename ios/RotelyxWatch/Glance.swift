@@ -14,7 +14,7 @@ import WidgetKit
 /// So this is the one thing on the watch that survives the application closing,
 /// and it is kept to the least that can fill a complication: how many
 /// conversations are waiting and who the most recent one is with. No message
-/// text, ever — a preview on a watch face is a message published to the room.
+/// text, ever: a preview on a watch face is a message published to the room.
 ///
 /// It is not sealed, because a shared container the operating system already
 /// isolates per application is what a complication can read and a passphrase is

@@ -13,7 +13,7 @@ import WidgetKit
 /// # Why it says a number and a name and no more
 ///
 /// A complication is read by whoever is standing next to the wrist. It is on
-/// screen with no unlock, no passphrase and no intent — a face is a thing other
+/// screen with no unlock, no passphrase and no intent: a face is a thing other
 /// people look at. So there is no message text here at any size, including the
 /// rectangular one that has room for it. `Glance` holds what is shown and
 /// nothing else is available to hold.
@@ -49,7 +49,7 @@ struct Entry: TimelineEntry {
 /// Where the face's content comes from.
 ///
 /// One entry, never expiring. The watch application reloads the timeline the
-/// moment anything changes — see `Glance.write` — so a schedule here would be
+/// moment anything changes: see `Glance.write`, so a schedule here would be
 /// the system asking a question whose answer is already sitting in the
 /// container, spending battery to learn nothing.
 struct Provider: TimelineProvider {

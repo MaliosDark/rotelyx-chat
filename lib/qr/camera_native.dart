@@ -53,7 +53,22 @@ class CameraFeed {
   /// Flutter owns, so the preview composites with everything drawn over it
   /// instead of punching a hole through the layer tree. The overlay the scanner
   /// screen draws on top would not be possible with a platform view.
-  Widget preview() => Texture(textureId: _texture, filterQuality: FilterQuality.low);
+  /// Filled, not stretched.
+  ///
+  /// The bare `Texture` went straight into a square viewfinder that expands its
+  /// children, so a frame that is taller than it is wide was squeezed sideways
+  /// and everything in it leaned. Covering crops the long side instead, which
+  /// is what a viewfinder is meant to do: what you see in the square is what
+  /// the camera has, at the shape the camera has it.
+  Widget preview() => FittedBox(
+        fit: BoxFit.cover,
+        clipBehavior: Clip.hardEdge,
+        child: SizedBox(
+          width: width.toDouble(),
+          height: height.toDouble(),
+          child: Texture(textureId: _texture, filterQuality: FilterQuality.low),
+        ),
+      );
 
   static Future<CameraFeed> open() async {
     final permitted = await _invoke<bool>('permit') ?? false;

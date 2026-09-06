@@ -116,7 +116,9 @@ class _PairScreenState extends State<PairScreen> {
   String? get _arrivingMailbox {
     final code = codeFromLink(_code.text);
     if (code == null || code.isEmpty) return null;
-    return mailboxFromCode(code);
+
+    // A meeting link says where beside the code; an invitation says it inside.
+    return mailboxFromLink(_code.text) ?? mailboxFromCode(code);
   }
 
   PairingRole? _role;
@@ -538,8 +540,12 @@ class _PairScreenState extends State<PairScreen> {
             borderRadius: BorderRadius.circular(Metrics.radius),
             border: Border.all(color: t.line),
           ),
-          child: Text(
-            '${code.substring(0, 64)}...',
+          child: SelectableText(
+            // Whole, not truncated. The old invitation was three thousand
+            // characters and had to be cut with an ellipsis, which meant the
+            // thing on screen was never the thing being sent and could not be
+            // read back to somebody over the phone. This is fifty.
+            meetingLink(code, rotelyx.mailboxUrl),
             style: Type.small.copyWith(color: t.faint, fontFamily: 'monospace'),
           ),
         ),
@@ -549,19 +555,19 @@ class _PairScreenState extends State<PairScreen> {
         const SizedBox(height: 4),
         Text(
             () {
-              final at = expiryOfCode(code);
-              if (at == null) {
+              if (_invitationLife == Duration.zero) {
                 return 'This one has no time limit. Whoever opens it first '
                     'becomes the other side of the conversation.';
               }
-              final left = at.difference(DateTime.now());
+              final left = _invitationLife;
               final when = left.inHours >= 24
                   ? '${left.inDays} day${left.inDays == 1 ? '' : 's'}'
                   : left.inHours >= 1
                       ? '${left.inHours} hour${left.inHours == 1 ? '' : 's'}'
                       : '${left.inMinutes} minutes';
-              return 'Good for $when. Whoever opens it first becomes the '
-                  'other side of the conversation.';
+              return 'Good for $when, whether or not this app is open. '
+                  'Whoever opens it first becomes the other side of the '
+                  'conversation.';
             }(),
             textAlign: TextAlign.center,
             style: Type.small.copyWith(color: t.faint)),
@@ -570,7 +576,7 @@ class _PairScreenState extends State<PairScreen> {
             icon: Icons.ios_share,
             wide: true,
             onTap: () async {
-              final link = inviteLink(code);
+              final link = meetingLink(code, rotelyx.mailboxUrl);
               final shared = await shareText(link,
                   title: 'Invite someone to Rotelyx',
                   subject: 'A private conversation');
@@ -588,7 +594,8 @@ class _PairScreenState extends State<PairScreen> {
             icon: Icons.link,
             wide: true,
             onTap: () async {
-              await Clipboard.setData(ClipboardData(text: inviteLink(code)));
+              await Clipboard.setData(
+                  ClipboardData(text: meetingLink(code, rotelyx.mailboxUrl)));
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Link copied')));
@@ -652,12 +659,23 @@ class _PairScreenState extends State<PairScreen> {
             icon: Icons.mail_outline,
             wide: true,
             onTap: () => _attempt(() async {
-                  final c = await rotelyx.createInvitation(
+                  // A meeting code, not the keys.
+                  //
+                  // The invitation that carried them came to three thousand
+                  // characters, and no messaging application makes a URL that
+                  // long tappable: it showed the start, cut the rest, and what
+                  // was cut could not be copied either. See `invite_link.dart`.
+                  //
+                  // The keys stay on this phone and the meeting is written
+                  // down, so closing the application does not withdraw the
+                  // invitation: the next launch listens at the same place, and
+                  // whoever was invited deposits whenever they get round to it.
+                  final code = await rotelyx.inviteByMeetingCode(
                     displayName: _name.text.trim(),
                     validFor: _invitationLife,
                   );
-                  if (mounted) setState(() => _invitation = c);
-                })),
+                  if (mounted) setState(() => _invitation = code);
+                }, role: PairingRole.host)),
         const SizedBox(height: Metrics.pad),
         Row(children: [
           Expanded(child: Divider(color: t.line)),
@@ -691,11 +709,26 @@ class _PairScreenState extends State<PairScreen> {
                         'that invitation could not be opened. It may have been '
                         'used already, or expired.');
                   }
+
+                  // A meeting link first, because that is what this build
+                  // hands out. An invitation carrying keys is still accepted:
+                  // they were sent before this and somebody's is sitting in a
+                  // chat somewhere waiting to be opened.
+                  final meeting =
+                      readMeetingCode(meetingFromLink(_code.text) ?? '');
+                  if (meeting != null) {
+                    return rotelyx.pairByMeetingCode(
+                      code: meeting,
+                      displayName: _name.text.trim(),
+                      role: PairingRole.guest,
+                    );
+                  }
+
                   return rotelyx.acceptInvitation(
                     code: code,
                     displayName: _name.text.trim(),
                   );
-                })),
+                }, role: PairingRole.guest)),
         const SizedBox(height: Metrics.pad),
         const RxNote(
           'Use this when you cannot be together and cannot speak. The link '

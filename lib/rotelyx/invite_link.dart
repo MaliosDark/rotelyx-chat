@@ -22,11 +22,30 @@
 /// to report: no error, no timeout worth showing, just a conversation that
 /// never starts. So the invitation says where to meet.
 ///
+/// # Why a link carries a meeting code and not the keys
+///
+/// It used to carry the whole invitation: a key package and a hybrid public
+/// key, base64 inside base64, which came to about three thousand characters.
+/// No messaging application turns a URL that long into something you can tap.
+/// WhatsApp showed the beginning, cut the rest, and what was cut could not be
+/// copied either, so the invitation arrived visibly broken.
+///
+/// `meeting_code.dart` had already met this and answered it for the QR, where
+/// the limit is the symbol rather than the chat bubble: the code does not carry
+/// keys, it names a place, and the keys go over the mailbox where their size
+/// costs nothing. A link has the same problem and takes the same answer. Fifty
+/// characters instead of three thousand.
+///
+/// What it costs is one round trip: the invited side has to say hello and be
+/// answered rather than replying to keys it was handed. That is what the QR has
+/// always done.
+///
 /// # What this deliberately does not do
 ///
-/// It does not shorten anything. A short link is a lookup on somebody's server,
-/// which turns an invitation nobody can see into an invitation one host resolves
-/// and could keep. The code is long and it stays long.
+/// It does not shorten anything through a service. A short link is a lookup on
+/// somebody's server, which turns an invitation nobody can see into one host
+/// that resolves it and could keep it. This is short because it carries less,
+/// not because somebody else is holding the rest.
 library;
 
 import 'dart:convert';
@@ -44,6 +63,43 @@ const invitePath = '/i';
 
 /// Wrap a raw invitation code into something sendable.
 String inviteLink(String code) => 'https://$inviteHost$invitePath#$code';
+
+/// Which mailbox a link's code is separated from its host by.
+///
+/// A tilde, because base32 and base64 both leave it alone and no URL escaping
+/// touches it, so what is typed is what arrives.
+const _mailboxMark = '~';
+
+/// A link that carries a meeting code and where to meet.
+///
+/// The host travels because the code cannot imply it. Two people whose builds
+/// point at different mailboxes wait in places the other never visits, and
+/// neither side has anything to show for it: no error, no timeout worth
+/// reporting, a conversation that simply never starts.
+String meetingLink(String code, String mailbox) =>
+    'https://$inviteHost$invitePath#$code$_mailboxMark$mailbox';
+
+/// The meeting code in a link, or null when it carries none.
+String? meetingFromLink(String input) {
+  final fragment = codeFromLink(input);
+  if (fragment == null) return null;
+
+  final at = fragment.indexOf(_mailboxMark);
+  return at < 0 ? fragment : fragment.substring(0, at);
+}
+
+/// The mailbox a meeting link names, or null when it names none.
+///
+/// Null covers a link from a build before this and is not a failure: the
+/// honest answer for those is whatever this one is configured with.
+String? mailboxFromLink(String input) {
+  final fragment = codeFromLink(input);
+  if (fragment == null) return null;
+
+  final at = fragment.indexOf(_mailboxMark);
+  if (at < 0 || at + 1 >= fragment.length) return null;
+  return fragment.substring(at + 1);
+}
 
 /// The code inside a link, or null when this is not one.
 ///

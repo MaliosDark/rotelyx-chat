@@ -90,7 +90,7 @@ struct HomeFace: View {
 /// in front of each other, one holding up a code. That was four taps from the
 /// home screen; this is one.
 ///
-/// It carries nothing. The code is minted when the screen opens, not here — a
+/// It carries nothing. The code is minted when the screen opens, not here: a
 /// meeting code lives for one handshake, and one sitting on a home screen for a
 /// fortnight would be a meeting anybody who had seen the screen could attend.
 struct MeetWidget: Widget {
@@ -166,7 +166,7 @@ struct LockFace: View {
     var body: some View {
         switch family {
         case .accessoryInline:
-            // The system owns this row's look — it sits beside the date — so it
+            // The system owns this row's look: it sits beside the date, so it
             // gets no colour and no font of ours. Fighting it produces a widget
             // that looks broken rather than branded.
             Text(glance.waiting == 0 ? "Rotelyx" : "Rotelyx · \(glance.waiting)")
@@ -214,7 +214,7 @@ struct LockFace: View {
 /// `containerBackground` arrived in iOS 17 and is how a widget declares its own
 /// ground; before that the system provided one. Guarded rather than required,
 /// because the application itself supports iOS 15 and lock screen widgets have
-/// worked since 16 — raising the whole extension to 17 would take the feature
+/// worked since 16: raising the whole extension to 17 would take the feature
 /// away from people whose phones can perfectly well show it.
 private extension View {
     @ViewBuilder
@@ -236,8 +236,8 @@ struct Entry: TimelineEntry {
 
 /// One entry, never expiring.
 ///
-/// The application reloads the timeline the moment anything changes — see
-/// `Widgets.put` — so a schedule here would be the system asking a question
+/// The application reloads the timeline the moment anything changes: see
+/// `Widgets.put`, so a schedule here would be the system asking a question
 /// whose answer is already sitting in the container, spending battery to learn
 /// nothing.
 struct Provider: TimelineProvider {

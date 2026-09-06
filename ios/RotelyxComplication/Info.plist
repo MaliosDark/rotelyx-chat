@@ -10,7 +10,7 @@
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<!-- Which binary inside the bundle to run. Without it the extension builds,
 	     embeds, and is rejected at install time with "missing or invalid
-	     CFBundleExecutable" — a failure no compiler sees. -->
+	     CFBundleExecutable": a failure no compiler sees. -->
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleDevelopmentRegion</key>

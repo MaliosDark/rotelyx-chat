@@ -83,12 +83,37 @@ class QrCamera: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
             return
         }
         session.addOutput(output)
+
+        // Upright.
+        //
+        // The camera hands over its sensor's landscape frame whatever way the
+        // phone is being held, so 1280 by 720 arrived and was drawn into a
+        // square viewfinder: rotated a quarter turn and squashed to fit. Aiming
+        // it at anything was guesswork.
+        //
+        // Turned here rather than in Flutter, so the buffer the decoder reads
+        // is the buffer the person is looking at. Rotating only the preview
+        // would leave the two disagreeing about which way up the code is, and
+        // the capture pipeline does this without a copy.
+        if let connection = output.connection(with: .video) {
+            if #available(iOS 17.0, *) {
+                if connection.isVideoRotationAngleSupported(90) {
+                    connection.videoRotationAngle = 90
+                }
+            } else if connection.isVideoOrientationSupported {
+                connection.videoOrientation = .portrait
+            }
+        }
+
         session.commitConfiguration()
 
         textureId = registry?.register(self) ?? 0
         queue.async { self.session.startRunning() }
 
-        result(["texture": textureId, "width": 1280, "height": 720])
+        // Portrait now, so the sides swap. These size the preview until the
+        // first frame arrives and a wrong pair here is a viewfinder that jumps
+        // the moment the camera wakes.
+        result(["texture": textureId, "width": 720, "height": 1280])
     }
 
     func captureOutput(_ output: AVCaptureOutput,

@@ -336,6 +336,21 @@ class StoredConversation {
   /// Whether to show anything at all in the list.
   bool get hasUnread => unread || unreadCount > 0;
 
+  /// When the soonest message in here destroys itself, or null when none is
+  /// counting.
+  ///
+  /// Only theirs, and only ones not yet gone. Our own copy expiring is not news
+  /// to us: we chose the timer.
+  DateTime? get burnsAt {
+    DateTime? soonest;
+    for (final m in messages) {
+      final at = m.burnAt;
+      if (m.mine || at == null || m.burnt) continue;
+      if (soonest == null || at.isBefore(soonest)) soonest = at;
+    }
+    return soonest;
+  }
+
   /// What to show: the note this device keeps, or the label they chose.
   String get displayTitle => nickname.isNotEmpty ? nickname : title;
 
@@ -418,7 +433,7 @@ class RotelyxStore {
   /// A complication is read by whoever is standing next to the wrist: no
   /// unlock, no passphrase, no intent. Some people want their watch to say who
   /// is waiting and some want it to say nothing, and neither is this
-  /// application's decision — the one thing it should not do is choose for
+  /// application's decision: the one thing it should not do is choose for
   /// them and not mention it.
   ///
   /// The middle setting is the default. A number says something is waiting
@@ -1048,6 +1063,75 @@ class RotelyxStore {
   }
 
   String? sessionBlob(String id) => _box.read(_kSession(id)) as String?;
+
+  // ---------------------------------------------------------------------------
+  // An invitation somebody is still waiting on
+  // ---------------------------------------------------------------------------
+
+  static const _kWaiting = 'rotelyx.waiting';
+
+  /// The meeting somebody handed out and has not been joined at yet.
+  ///
+  /// # Why this is kept at all
+  ///
+  /// A link used to carry the inviter's keys, so it worked whether or not the
+  /// inviter's phone was on. It cannot any more: three thousand characters is
+  /// not a link anybody can tap, so what travels is a place to meet and the
+  /// keys stay here. See `invite_link.dart`.
+  ///
+  /// That would make an invitation good only while the screen was open, which
+  /// is not what somebody means by inviting a person. So the meeting is written
+  /// down, and the application listens at it again on the next launch. The
+  /// person who was invited deposits into the mailbox whenever they get round
+  /// to it, and it waits there under its own expiry until the inviter is
+  /// listening again.
+  ///
+  /// Sealed like any other session, with the same key. What is stored is the
+  /// inviter's MLS state, which is the same thing a conversation stores, and it
+  /// is worth exactly as much: without the passphrase it is bytes.
+  void saveWaiting({
+    required String tag,
+    required String code,
+    required String name,
+    required DateTime until,
+    required WasmSession session,
+  }) {
+    final key = _key;
+    if (key == null) return;
+    try {
+      _box.write(_kWaiting, {
+        'tag': tag,
+        'code': code,
+        'name': name,
+        'until': until.millisecondsSinceEpoch,
+        'session': session.sealSession(key),
+      });
+    } on Object {
+      // An invitation that fails to persist is an invitation that only lasts
+      // while the screen is open, which is what it was before this existed.
+    }
+  }
+
+  /// What is being waited on, or null when nothing is or it has expired.
+  ///
+  /// Expiry is checked on the way out rather than swept: nothing runs when the
+  /// application is closed, and a sweep on launch would be one more thing that
+  /// has to happen before the first screen.
+  Map<String, Object?>? get waiting {
+    final held = _box.read(_kWaiting);
+    if (held is! Map) return null;
+
+    final until = held['until'];
+    if (until is int &&
+        DateTime.now().isAfter(DateTime.fromMillisecondsSinceEpoch(until))) {
+      forgetWaiting();
+      return null;
+    }
+    return held.cast<String, Object?>();
+  }
+
+  /// Somebody arrived, or the invitation was withdrawn.
+  void forgetWaiting() => _box.remove(_kWaiting);
 
   WasmKey? get key => _key;
 }

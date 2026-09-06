@@ -7,7 +7,7 @@ import Foundation
 /// question. A home screen is behind the passcode, so whoever is looking has
 /// already been let in. A lock screen is read by whoever the phone is lying in
 /// front of. The person sets them separately, and the application only writes
-/// what each is permitted to carry — so a widget cannot leak what its setting
+/// what each is permitted to carry, so a widget cannot leak what its setting
 /// refused, because the refused thing never reached this container.
 struct Glance {
     let waiting: Int

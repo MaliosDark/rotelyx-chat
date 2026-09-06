@@ -9,7 +9,7 @@ import AVFoundation
 /// application can change it.
 ///
 /// This is the other case: the application is open on the wrist and a message
-/// arrives. Nothing about that is a notification — it is audio, played by an
+/// arrives. Nothing about that is a notification: it is audio, played by an
 /// application that is running, and an application that is running may play
 /// whatever it likes. So the one moment watchOS leaves open is the one moment
 /// Rotelyx can sound like itself.

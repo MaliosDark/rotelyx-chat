@@ -58,7 +58,7 @@ import UserNotifications
   /// with while nothing is listening yet.
   ///
   /// A launch from cold reaches `open url:` before the engine exists, so the
-  /// link is held rather than pushed into nothing — a widget that does nothing
+  /// link is held rather than pushed into nothing: a widget that does nothing
   /// the first time it is tapped is a widget people tap once.
   private var links: FlutterMethodChannel?
   private var launchedBy: String?

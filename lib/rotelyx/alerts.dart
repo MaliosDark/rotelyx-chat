@@ -180,7 +180,7 @@ class Alerts {
     // The wrist, before the decision below. A watch is told even when this
     // conversation is open on the phone, because "open on the phone" is
     // precisely the case where the phone is in a hand and the watch is not the
-    // thing being looked at — and being told is what keeps its list current.
+    // thing being looked at, and being told is what keeps its list current.
     //
     // Muted travels with it. This used to be a bare call, so a conversation
     // somebody had deliberately silenced went on tapping their arm: the phone
@@ -225,7 +225,7 @@ class Alerts {
   /// is the whole safeguard: the text is what a locked screen withholds when
   /// previews are off. Put next to the name it would survive that setting, and
   /// a flame on a lock screen tells whoever is glancing at it which message is
-  /// the one worth reading over your shoulder — which is the fact that setting
+  /// the one worth reading over your shoulder, which is the fact that setting
   /// exists to keep.
   static String preview(String text) {
     final burns = Ephemeral.isEphemeral(text);

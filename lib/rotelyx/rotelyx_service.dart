@@ -24,6 +24,7 @@ import 'dart:math';
 
 import 'burn_clock.dart';
 import 'mailbox_client.dart';
+import 'meeting_code.dart';
 import '../platform/apple_push.dart';
 import 'push.dart';
 import 'rotelyx_config.dart';
@@ -846,6 +847,84 @@ class RotelyxService {
   }) =>
       pairByPhrase(phrase: code, displayName: displayName, role: role);
 
+  /// Hand out a meeting that survives this application being closed.
+  ///
+  /// The difference from [pairByMeetingCode] is one line at the end, and it is
+  /// what makes an invitation an invitation rather than a moment: the meeting
+  /// is written down, so a later launch listens at it again. Whoever was
+  /// invited deposits whenever they get round to it and the mailbox holds it
+  /// under its own expiry.
+  ///
+  /// Nothing of the keys goes anywhere. They stay sealed on this device, the
+  /// way a conversation's do; what travels is a place.
+  Future<String> inviteByMeetingCode({
+    required String displayName,
+    required Duration validFor,
+  }) async {
+    final code = newMeetingCode();
+    await pairByMeetingCode(
+      code: code,
+      displayName: displayName,
+      role: PairingRole.host,
+    );
+
+    final session = _session;
+    final tag = _meetingTag;
+    if (session != null && tag != null) {
+      store.saveWaiting(
+        tag: tag,
+        code: code,
+        name: displayName,
+        // Zero means never, which is what the longest choice on the pairing
+        // screen has always meant. A century is not never and is the same
+        // thing to everybody alive.
+        until: DateTime.now()
+            .add(validFor == Duration.zero
+                ? const Duration(days: 36500)
+                : validFor),
+        session: session,
+      );
+    }
+    return code;
+  }
+
+  /// Listen again at a meeting handed out before this launch.
+  ///
+  /// Returns false when there is nothing waiting, which is the ordinary case
+  /// and not a failure.
+  ///
+  /// The session comes back sealed rather than being made afresh: the person
+  /// who was invited is answering the key package they were given, and a new
+  /// member would be a different one.
+  Future<bool> resumeWaiting() async {
+    final held = store.waiting;
+    if (held == null) return false;
+
+    final blob = held['session'] as String?;
+    final tag = held['tag'] as String?;
+    final key = store.key;
+    if (blob == null || tag == null || key == null) return false;
+
+    try {
+      _useSession(RotelyxWasm.unsealSession(blob, key));
+    } on Object {
+      // A blob that will not open is an invitation nobody can answer. Better
+      // forgotten than left listening at a place with no way to reply.
+      store.forgetWaiting();
+      return false;
+    }
+
+    _displayName = held['name'] as String? ?? _displayName;
+    _role = PairingRole.host;
+    _meetingTag = tag;
+    _session!.found();
+
+    await _openMailbox();
+    _mailbox!.subscribe([tag]);
+    _moveTo(RotelyxState.pairing);
+    return true;
+  }
+
   /// Generate an invitation this device is waiting on, to be delivered out of
   /// band by paste.
   ///
@@ -1512,6 +1591,16 @@ class RotelyxService {
     // post-quantum secret never mixed into the key schedule, and no error
     // anywhere. The only visible symptom would be safety numbers that disagree.
     _moveTo(RotelyxState.joined);
+
+    // The invitation has been used. Forgotten here rather than left to expire,
+    // because a meeting somebody has already arrived at is a place this
+    // application would otherwise go on listening at after every launch, for
+    // as long as the invitation was good for.
+    //
+    // The envelope the guest deposited is removed separately, by the mailbox's
+    // own `collected`: delivery does not remove, so that a tag anybody can
+    // derive cannot be drained by somebody who is not the recipient.
+    store.forgetWaiting();
 
     // From here messages travel under tags derived from the group itself, not
     // from the meeting phrase. Anyone who knew the phrase loses the thread.

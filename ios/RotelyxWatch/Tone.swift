@@ -12,7 +12,7 @@ enum Tone {
     /// The brand violet. What you said, on both screens.
     static let accent = Color(red: 0x6A / 255, green: 0x31 / 255, blue: 0xEE / 255)
 
-    /// What they said. `dRaised` on the phone — a card lifted off the backdrop,
+    /// What they said. `dRaised` on the phone: a card lifted off the backdrop,
     /// which on a watch is the only thing separating a bubble from the black
     /// the screen is painted with when it is off.
     static let raised = Color(red: 0x1C / 255, green: 0x1B / 255, blue: 0x23 / 255)
