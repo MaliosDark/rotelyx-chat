@@ -84,6 +84,11 @@ import UserNotifications
   private var camera: QrCamera?
   private var files: FilePicker?
 
+  /// Held for the same reason as `files`: a channel handler that is the only
+  /// reference to its object is a channel that stops working when the object
+  /// is collected.
+  private var keeper: SaveToPhotos?
+
   override func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
@@ -199,6 +204,12 @@ import UserNotifications
       FlutterMethodChannel(name: FilePicker.channel,
                            binaryMessenger: controller.binaryMessenger)
         .setMethodCallHandler { call, result in picker.handle(call, result) }
+
+      let photos = SaveToPhotos()
+      keeper = photos
+      FlutterMethodChannel(name: SaveToPhotos.channel,
+                           binaryMessenger: controller.binaryMessenger)
+        .setMethodCallHandler { call, result in photos.handle(call, result) }
     }
 
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
@@ -310,6 +321,11 @@ import UserNotifications
     // application and should not be shown a leftover notification about
     // nothing while they are looking at the thing it was about.
     let centre = UNUserNotificationCenter.current()
+
+    // The push's own notice goes too. It says a message arrived, and somebody
+    // opening the application is about to see which.
+    centre.removeDeliveredNotifications(withIdentifiers: [Notifications.wakeNotice])
+
     centre.getDeliveredNotifications { delivered in
       let blanks = delivered
         .filter { $0.request.content.threadIdentifier == AppDelegate.quietThread }

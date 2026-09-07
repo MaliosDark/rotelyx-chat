@@ -149,10 +149,32 @@ enum Notifications {
         let request = UNNotificationRequest(
             identifier: String(id), content: content, trigger: nil)
 
+        // And take down the push's version of the same news.
+        //
+        // Two paths reach a person about one message. This one, which knows
+        // who wrote and what they said, and the notification extension, woken
+        // by a push, which knows only that something arrived. While the
+        // application is still alive in the background both run, and the
+        // result was two notifications for one message, the second of them
+        // saying almost nothing.
+        //
+        // Every wake collapses onto one identifier at the push service, so
+        // there is only ever one of those to take down, and this one is
+        // strictly the better of the two.
+        UNUserNotificationCenter.current()
+            .removeDeliveredNotifications(withIdentifiers: [Notifications.wakeNotice])
+
         UNUserNotificationCenter.current().add(request) { _ in
             DispatchQueue.main.async { result(nil) }
         }
     }
+
+    /// The identifier every push wake arrives under.
+    ///
+    /// It is the `apns-collapse-id` the mailbox and the notifier send, which
+    /// iOS uses as the notification's identifier, so all of them replace each
+    /// other and there is never more than one.
+    static let wakeNotice = "rotelyx-wake"
 
     /// Take down whatever is showing for a conversation, because it has been
     /// read on this device.

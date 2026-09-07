@@ -85,15 +85,27 @@
 	     touches the microphone or camera without them, and the text is what the
 	     person reads while deciding, so it says what the thing is for and stops.
 
-	     Notably absent: NSPhotoLibraryUsageDescription. Attachments go through
-	     the system document picker, which asks for nothing. Reading the photo
-	     library would give a prettier grid and cost a line that a person reads
-	     as "this app can see all my photographs".
+	     Notably absent: NSPhotoLibraryUsageDescription, which is the one that
+	     grants read access to the whole photo library. This application has no
+	     use for it and does not ask.
+
+	     Choosing a photograph to send asks for nothing either. That goes
+	     through PHPickerViewController, which runs outside this process and
+	     hands back the one picture that was tapped; the library is never
+	     visible to this application. See ios/Runner/FilePicker.swift.
+
+	     What is present is NSPhotoLibraryAddUsageDescription, the add-only
+	     permission, and it is used at one moment: somebody presses save on a
+	     picture a friend sent them. Add-only cannot list, open or count
+	     anything in the library. It can put one picture in. See
+	     ios/Runner/SaveToPhotos.swift.
 	-->
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Rotelyx needs the microphone for voice calls. It is used only while a call is running.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Rotelyx needs the camera to scan a meeting code. Nothing is recorded and nothing is sent.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Rotelyx asks for this only when you tap save on a picture someone sent you, so that it can put that one picture in your library. This is the add-only permission: Rotelyx cannot see, open or list anything already in your photos, and it never asks to. Choosing a photograph to send does not use this and asks for no permission at all.</string>
 	<!-- ITSAppUsesNonExemptEncryption is deliberately absent, and absent is not
 	     the same as false.
 

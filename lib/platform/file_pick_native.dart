@@ -12,8 +12,13 @@
 /// has no way to tell apart from "this application can see all your photographs
 /// whenever it likes", because that is what it says.
 ///
-/// The work is in `android/.../FilePicker.kt`. iOS is not wired up and reports
-/// so rather than throwing something unreadable.
+/// Asking for pictures narrows the same picker rather than opening a different
+/// door. On iOS that is `PHPickerViewController`, which runs outside this
+/// application and hands back the one photograph that was tapped; on Android it
+/// is the same document picker filtered to images. Neither asks for anything,
+/// and neither puts a line on the privacy screen.
+///
+/// The work is in `android/.../FilePicker.kt` and `ios/Runner/FilePicker.swift`.
 library;
 
 import 'dart:io' show Platform;
@@ -26,7 +31,7 @@ export 'file_pick_api.dart';
 
 const MethodChannel _channel = MethodChannel('rotelyx/files');
 
-Future<PickedFile?> pickFile({int? maxBytes}) async {
+Future<PickedFile?> pickFile({int? maxBytes, bool images = false}) async {
   if (!Platform.isAndroid && !Platform.isIOS) {
     throw const NoFilePicker(
         'Choosing a file is not built for this platform yet.');
@@ -35,7 +40,7 @@ Future<PickedFile?> pickFile({int? maxBytes}) async {
   final Map<Object?, Object?>? picked;
   try {
     picked = await _channel.invokeMethod<Map<Object?, Object?>>(
-        'pick', {'maxBytes': maxBytes});
+        'pick', {'maxBytes': maxBytes, 'images': images});
   } on PlatformException catch (e) {
     throw NoFilePicker(switch (e.code) {
       'toolarge' => e.message ?? 'That file is too large to send.',

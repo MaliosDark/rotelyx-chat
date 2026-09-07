@@ -16,8 +16,11 @@ export 'file_pick_api.dart';
 /// Returns null when the user closed it without choosing, which is not a
 /// failure and should not be reported as one. Throws [NoFilePicker] only when
 /// the file could not be read.
-Future<PickedFile?> pickFile({int? maxBytes}) async {
+Future<PickedFile?> pickFile({int? maxBytes, bool images = false}) async {
   final input = web.HTMLInputElement()..type = 'file';
+  // The browser's own filter, which is the same idea as narrowing the picker
+  // on a phone: somebody sending a photograph is offered photographs.
+  if (images) input.accept = 'image/*';
   input.click();
 
   await input.onChange.first;

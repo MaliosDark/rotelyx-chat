@@ -29,6 +29,7 @@ cryptography, the mailbox or the relay is documented there.
 | Know why the browser build refuses to load a font from a CDN | [CSP.md](CSP.md) |
 | Understand what is kept on the device and what is not | [PERSISTENCE.md](PERSISTENCE.md) |
 | Know how a device is woken when the application is closed | [PUSH.md](PUSH.md) |
+| Know how a photograph fits in a 64 KiB envelope | [PICTURES.md](PICTURES.md) |
 
 ## Shipping it
 

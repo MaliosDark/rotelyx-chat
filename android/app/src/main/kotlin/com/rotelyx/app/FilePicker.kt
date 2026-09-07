@@ -60,9 +60,16 @@ class FilePicker(private val activity: Activity) {
         limit = call.argument<Int>("maxBytes") ?: DEFAULT_MAX
         pending = result
 
+        // Narrowed to pictures when that is what was asked for, so somebody
+        // sending a photograph is shown photographs rather than a list of
+        // folders to go and find one in. It is the same system picker and it
+        // still asks for no permission: this process is handed the one file
+        // that was chosen and never sees the rest.
+        val images = call.argument<Boolean>("images") ?: false
+
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
-            type = "*/*"
+            type = if (images) "image/*" else "*/*"
         }
 
         try {

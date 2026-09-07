@@ -31,6 +31,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 
 import '../../platform/file_pick.dart';
+import '../../rotelyx/photo_codec.dart';
 import '../../rotelyx/rotelyx_service.dart';
 import '../../rotelyx/rotelyx_store.dart';
 import '../../rotelyx/signal.dart';
@@ -306,5 +307,101 @@ Future<Uint8List?> shrinkToAvatar(Uint8List bytes, {int side = _side}) async {
     }
   } finally {
     source.dispose();
+  }
+}
+
+/// Fit a photograph into a byte budget, as well as it can be fitted.
+///
+/// Returns null when the bytes are not a picture this platform can decode.
+///
+/// # Why this is not `shrinkToFit`
+///
+/// That one re-encodes as PNG, because `toByteData` offers PNG and raw pixels
+/// and nothing else. PNG of a photograph is several times a lossy encoding of
+/// the same picture, so meeting the free tier's 64 KiB envelope that way meant
+/// drawing the photograph at around three hundred pixels on its long edge. That
+/// is a stamp. `photo_codec.dart` exists so that it does not have to be.
+///
+/// # How the size is arrived at
+///
+/// Two dials and they are turned in the right order. Resolution comes down only
+/// when quality alone cannot get there, because a smaller picture of the whole
+/// scene beats a larger one that has been quantised into mush, and both beat
+/// the picture being refused.
+///
+/// The search is a bisection on quality rather than a walk down a list of
+/// steps, so it lands near the top of what the budget allows instead of at
+/// whichever step happened to fit.
+Future<Uint8List?> fitPicture(Uint8List bytes, {required int maxBytes}) async {
+  ui.Image source;
+  try {
+    final codec = await ui.instantiateImageCodec(bytes);
+    source = (await codec.getNextFrame()).image;
+  } on Object {
+    return null;
+  }
+
+  try {
+    for (final edge in const [1600, 1280, 1024, 800, 640, 480, 360]) {
+      final longest =
+          source.width > source.height ? source.width : source.height;
+      final scale = edge >= longest ? 1.0 : edge / longest;
+      final w = (source.width * scale).round().clamp(8, 4096);
+      final h = (source.height * scale).round().clamp(8, 4096);
+
+      final rgba = await _pixels(source, w, h);
+      if (rgba == null) return null;
+
+      // Bisection between what is certainly too coarse to bother with and what
+      // is as good as this codec is asked to go.
+      var low = 12;
+      var high = 92;
+      Uint8List? best;
+
+      while (low <= high) {
+        final middle = (low + high) >> 1;
+        final tried = encodePhoto(rgba, w, h, quality: middle);
+        if (tried.length <= maxBytes) {
+          best = tried;
+          low = middle + 1;
+        } else {
+          high = middle - 1;
+        }
+      }
+
+      if (best != null) return best;
+
+      // Nothing fitted at this size. Down a step and try again, unless there
+      // are no steps left, in which case this picture cannot be sent and
+      // saying so is better than sending a smear.
+      if (edge == 360) return null;
+    }
+    return null;
+  } finally {
+    source.dispose();
+  }
+}
+
+/// Draw [source] at [w] by [h] and read the pixels back.
+Future<Uint8List?> _pixels(ui.Image source, int w, int h) async {
+  if (w == source.width && h == source.height) {
+    final data = await source.toByteData(format: ui.ImageByteFormat.rawRgba);
+    return data?.buffer.asUint8List();
+  }
+
+  final recorder = ui.PictureRecorder();
+  Canvas(recorder).drawImageRect(
+    source,
+    Rect.fromLTWH(0, 0, source.width.toDouble(), source.height.toDouble()),
+    Rect.fromLTWH(0, 0, w.toDouble(), h.toDouble()),
+    Paint()..filterQuality = FilterQuality.medium,
+  );
+
+  final drawn = await recorder.endRecording().toImage(w, h);
+  try {
+    final data = await drawn.toByteData(format: ui.ImageByteFormat.rawRgba);
+    return data?.buffer.asUint8List();
+  } finally {
+    drawn.dispose();
   }
 }

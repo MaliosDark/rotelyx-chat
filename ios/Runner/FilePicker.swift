@@ -1,4 +1,5 @@
 import Flutter
+import PhotosUI
 import UIKit
 import UniformTypeIdentifiers
 
@@ -9,11 +10,16 @@ import UniformTypeIdentifiers
 /// by the system, the person picks one file, and this process is handed that
 /// one file.
 ///
-/// The alternative, `PHPickerViewController` against the photo library, gives a
-/// prettier grid and costs `NSPhotoLibraryUsageDescription` on the permission
-/// screen, which a person reads as "this application can see all my
-/// photographs". For an application whose argument is that it holds nothing,
-/// the plainer picker is the honest one.
+/// Pictures go through `PHPickerViewController`, which asks for nothing either.
+/// It was avoided here on the belief that it cost
+/// `NSPhotoLibraryUsageDescription`, and that has not been true since iOS 14:
+/// the grid is drawn by a separate process that this application cannot see
+/// into, and what comes back is the one picture that was tapped. There is no
+/// permission, no prompt, and nothing on the privacy screen.
+///
+/// Which is why sending a photograph now opens the photographs rather than the
+/// file system. Somebody attaching a picture was being shown a list of folders
+/// and having to go and find it, which is the wrong question asked politely.
 ///
 /// # Why the bytes are copied here
 ///
@@ -43,9 +49,14 @@ class FilePicker: NSObject, UIDocumentPickerDelegate {
             return
         }
 
-        limit = (call.arguments as? [String: Any])?["maxBytes"] as? Int
-            ?? FilePicker.defaultMax
+        let args = call.arguments as? [String: Any]
+        limit = args?["maxBytes"] as? Int ?? FilePicker.defaultMax
         pending = result
+
+        if args?["images"] as? Bool == true, #available(iOS 14.0, *) {
+            presentPhotos()
+            return
+        }
 
         let picker: UIDocumentPickerViewController
         if #available(iOS 14.0, *) {
@@ -129,10 +140,93 @@ class FilePicker: NSObject, UIDocumentPickerDelegate {
         return "application/octet-stream"
     }
 
+    /// The system photograph grid.
+    ///
+    /// Out of process, so this application never sees the library, only the one
+    /// picture that was chosen. Nothing is asked of the person and nothing
+    /// appears on the privacy screen.
+    @available(iOS 14.0, *)
+    private func presentPhotos() {
+        var config = PHPickerConfiguration()
+        config.filter = .images
+        config.selectionLimit = 1
+
+        let picker = PHPickerViewController(configuration: config)
+        picker.delegate = self
+
+        guard let host = host else {
+            let waiting = pending
+            pending = nil
+            waiting?(FlutterError(code: "nopicker",
+                                  message: "no window to present from", details: nil))
+            return
+        }
+        host.present(picker, animated: true)
+    }
+
     func handle(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
         switch call.method {
         case "pick": pick(call, result)
         default: result(FlutterMethodNotImplemented)
+        }
+    }
+}
+
+@available(iOS 14.0, *)
+extension FilePicker: PHPickerViewControllerDelegate {
+
+    func picker(_ picker: PHPickerViewController,
+                didFinishPicking results: [PHPickerResult]) {
+        picker.dismiss(animated: true)
+
+        guard let waiting = pending else { return }
+        pending = nil
+
+        // Backed out. Null rather than an error, as with the other picker.
+        guard let item = results.first?.itemProvider else {
+            waiting(nil)
+            return
+        }
+
+        // Asked for by type rather than as an image.
+        //
+        // `loadObject(ofClass: UIImage.self)` hands back a decoded bitmap, and
+        // re-encoding it here would throw away whatever the camera wrote and
+        // replace it with something larger. The bytes on disk are what is
+        // wanted, and the size check below is about those bytes rather than
+        // about a picture this process happened to redraw.
+        let wanted = [UTType.jpeg, UTType.png, UTType.heic, UTType.gif]
+        let type = wanted.first { item.hasItemConformingToTypeIdentifier($0.identifier) }
+            ?? UTType.image
+
+        item.loadDataRepresentation(forTypeIdentifier: type.identifier) { data, error in
+            DispatchQueue.main.async {
+                guard let data = data else {
+                    waiting(FlutterError(
+                        code: "unreadable",
+                        message: error?.localizedDescription ?? "that picture could not be read",
+                        details: nil))
+                    return
+                }
+
+                if data.count > self.limit {
+                    waiting(FlutterError(
+                        code: "toolarge",
+                        message: "that picture is \(data.count / 1024 / 1024) MB, "
+                            + "and the limit is \(self.limit / 1024 / 1024) MB",
+                        details: nil))
+                    return
+                }
+
+                let name = item.suggestedName ?? "picture"
+                let extension_ = type.preferredFilenameExtension ?? "jpg"
+
+                waiting([
+                    "name": name.contains(".") ? name : "\(name).\(extension_)",
+                    "mime": type.preferredMIMEType ?? "image/jpeg",
+                    "bytes": FlutterStandardTypedData(bytes: data),
+                ])
+            }
         }
     }
 }

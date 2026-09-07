@@ -53,6 +53,7 @@
 		E5A1B2C3D4E5F60000000021 /* CallAudio.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5A1B2C3D4E5F60000000020 /* CallAudio.swift */; };
 		E5A1B2C3D4E5F60000000023 /* QrCamera.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5A1B2C3D4E5F60000000022 /* QrCamera.swift */; };
 		E5A1B2C3D4E5F60000000025 /* FilePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5A1B2C3D4E5F60000000024 /* FilePicker.swift */; };
+		E5A1B2C3D4E5F60000000045 /* SaveToPhotos.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5A1B2C3D4E5F60000000044 /* SaveToPhotos.swift */; };
 		E5A1B2C3D4E5F60000000031 /* Notifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5A1B2C3D4E5F60000000030 /* Notifications.swift */; };
 		E5A1B2C3D4E5F60000000033 /* WatchBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5A1B2C3D4E5F60000000032 /* WatchBridge.swift */; };
 		E5A1B2C3D4E5F60000000091 /* Waiting.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5A1B2C3D4E5F60000000090 /* Waiting.swift */; };
@@ -206,6 +207,7 @@
 		E5A1B2C3D4E5F60000000020 /* CallAudio.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallAudio.swift; sourceTree = "<group>"; };
 		E5A1B2C3D4E5F60000000022 /* QrCamera.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QrCamera.swift; sourceTree = "<group>"; };
 		E5A1B2C3D4E5F60000000024 /* FilePicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilePicker.swift; sourceTree = "<group>"; };
+		E5A1B2C3D4E5F60000000044 /* SaveToPhotos.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveToPhotos.swift; sourceTree = "<group>"; };
 		E5A1B2C3D4E5F60000000030 /* Notifications.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Notifications.swift; sourceTree = "<group>"; };
 		E5A1B2C3D4E5F60000000032 /* WatchBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchBridge.swift; sourceTree = "<group>"; };
 		E5A1B2C3D4E5F60000000090 /* Waiting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Waiting.swift; sourceTree = "<group>"; };
@@ -373,6 +375,7 @@
 				E5A1B2C3D4E5F60000000032 /* WatchBridge.swift */,
 				E5A1B2C3D4E5F60000000022 /* QrCamera.swift */,
 				E5A1B2C3D4E5F60000000024 /* FilePicker.swift */,
+				E5A1B2C3D4E5F60000000044 /* SaveToPhotos.swift */,
 				E5A1B2C3D4E5F60000000016 /* SharedContainer.swift */,
 				74858FAD1ED2DC5600515810 /* Runner-Bridging-Header.h */,
 				E5A1B2C3D4E5F6000000000F /* Runner.entitlements */,
@@ -799,6 +802,7 @@
 				E5A1B2C3D4E5F60000000033 /* WatchBridge.swift in Sources */,
 				E5A1B2C3D4E5F60000000023 /* QrCamera.swift in Sources */,
 				E5A1B2C3D4E5F60000000025 /* FilePicker.swift in Sources */,
+				E5A1B2C3D4E5F60000000045 /* SaveToPhotos.swift in Sources */,
 				E5A1B2C3D4E5F60000000017 /* SharedContainer.swift in Sources */,
 				74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */,
 				1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */,

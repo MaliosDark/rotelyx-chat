@@ -106,7 +106,8 @@ nothing having happened.
 **Working:** pairing by QR, phrase or invitation, with the camera reading the
 code on a phone; one-to-one and group conversations; replies; reactions;
 self-destructing messages that burn on both devices from the moment the
-recipient reads them; encrypted local history; attachments up to 5 MB; unread
+recipient reads them; encrypted local history; photographs, through a codec of its own so that one
+fits an envelope; files; unread
 counts; a read tick that is never inferred; contact names, pictures, pinning and
 muting; notifications with the sender's name and picture and no push service
 involved; a PIN for the application and a separate one that seals a single

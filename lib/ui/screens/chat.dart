@@ -15,6 +15,7 @@ import '../../platform/file_pick.dart';
 
 import '../../rotelyx/alerts.dart';
 import '../../rotelyx/attachment.dart';
+import '../../rotelyx/photo_codec.dart';
 
 import '../../rotelyx/ephemeral.dart';
 import '../../rotelyx/quoted.dart';
@@ -25,6 +26,7 @@ import '../gestures.dart';
 import '../../rotelyx/calls.dart';
 import 'contact.dart';
 import 'picture.dart';
+import '../photo.dart';
 import '../theme.dart';
 import '../widgets.dart';
 
@@ -205,14 +207,58 @@ class _ChatScreenState extends State<ChatScreen> {
     });
   }
 
-  Future<void> _pickFile() async {
+  /// Ask which, then open that.
+  ///
+  /// The button used to go straight to the file system, which is the wrong
+  /// question asked politely: almost everything anybody attaches to a message
+  /// is a photograph, and a photograph is not a folder to go and find. So
+  /// pictures are offered first, and everything else is still one tap away.
+  Future<void> _attach() async {
+    final t = RotelyxThemeScope.of(context);
+    final images = await showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: t.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(Metrics.radius)),
+      ),
+      builder: (sheet) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(Metrics.wide),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('Attach', style: Type.title.copyWith(color: t.text)),
+              const SizedBox(height: Metrics.pad),
+              RxButton('Photo',
+                  icon: Icons.photo_outlined,
+                  wide: true,
+                  onTap: () => Navigator.of(sheet).pop(true)),
+              const SizedBox(height: Metrics.gap),
+              RxButton('File',
+                  weight: Weight.secondary,
+                  icon: Icons.insert_drive_file_outlined,
+                  wide: true,
+                  onTap: () => Navigator.of(sheet).pop(false)),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    // Closed without choosing.
+    if (images == null || !mounted) return;
+    await _pickFile(images: images);
+  }
+
+  Future<void> _pickFile({bool images = false}) async {
     final PickedFile? file;
     try {
       // Picked well above what can be sent, because a picture is shrunk below
       // and the old limit refused a camera photograph at the picker, before
       // anything had a chance to make it smaller. Anything that is not a
       // picture is still held to the real limit, a few lines down.
-      file = await pickFile(maxBytes: 24 * 1024 * 1024);
+      file = await pickFile(maxBytes: 24 * 1024 * 1024, images: images);
     } on NoFilePicker catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -229,24 +275,36 @@ class _ChatScreenState extends State<ChatScreen> {
     var bytes = file.bytes;
     var mime = file.mime;
 
-    if (bytes.length > maxAttachmentBytes) {
-      final shrunk = await shrinkToFit(bytes, maxBytes: maxAttachmentBytes);
-      if (shrunk == null) {
+    // What one envelope will actually hold.
+    //
+    // Without a capability token the mailbox takes 64 KiB, and it refuses the
+    // deposit rather than trimming it, so a picture aimed at the paid ceiling
+    // was sealed, sent, and bounced. The person saw a failure and no reason.
+    final budget = store.capabilityToken == null
+        ? freeAttachmentBytes
+        : maxAttachmentBytes;
+
+    if (mime.startsWith('image/')) {
+      // Through this application's own codec rather than the platform's.
+      //
+      // `photo_codec.dart` says why at length. The short of it is that the
+      // engine will only re-encode as PNG, and PNG of a photograph at 44 KiB
+      // is three hundred pixels across. This holds a thousand.
+      final fitted = await fitPicture(bytes, maxBytes: budget);
+      if (fitted == null) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(mime.startsWith('image/')
-                ? 'That picture will not shrink small enough to send.'
-                : 'That file is ${bytes.length ~/ (1024 * 1024)} MB and the '
-                    'limit is ${maxAttachmentBytes ~/ (1024 * 1024)} MB.')));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('That picture will not fit in one message.')));
         return;
       }
-      if (!identical(shrunk, bytes)) {
-        bytes = shrunk;
-        // Redrawn through the engine's encoder, so it is a PNG now whatever it
-        // arrived as. Saying otherwise would have the far side decode it as
-        // the format it no longer is.
-        mime = 'image/png';
-      }
+      bytes = fitted;
+      mime = photoMime;
+    } else if (bytes.length > budget) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('That file is ${readableBytes(bytes.length)} and the '
+              'limit is ${readableBytes(budget)}.')));
+      return;
     }
 
     if (!mounted) return;
@@ -1133,7 +1191,7 @@ class _ChatScreenState extends State<ChatScreen> {
               controller: _input,
               focus: _focus,
               onSend: _send,
-              onAttach: _pickFile,
+              onAttach: _attach,
               burnSeconds: _burnSeconds,
               onBurn: _pickBurn,
             ),
@@ -1892,7 +1950,7 @@ class _Composer extends StatelessWidget {
         children: [
           IconButton(
             onPressed: onAttach,
-            tooltip: 'Attach a file',
+            tooltip: 'Attach a photo or a file',
             icon: Icon(Icons.attach_file, size: 20, color: t.muted),
           ),
 
@@ -2156,11 +2214,18 @@ class _Body extends StatelessWidget {
     }
 
     if (file.isImage) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(10),
-        child: Image.memory(file.bytes,
-            fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => _FileRow(file: file, fg: fg)),
+      return GestureDetector(
+        // Opened on a tap, because a picture inside a bubble is a thumbnail
+        // whatever its resolution, and looking properly at one is the ordinary
+        // thing to want. The viewer is where saving lives too.
+        onTap: () => PhotoViewer.open(context, file: file),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(10),
+          child: RotelyxPhoto(
+            bytes: file.bytes,
+            onFailed: (_) => _FileRow(file: file, fg: fg),
+          ),
+        ),
       );
     }
     return _FileRow(file: file, fg: fg);

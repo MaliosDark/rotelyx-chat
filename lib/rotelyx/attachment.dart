@@ -27,6 +27,23 @@ import 'dart:typed_data';
 /// ceiling. Refusing early beats sealing something the mailbox will reject.
 const int maxAttachmentBytes = 5 * 1024 * 1024;
 
+/// What fits in one envelope without a capability token.
+///
+/// The mailbox allows 64 KiB in a free envelope. What travels is base64, which
+/// is four bytes for every three, so the picture itself has 48 KiB before the
+/// encoding alone overruns. Taking off the marker, the name, the type and what
+/// MLS wraps around all of it leaves this, and it is deliberately a little
+/// under: a deposit refused for being one byte over is a message somebody
+/// watched fail for no reason they can see.
+const int freeAttachmentBytes = 44 * 1024;
+
+/// A byte count somebody can read.
+String readableBytes(int count) {
+  final kb = count / 1024;
+  if (kb < 1024) return '${kb.toStringAsFixed(0)} KB';
+  return '${(kb / 1024).toStringAsFixed(1)} MB';
+}
+
 /// Marks a message body as a file rather than text.
 ///
 /// A prefix rather than a separate message type because the wasm's `send` takes
@@ -46,11 +63,7 @@ class Attachment {
 
   bool get isImage => mime.startsWith('image/');
 
-  String get readableSize {
-    final kb = bytes.length / 1024;
-    if (kb < 1024) return '${kb.toStringAsFixed(0)} KB';
-    return '${(kb / 1024).toStringAsFixed(1)} MB';
-  }
+  String get readableSize => readableBytes(bytes.length);
 
   /// Pack for sending. The name is percent-encoded so a filename containing the
   /// separator cannot forge the header.

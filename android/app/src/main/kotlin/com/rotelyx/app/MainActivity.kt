@@ -103,6 +103,10 @@ class MainActivity : FlutterFragmentActivity() {
         MethodChannel(engine.dartExecutor.binaryMessenger, FilePicker.CHANNEL)
             .setMethodCallHandler(picker::handle)
 
+        val photos = SaveToPhotos(this)
+        MethodChannel(engine.dartExecutor.binaryMessenger, SaveToPhotos.CHANNEL)
+            .setMethodCallHandler(photos::handle)
+
         MethodChannel(engine.dartExecutor.binaryMessenger, Notifications.CHANNEL)
             .setMethodCallHandler { call, result ->
                 when (call.method) {
