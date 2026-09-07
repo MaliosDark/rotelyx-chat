@@ -22,6 +22,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:math';
 
+import '../platform/widgets.dart';
 import 'burn_clock.dart';
 import 'mailbox_client.dart';
 import 'meeting_code.dart';
@@ -651,6 +652,16 @@ class RotelyxService {
       if (!conversation.burnAcks.contains(id)) conversation.burnAcks.add(id);
     }
     store.save(conversation);
+
+    // The countdown has started, so the surfaces that show one need telling.
+    //
+    // This was missing, and it is the whole reason nobody ever saw the Dynamic
+    // Island count a message down. `refreshWidgets` was called when a message
+    // arrived, which is the one moment a burning message has no deadline: the
+    // clock starts when the recipient reads it, and reading it is this
+    // function. So the refresh ran, found nothing counting, and took the
+    // countdown off; then the deadline was set here and nothing asked again.
+    refreshWidgets();
 
     _flushBurnAcks(conversationId);
     return true;
