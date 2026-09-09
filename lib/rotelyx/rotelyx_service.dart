@@ -1155,6 +1155,12 @@ class RotelyxService {
   /// Whether a reconnection is already under way.
   bool _reopening = false;
 
+  /// Whether this device still owes the group a fresh key after unsealing.
+  ///
+  /// Set when a session comes off the disk, spent by the first thing this
+  /// device actually sends. See [_rekeyIfOwed].
+  bool _rekeyOwed = false;
+
   /// The socket went away. Open another one and listen where we were listening.
   ///
   /// A socket closes whenever the screen is left, the network moves, or the
@@ -1805,7 +1811,19 @@ class RotelyxService {
   /// A conversation with one member has nobody to tell and nothing to move, and
   /// a note to self is the ordinary case of that. Failing the conversation over
   /// it would make history unreadable to protect a rekey nobody needed.
-  Future<void> _rekeyAfterRestore() async {
+  /// Pay the debt if one is owed, before this device sends anything.
+  ///
+  /// Public because placing a call sends through [signal], and [signal] cannot
+  /// pay it itself: read receipts go out through there too, and they are sent
+  /// on merely opening a conversation, which is the thing this whole change
+  /// exists to stop being a commit.
+  void rekeyIfOwed() {
+    if (!_rekeyOwed) return;
+    _rekeyOwed = false;
+    _rekeyAfterRestore();
+  }
+
+  void _rekeyAfterRestore() {
     final session = _session;
     if (session == null) return;
 
@@ -1859,6 +1877,9 @@ class RotelyxService {
     final session = _session;
     if (session == null || state != RotelyxState.joined) return false;
     if (text.trim().isEmpty) return false;
+
+    // Before the first word this device says, and never for merely opening.
+    rekeyIfOwed();
 
     final message =
         RotelyxMessage(text: text, mine: true, at: DateTime.now(),
@@ -2046,22 +2067,24 @@ class RotelyxService {
     _moveTo(RotelyxState.joined);
     _resubscribe();
 
-    // A session that came off the disk cannot send until it has rekeyed.
+    // A session that came off the disk owes the group a fresh key before it
+    // can send, and the debt is *recorded* here rather than paid.
     //
-    // `unsealSession` reopens the MLS group from storage, and a reopened group
-    // refuses to send: the copy believes it is at a generation the group has
-    // already spent, so everything it sent would be dropped by the receiver
-    // and nothing would say why. The engine answers that by refusing at the
-    // near end instead, and `rekeyAfterRestore` is how a copy earns the right
-    // back.
+    // # Why not here
     //
-    // Nothing called it. The whole path is built, in the wasm, in the C ABI,
-    // in this interface and in both implementations, and no caller existed.
-    // While conversations lived only in memory that cost nothing, because a
-    // session was never reopened. The moment history was kept, every restored
-    // conversation could receive and could not send, on both platforms and in
-    // both directions.
-    await _rekeyAfterRestore();
+    // Paying it here meant a commit on every reopen, and a reopen happens on
+    // every application start and after every dropped connection. Two phones
+    // doing that without seeing each other each moved to an epoch of their own,
+    // and two commits made at the same epoch cannot both be accepted: one side
+    // is refused and stays behind. From then on each deposits under tags the
+    // other is not listening on, and no amount of closing and reopening brings
+    // them back, because what is broken is the conversation and not the socket.
+    //
+    // A device that opens a conversation and reads it now changes nothing. The
+    // debt is paid by the first thing this device actually sends, which is the
+    // moment the fresh key is genuinely needed, and that is one commit for a
+    // person who says something rather than one for a person who looked.
+    _rekeyOwed = true;
 
     final meeting = _meetingTag;
     if (meeting != null) _mailbox?.subscribe([meeting]);

@@ -104,6 +104,10 @@ class Calls {
       }
     }
 
+    // A conversation just reopened owes the group a fresh key, and a ring is
+    // the first thing this device would be sending. See `rekeyIfOwed`.
+    rotelyx.rekeyIfOwed();
+
     if (!audioIsBuilt) return 'Calls are not built for this platform yet.';
     if (!await permitMicrophone()) {
       return 'The microphone permission was refused.';
