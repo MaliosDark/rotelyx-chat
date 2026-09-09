@@ -80,6 +80,46 @@ import UserNotifications
     return true
   }
 
+  /// A tapped invitation link, which arrives here and not through `open url:`.
+  ///
+  /// # Why there are two of these
+  ///
+  /// `open url:` is for a scheme this application registered, `rotelyx://`. A
+  /// link to `https://rotelyx.com/i#...` is a Universal Link, and iOS delivers
+  /// one as a user activity instead. An application that implements only the
+  /// first opens for its own scheme and sends every web link to Safari, which
+  /// is what happened here: the entitlement named the domain, the site served
+  /// the association, and the link still went nowhere because nothing was
+  /// listening on this side.
+  ///
+  /// # The fragment survives
+  ///
+  /// `webpageURL` is the whole link, and the invitation lives after the hash.
+  /// It never reached a server on the way here: the phone recognised the domain
+  /// and opened this instead of making the request at all.
+  override func application(
+    _ application: UIApplication,
+    continue userActivity: NSUserActivity,
+    restorationHandler: @escaping ([UIUserActivityRestoring]?) -> Void
+  ) -> Bool {
+    guard userActivity.activityType == NSUserActivityTypeBrowsingWeb,
+          let url = userActivity.webpageURL
+    else {
+      return super.application(
+        application, continue: userActivity, restorationHandler: restorationHandler)
+    }
+
+    // Held when the engine is not up yet, exactly as a cold launch through
+    // `open url:` is: a link that arrives before anything is listening must
+    // not be pushed into nothing.
+    if let links = links {
+      links.invokeMethod("link", arguments: url.absoluteString)
+    } else {
+      launchedBy = url.absoluteString
+    }
+    return true
+  }
+
   private var audio: CallAudio?
   private var camera: QrCamera?
   private var files: FilePicker?

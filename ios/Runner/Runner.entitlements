@@ -26,5 +26,22 @@
 	     step yields `BadDeviceToken` and no other clue. -->
 	<key>aps-environment</key>
 	<string>production</string>
+
+	<!-- So an invitation link opens this application rather than Safari.
+	     Android has done this since the beginning through an intent filter;
+	     iOS asks for the domain to be named here and for the site to serve
+	     `/.well-known/apple-app-site-association` naming this app back.
+
+	     The invitation is in the fragment of the link and a fragment never
+	     reaches a server, so what the site is asked for is `/i` and nothing
+	     else. Association does not change that: it makes the request stop
+	     happening at all, because the phone opens the app instead.
+
+	     `applinks:` and not `webcredentials:`: this is about opening links and
+	     not about sharing passwords, and there are none to share. -->
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>applinks:rotelyx.com</string>
+	</array>
 </dict>
 </plist>
