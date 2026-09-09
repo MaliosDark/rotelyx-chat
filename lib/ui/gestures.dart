@@ -154,11 +154,19 @@ class SlideOver extends StatefulWidget {
 }
 
 class SlideOverState extends State<SlideOver> with SingleTickerProviderStateMixin {
-  late final AnimationController _slide = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 260),
-    reverseDuration: const Duration(milliseconds: 220),
-  );
+  /// Built in `initState` and not as a `late final`.
+  ///
+  /// A `late final` initialiser runs at the first read, and `dispose` reads
+  /// this one. A widget taken down without ever having been built therefore
+  /// created its controller *during* teardown, and creating one asks the
+  /// element tree for its `TickerMode`, which is a lookup on a tree that is no
+  /// longer there. Flutter reports that as "looking up a deactivated widget's
+  /// ancestor is unsafe" and names nothing that would lead here.
+  ///
+  /// It stayed hidden because the tests never reached a screen that holds one:
+  /// the application always opened on the passphrase screen. The moment it
+  /// opened on the conversation list instead, three of them failed at once.
+  late AnimationController _slide;
 
   /// The conversation that is on the way out.
   ///
@@ -171,6 +179,11 @@ class SlideOverState extends State<SlideOver> with SingleTickerProviderStateMixi
   @override
   void initState() {
     super.initState();
+    _slide = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 260),
+      reverseDuration: const Duration(milliseconds: 220),
+    );
     if (widget.over != null) _slide.value = 1;
   }
 
