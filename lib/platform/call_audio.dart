@@ -114,10 +114,49 @@ Future<void> playTone(String name) async {
     // A tone is an announcement, never the thing itself. A device that will
     // not play one still places the call.
   } on MissingPluginException {
-    // iOS answers this channel without a `tone` case, and an unimplemented
-    // method is a MissingPluginException rather than a PlatformException. Both
-    // callers use `unawaited`, so this was an unhandled asynchronous error on
-    // every connect and every failure.
+    // Caught because an unimplemented method raises this rather than a
+    // `PlatformException`, and both callers use `unawaited`, so it would be an
+    // unhandled asynchronous error rather than a silent one. iOS answered
+    // nothing here until its `tone` case was written.
+  }
+}
+
+/// Start one of the repeating tones, and keep it going until [stopLoop].
+///
+/// `ringback` while a call we placed is ringing, `ringtone` while one we were
+/// offered is. Separate from [playTone] because the two are different things:
+/// a tone announces something that already happened and is over before anybody
+/// could stop it, and these state a condition that lasts, so somebody has to
+/// be able to end them.
+///
+/// Each file is one whole period with its own silence in it, so looping is the
+/// player repeating a file rather than this side running a timer. A timer would
+/// drift, and it would keep running if the call ended while the application was
+/// being torn down.
+Future<void> startLoop(String name) async {
+  if (!audioIsBuilt) return;
+  try {
+    await _channel.invokeMethod<bool>('loop', {'name': name});
+  } on PlatformException {
+    // A ring is an announcement, never the call itself.
+  } on MissingPluginException {
+    // A build whose platform side predates this still places calls, silently.
+  }
+}
+
+/// Stop whatever [startLoop] started. Safe when nothing is playing.
+///
+/// Called on every exit from a ringing phase rather than only on the expected
+/// one, because the failure that matters here is a phone that rings after the
+/// call is over, and that happens on the paths nobody thought about.
+Future<void> stopLoop() async {
+  if (!audioIsBuilt) return;
+  try {
+    await _channel.invokeMethod<bool>('unloop');
+  } on PlatformException {
+    // Nothing to stop is not a failure.
+  } on MissingPluginException {
+    // As above.
   }
 }
 

@@ -45,6 +45,33 @@ import 'chat_lock.dart' as chat_lock;
 import 'rotelyx_wasm.dart';
 
 /// One stored message.
+/// A call that left nothing behind, written into the conversation.
+///
+/// # Why a call is a message
+///
+/// A call that was answered is remembered by the people who had it. One that
+/// was not is remembered by nobody: it rang, it stopped, and every trace of it
+/// was in memory. There was no call history and no line in the conversation, so
+/// somebody whose phone was in another room had no way to learn that they had
+/// been called at all.
+///
+/// It goes in the conversation rather than in a list of its own because that is
+/// where the person already looks, and because a call in this application is
+/// always with the people in one conversation.
+///
+/// Which way it went is [StoredMessage.mine], as it is for every other message,
+/// so "we called and nobody answered" and "they called and we missed it" are
+/// one value here and two sentences on screen.
+enum CallNote {
+  /// It rang until somebody gave up.
+  missed,
+
+  /// Somebody said no. A different fact from nobody answering, and the
+  /// difference is worth keeping: one is a person who was not there and the
+  /// other is a person who was.
+  declined,
+}
+
 class StoredMessage {
   const StoredMessage({
     required this.text,
@@ -57,6 +84,7 @@ class StoredMessage {
     this.edited = false,
     this.reactions = const {},
     this.burnAt,
+    this.call,
   });
 
   final String text;
@@ -110,6 +138,15 @@ class StoredMessage {
   /// a minute meant a minute, not a minute of screen time.
   final DateTime? burnAt;
 
+  /// What kind of call this line records, or null for an ordinary message.
+  ///
+  /// [text] is filled in as well, and deliberately: a build that predates this
+  /// field ignores it and still has a sentence to draw. The application is
+  /// already on people's phones, and a conversation that syncs a line those
+  /// builds render as an empty bubble would be a worse bug than the one this
+  /// fixes.
+  final CallNote? call;
+
   /// True once the deadline has passed.
   bool get burnt =>
       burnAt != null && DateTime.now().isAfter(burnAt!);
@@ -144,6 +181,7 @@ class StoredMessage {
         edited: edited ?? this.edited,
         reactions: reactions ?? this.reactions,
         burnAt: burnAt ?? this.burnAt,
+        call: call,
       );
 
   Map<String, dynamic> toJson() => {
@@ -157,6 +195,7 @@ class StoredMessage {
         if (edited) 'ed': true,
         if (reactions.isNotEmpty) 'r': reactions,
         if (burnAt != null) 'b': burnAt!.millisecondsSinceEpoch,
+        if (call != null) 'c': call!.name,
       };
 
   static StoredMessage fromJson(Map<String, dynamic> j) => StoredMessage(
@@ -174,7 +213,23 @@ class StoredMessage {
         burnAt: j['b'] is int
             ? DateTime.fromMillisecondsSinceEpoch(j['b'] as int)
             : null,
+        // An unknown name reads as null rather than throwing, so a line written
+        // by a later build is an ordinary message here instead of a conversation
+        // that will not load.
+        call: _noteNamed(j['c']),
       );
+}
+
+/// The note by that name, or null when there is none.
+///
+/// Null for an unknown name rather than an exception, so a line written by a
+/// later build reads as an ordinary message here instead of making the whole
+/// conversation fail to load.
+CallNote? _noteNamed(Object? name) {
+  for (final v in CallNote.values) {
+    if (v.name == name) return v;
+  }
+  return null;
 }
 
 /// What comparing the safety number has established for one conversation.

@@ -1158,6 +1158,15 @@ class _ChatScreenState extends State<ChatScreen> {
                       itemCount: c.messages.length,
                       itemBuilder: (_, i) {
                         final message = c.messages[i];
+
+                        // A call is not something somebody said, so it is not
+                        // drawn as something somebody said. No bubble, no side,
+                        // no reply and no reaction: those all belong to a
+                        // message with an author, and this has an event.
+                        if (message.call != null) {
+                          return _CallLine(message: message);
+                        }
+
                         final bubble = _Bubble(
                           message: message,
                           showAuthor: _startsRun(c.messages, i),
@@ -1829,6 +1838,60 @@ class _Bubble extends StatelessWidget {
             ),
           ),
         ],
+    );
+  }
+}
+
+/// A call that nobody answered, as one line in the middle of the column.
+///
+/// Centred and muted on purpose. It is a fact about the conversation rather
+/// than a turn in it, and the shape people already read that way is the one
+/// every messenger uses for "this happened" as opposed to "somebody said".
+class _CallLine extends StatelessWidget {
+  const _CallLine({required this.message});
+
+  final StoredMessage message;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = RotelyxThemeScope.of(context);
+    final note = message.call;
+    final mine = message.mine;
+
+    // Missed incoming is the one worth an eye. The other three are things the
+    // person already knows about, because they were the one who did them.
+    final missed = note == CallNote.missed && !mine;
+
+    final icon = switch (note) {
+      CallNote.declined => Icons.phone_disabled_outlined,
+      _ => mine ? Icons.call_made_outlined : Icons.call_missed_outlined,
+    };
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: Metrics.wide,
+        vertical: 6,
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 14, color: missed ? t.text : t.faint),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              message.text,
+              textAlign: TextAlign.center,
+              style: Type.small.copyWith(color: missed ? t.muted : t.faint),
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            '${message.at.hour.toString().padLeft(2, '0')}:'
+            '${message.at.minute.toString().padLeft(2, '0')}',
+            style: Type.small.copyWith(color: t.faint),
+          ),
+        ],
+      ),
     );
   }
 }

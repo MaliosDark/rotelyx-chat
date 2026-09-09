@@ -20,6 +20,16 @@ that the shipped file is what it claims to be.
     assets/sound/message.wav      an arriving message
     assets/sound/connected.wav    a call that got through
     assets/sound/failed.wav       a call that did not
+    assets/sound/ringback.wav     what the caller hears while it rings
+    assets/sound/ringtone.wav     what the called phone plays
+
+The first three are one-shot: they announce something that has already
+happened and are over in half a second. The last two repeat until somebody
+answers, and that changes what they are allowed to be. A tone heard once has
+four hundred milliseconds to be interesting; a tone heard twenty times in a
+row has to survive being heard twenty times in a row. So the character is in
+the tuning rather than in the volume or the density, and each one is mostly
+silence: the pulse is about a quarter of its period.
 
 
 A notification tone has about four hundred milliseconds to be recognised
@@ -108,6 +118,18 @@ def sequence(parts):
     return [s / loudest * PEAK for s in buffer]
 
 
+def bed(seconds):
+    """Silence, long enough to set the length of a repeating sound.
+
+    `sequence` sizes its buffer from whichever part ends latest, so a tone
+    followed by nothing produces a file that ends when the tone does. Laying a
+    silent bed underneath is what gives a looping sound its gap: the file is
+    one whole period, and the player repeats the file rather than being told
+    when to wait.
+    """
+    return [0.0] * int(RATE * seconds)
+
+
 def write(path, samples):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with wave.open(path, "wb") as f:
@@ -156,10 +178,46 @@ def main():
         (0.10, detuned(E5, 0.50, 6.0)),
     ])
 
+    # Waiting: the same rising fourth as everything else, and then nothing.
+    # `connected` earns its landing note; this one is deliberately denied it,
+    # because an unresolved interval is what waiting actually is and a person
+    # hears the difference without being told. Detuned harder than `failed`,
+    # at twenty two cents, which is about one and a half beats a second: enough
+    # that the sound is audibly not right, which is the "altered" this was asked
+    # for, and not so much that it becomes a warble.
+    #
+    # 3.2 seconds, of which the pulse is 0.7. Every ringback in the world is
+    # mostly gap, and the reason is that the caller is listening for a voice
+    # interrupting it, not for the tone.
+    ringback = sequence([
+        (0.00, bed(3.2)),
+        (0.00, detuned(E5, 0.30, 8.0, cents=22.0)),
+        (0.16, detuned(A5, 0.44, 6.0, cents=22.0)),
+    ])
+
+    # Being called: two pulses and a long gap, which is the shape a telephone
+    # has had for a century and the one thing in this file worth borrowing
+    # rather than inventing. A person in another room has to recognise it
+    # through a wall, so this is the one sound that repeats its gesture instead
+    # of stating it once.
+    #
+    # In tune, unlike `ringback`. The two are heard by different people at the
+    # same moment, and they have to be told apart: the caller gets the unsettled
+    # one, the called phone gets the plain one.
+    ringtone = sequence([
+        (0.00, bed(3.6)),
+        (0.00, tone(E5, 0.20, 13.0)),
+        (0.10, tone(A5, 0.28, 10.0)),
+        (0.60, tone(E5, 0.20, 13.0)),
+        (0.70, tone(A5, 0.28, 10.0)),
+    ])
+
     for name, samples in [
         ("message", incoming),
         ("connected", connected),
         ("failed", failed),
+        ("ringback", ringback),
+        ("ringtone", ringtone),
     ]:
         path = os.path.join(sounds, f"{name}.wav")
         size = write(path, samples)
@@ -173,7 +231,7 @@ def main():
     # All three, for the same reason. The call tones are not a notification
     # channel's sound, but they are played by `CallAudio.kt` through the audio
     # route the call is already using, and that reads a resource too.
-    for name in ("message", "connected", "failed"):
+    for name in ("message", "connected", "failed", "ringback", "ringtone"):
         with open(os.path.join(sounds, f"{name}.wav"), "rb") as src:
             data = src.read()
         with open(os.path.join(raw, f"rotelyx_{name}.wav"), "wb") as dst:

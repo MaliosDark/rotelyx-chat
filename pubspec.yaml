@@ -90,7 +90,7 @@ flutter:
   assets:
     - assets/images/
 
-    # The two call tones, and only these two.
+    # The call sounds, and only these.
     #
     # The folder is not declared, for the reason below: Android plays its copy
     # as a resource and a second identical copy in every package is waste. iOS
@@ -104,6 +104,8 @@ flutter:
     # application.
     - assets/sound/connected.wav
     - assets/sound/failed.wav
+    - assets/sound/ringback.wav
+    - assets/sound/ringtone.wav
 
     # `assets/sound/` is deliberately NOT declared.
     #

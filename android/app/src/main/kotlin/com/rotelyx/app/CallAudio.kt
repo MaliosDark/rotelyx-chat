@@ -73,6 +73,9 @@ class CallAudio {
         private const val TAG = "RotelyxAudio"
     }
 
+    /** The repeating ring, when one is playing. See [loop]. */
+    private var ringer: MediaPlayer? = null
+
     private var record: AudioRecord? = null
     private var track: AudioTrack? = null
 
@@ -539,6 +542,71 @@ class CallAudio {
         result.success(played)
     }
 
+    /**
+     * Start a repeating ring, and keep it until [unloop].
+     *
+     * A `MediaPlayer` on the same raw resources as [tone], with `isLooping`,
+     * because each file is a whole period with its own silence in it. Looping
+     * a file is one flag; a timer that replays a short tone would drift, and
+     * would go on ringing if the call ended while this side was being torn
+     * down.
+     *
+     * `USAGE_NOTIFICATION_RINGTONE` rather than the voice usage [tone] takes:
+     * this plays while there is no call, and a ring routed into the earpiece is
+     * a ring nobody in the next room hears. The one exception is a ringback,
+     * which is heard by somebody already holding the phone, but routing the two
+     * differently would mean two audio attributes for one mechanism, and the
+     * ringback is short and quiet enough that the loudspeaker is not wrong.
+     *
+     * Replaces whatever was playing. Two rings at once is not a state this can
+     * be in, and if it ever were, the fix is to stop the old one rather than to
+     * layer them.
+     */
+    private fun loop(call: MethodCall, context: android.content.Context,
+                     result: MethodChannel.Result) {
+        val id = when (call.argument<String>("name")) {
+            "ringback" -> R.raw.rotelyx_ringback
+            "ringtone" -> R.raw.rotelyx_ringtone
+            else -> {
+                result.success(false)
+                return
+            }
+        }
+
+        unloop()
+
+        val player = MediaPlayer()
+        val playing = runCatching {
+            val fd = context.resources.openRawResourceFd(id)
+            player.setDataSource(fd.fileDescriptor, fd.startOffset, fd.length)
+            fd.close()
+            player.setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build()
+            )
+            player.isLooping = true
+            player.prepare()
+            player.start()
+            true
+        }.getOrElse {
+            player.release()
+            false
+        }
+
+        if (playing) ringer = player
+        result.success(playing)
+    }
+
+    /** Stop the repeating ring. Does nothing when none is playing. */
+    private fun unloop() {
+        val player = ringer ?: return
+        ringer = null
+        runCatching { player.stop() }
+        player.release()
+    }
+
     /** Automatic gain, when the device offers it. */
     private fun attachGain(sessionId: Int) {
         if (!AutomaticGainControl.isAvailable()) return
@@ -578,6 +646,12 @@ class CallAudio {
     }
 
     fun stop(context: android.content.Context? = null) {
+        // First, and unconditionally. Everything below is about a call that was
+        // running; a ring belongs to a call that was not yet, and the paths
+        // that end one without ever starting audio are exactly the ones that
+        // would otherwise leave a phone ringing to itself.
+        unloop()
+
         running.set(false)
         capture?.join(500)
         capture = null
@@ -617,6 +691,11 @@ class CallAudio {
             "route" -> route(call, context, result)
             "dropped" -> result.success(dropped)
             "tone" -> tone(call, context, result)
+            "loop" -> loop(call, context, result)
+            "unloop" -> {
+                unloop()
+                result.success(true)
+            }
             "stop" -> {
                 stop(context)
                 result.success(null)

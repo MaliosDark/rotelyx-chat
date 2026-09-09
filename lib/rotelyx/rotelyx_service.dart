@@ -246,6 +246,43 @@ class RotelyxService {
     store.save(conversation);
   }
 
+  /// Write a call that left nothing behind into the conversation.
+  ///
+  /// # Why this is here and not in `Calls`
+  ///
+  /// For the same reason `_record` is: this service owns what is durable. The
+  /// call machinery knows a call ended and knows nothing about which
+  /// conversation is being persisted to, and a widget that happened to be on
+  /// screen is the wrong place to own history, which is written down at
+  /// [_emit].
+  ///
+  /// The state is re-announced rather than a message being pushed onto
+  /// [messages]. Screens reload the conversation from the store when the state
+  /// changes, which they already do, and the live stream carries messages that
+  /// travelled: this one did not travel, it happened here. Both sides write
+  /// their own line about the same call, because both sides know their own half
+  /// of it and neither has to be told.
+  void recordCall(CallNote note, {required bool mine, required String text}) {
+    final id = _persistId;
+    if (id == null) return;
+
+    final conversation = store.load(id);
+    if (conversation == null) return;
+
+    final at = DateTime.now();
+    conversation.messages.add(StoredMessage(
+      text: text,
+      mine: mine,
+      at: at,
+      author: mine ? '' : conversation.title,
+      call: note,
+    ));
+    conversation.lastActivity = at;
+    store.save(conversation);
+
+    _stateChanges.add(state);
+  }
+
   /// Rewrite a message's delivery state once the mailbox has answered.
   ///
   /// [StoredMessage] is immutable, so the entry is replaced rather than

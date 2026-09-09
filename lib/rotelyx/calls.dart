@@ -423,8 +423,77 @@ class Calls {
   }
 
   void _move(CallState next) {
+    final before = _state.phase;
     _state = next;
+    _ring(before, next.phase);
+    _note(before, next);
     _changes.add(next);
+  }
+
+  /// Write a line about a call that nobody answered.
+  ///
+  /// Only from a ringing phase, and only into `over`. A call that reached
+  /// `talking` is remembered by the two people who had it and needs no line;
+  /// one that never did is the case this exists for, because until now it left
+  /// no trace anywhere at all.
+  ///
+  /// Which side placed it is the phase it was ringing in, and that becomes
+  /// `mine` on the line, so the two ends write different sentences about the
+  /// same call without either being told anything by the other.
+  void _note(CallPhase before, CallState next) {
+    if (next.phase != CallPhase.over) return;
+    final outgoing = before == CallPhase.ringingOut;
+    if (!outgoing && before != CallPhase.ringingIn) return;
+
+    // Declined is the one ending somebody chose. Everything else, including
+    // the connection breaking while it rang, is the same fact to whoever reads
+    // it later: it rang and nobody picked it up.
+    final declined = next.ended == CallEnded.declined;
+    final note = declined ? CallNote.declined : CallNote.missed;
+
+    rotelyx.recordCall(
+      note,
+      mine: outgoing,
+      text: switch ((outgoing, declined)) {
+        (true, false) => 'Called, no answer',
+        (true, true) => 'Call declined',
+        (false, false) => 'Missed call',
+        (false, true) => 'Call declined',
+      },
+    );
+  }
+
+  /// Start and stop the ring, from the one place every phase change passes.
+  ///
+  /// # Why here and not at the four call sites
+  ///
+  /// A ring has to stop on every way out of ringing, and there are more ways
+  /// than the two anybody thinks of. Answered and declined are the two; the
+  /// others are the far end hanging up mid-ring, the heartbeat running out, the
+  /// watchdog firing, and the call being replaced by another. Starting it where
+  /// the call is placed and stopping it where it is answered leaves the rest
+  /// ringing, and a phone that rings after the caller gave up is the worst of
+  /// the failures available here.
+  ///
+  /// Phases are compared rather than trusted to differ: `_move` is called with
+  /// the same phase in it more than once, and restarting a ring on every
+  /// heartbeat would make it stutter instead of loop.
+  void _ring(CallPhase before, CallPhase after) {
+    if (before == after) return;
+
+    switch (after) {
+      case CallPhase.ringingOut:
+        unawaited(startLoop('ringback'));
+      case CallPhase.ringingIn:
+        unawaited(startLoop('ringtone'));
+      default:
+        // Every other phase, including the ones that are not endings. Connected
+        // is one of them: the ringback has to stop the moment there is a voice,
+        // and the `connected` tone plays over its silence.
+        if (before == CallPhase.ringingOut || before == CallPhase.ringingIn) {
+          unawaited(stopLoop());
+        }
+    }
   }
 }
 

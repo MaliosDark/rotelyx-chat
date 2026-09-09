@@ -227,6 +227,12 @@ class CallAudio {
     }
 
     func stop() {
+        // Before the guard, deliberately. Below this line is the teardown of a
+        // call that was running; a ring plays while one is not, so every path
+        // that ends a call before its audio ever started returns at the guard
+        // and would leave the phone ringing to itself.
+        unloop()
+
         guard running else { return }
         running = false
 
@@ -285,6 +291,68 @@ class CallAudio {
         }
     }
 
+    /// Held for as long as it rings, and released by `unloop`.
+    private var ringer: AVAudioPlayer?
+
+    /// Start a repeating ring: `ringback` while we call, `ringtone` while we
+    /// are called.
+    ///
+    /// `numberOfLoops = -1` rather than a repeating timer. Each file is one
+    /// whole period with its own silence in it, so the player holds the rhythm
+    /// and nothing here has to stay awake to keep it.
+    ///
+    /// The session is set to `.playback` when no call is running. A ring plays
+    /// before there is a call, so the `.playAndRecord` session `start` installs
+    /// does not exist yet, and without a category the sound is subject to the
+    /// silent switch: a phone that shows a call and makes no sound because a
+    /// switch on its side is flipped is a missed call nobody knows they missed.
+    /// A call that is already running keeps its own session untouched, which is
+    /// the ringback case.
+    private func loop(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
+        guard let args = call.arguments as? [String: Any],
+              let name = args["name"] as? String,
+              name == "ringback" || name == "ringtone" else {
+            result(false)
+            return
+        }
+
+        let key = FlutterDartProject.lookupKey(forAsset: "assets/sound/\(name).wav")
+        guard let path = Bundle.main.path(forResource: key, ofType: nil) else {
+            result(false)
+            return
+        }
+
+        unloop()
+
+        do {
+            if !running {
+                let session = AVAudioSession.sharedInstance()
+                try session.setCategory(.playback, mode: .default)
+                try session.setActive(true)
+            }
+            let player = try AVAudioPlayer(contentsOf: URL(fileURLWithPath: path))
+            player.numberOfLoops = -1
+            ringer = player
+            player.play()
+            result(true)
+        } catch {
+            ringer = nil
+            result(false)
+        }
+    }
+
+    /// Stop the repeating ring. Does nothing when none is playing.
+    ///
+    /// The session is left as it is rather than deactivated. A ringback ends
+    /// because the call was answered, and `start` is setting up its own session
+    /// at that moment; tearing this one down underneath it is a race for no
+    /// benefit. A ring that ends with no call following leaves a `.playback`
+    /// session with nothing playing, which costs nothing.
+    private func unloop() {
+        ringer?.stop()
+        ringer = nil
+    }
+
     func handle(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
         switch call.method {
         case "permit":
@@ -298,6 +366,10 @@ class CallAudio {
         case "play": play(call, result)
         case "route": route(call, result)
         case "tone": tone(call, result)
+        case "loop": loop(call, result)
+        case "unloop":
+            unloop()
+            result(true)
         case "dropped": result(dropped)
         case "stop":
             stop()
