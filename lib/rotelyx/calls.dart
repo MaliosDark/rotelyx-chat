@@ -147,6 +147,17 @@ class Calls {
   /// Answer what is ringing.
   Future<String?> answer() async {
     if (_state.phase != CallPhase.ringingIn) return null;
+
+    // The same debt `place` pays, on the side that did not dial.
+    //
+    // A conversation reopened from storage cannot send until it has rekeyed,
+    // and everything this side of a call says goes out through `signal`:
+    // answering, declining, hanging up. Without this, a call arriving into a
+    // freshly opened application is one the other phone never hears the end
+    // of, and it rings out while somebody is looking at it. See
+    // `RotelyxService.rekeyIfOwed`.
+    rotelyx.rekeyIfOwed();
+
     if (!await permitMicrophone()) {
       hangUp(CallEnded.declined);
       return 'The microphone permission was refused.';
@@ -192,6 +203,11 @@ class Calls {
     final next = _state.end(why);
     if (next == null) return;
 
+    // Declining is the other way a call is answered, and it is the one that
+    // matters most here: a decline that does not arrive leaves the caller
+    // listening to a phone that has already been put down.
+    rotelyx.rekeyIfOwed();
+
     // Only a call that broke. Declined, unanswered and hung up are endings a
     // person either caused or expected, and a fault tone for those would be
     // telling them something went wrong when nothing did.
@@ -225,6 +241,9 @@ class Calls {
       // Refused while busy. Told rather than ignored, so their phone stops
       // ringing instead of ringing out.
       if (what == CallSignal.ringing && _state.isBusy) {
+        // Same debt again. This one is a decline nobody pressed, and it is the
+        // only thing standing between the caller and a phone that rings out.
+        rotelyx.rekeyIfOwed();
         rotelyx.signal(Signal.call(CallSignal.declined, id: id));
       }
       return;
