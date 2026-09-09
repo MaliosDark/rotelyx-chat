@@ -342,6 +342,17 @@ class _WebEngine implements RotelyxEngine {
   String openUnder(String envelopeB64, String tagHex) =>
       _require().openUnder(envelopeB64, tagHex);
   @override
+  RotelyxKey keyFromDeviceBytes(String keyB64) => throw const RotelyxUnavailable(
+      'a browser has no keystore to take a key from, so a vault here is opened '
+      'with a passphrase');
+
+  @override
+  RotelyxKey unlockWithDeviceBytes(String keyB64, String blobB64) =>
+      throw const RotelyxUnavailable(
+          'a browser has no keystore to take a key from, so a vault here is '
+          'opened with a passphrase');
+
+  @override
   String sealWakeTicket(
           String notifierKeyB64, String kind, String token, int hour) =>
       _require().sealWakeTicket(notifierKeyB64, kind, token, hour);

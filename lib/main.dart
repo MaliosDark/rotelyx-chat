@@ -13,6 +13,7 @@
 /// long as the network takes.
 library;
 
+import 'rotelyx/rotelyx_store.dart';
 import 'package:flutter/material.dart';
 import 'package:get_storage/get_storage.dart';
 
@@ -37,6 +38,18 @@ Future<void> main() async {
   // instance pointing at the wrong directory, and the symptom is history that
   // silently stops being shared with the extension.
   await GetStorage('GetStorage', await sharedContainerPath()).initStorage;
+
+  // The vault, opened with the device's own key and without asking anybody.
+  //
+  // Before the first frame rather than from a widget: a future begun in
+  // `initState` settles whenever it settles, and one that calls `setState`
+  // after its widget is gone is a lookup on a tree that is no longer there.
+  // Here the answer is known before anything is built, so the first screen is
+  // simply the right one.
+  //
+  // False leaves the passphrase screen where it was, which is a vault made
+  // before device keys existed and a browser with nowhere to keep a key.
+  await store.openWithDeviceKey();
 
   // Render failures as readable text rather than the release build's blank grey
   // box, which is indistinguishable from an app that never started.

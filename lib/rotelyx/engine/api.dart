@@ -222,6 +222,16 @@ abstract interface class RotelyxEngine {
   /// seal to would let that server name its own and read every ticket.
   String sealWakeTicket(String notifierKeyB64, String kind, String token, int hour);
 
+  /// A vault key from bytes the device holds, rather than from a passphrase.
+  ///
+  /// Thirty two bytes, base64url. The engine has had this path since the
+  /// beginning and no client could reach it, which is why the only way to have
+  /// a vault was to make somebody type for it.
+  RotelyxKey keyFromDeviceBytes(String keyB64);
+
+  /// Open a vault that was made with [keyFromDeviceBytes].
+  RotelyxKey unlockWithDeviceBytes(String keyB64, String blobB64);
+
   String sealBlob(RotelyxKey key, String dataB64);
   String openBlob(RotelyxKey key, String blobB64);
 }

@@ -509,6 +509,14 @@ class _NativeEngine implements RotelyxEngine {
       _NativeKey(_int(_call({'op': 'key.create', 'passphrase': passphrase})));
 
   @override
+  RotelyxKey keyFromDeviceBytes(String keyB64) =>
+      _NativeKey(_int(_call({'op': 'key.fromPlatformKey', 'key': keyB64})));
+
+  @override
+  RotelyxKey unlockWithDeviceBytes(String keyB64, String blobB64) => _NativeKey(_int(
+      _call({'op': 'key.unlockWithPlatformKey', 'key': keyB64, 'blob': blobB64})));
+
+  @override
   RotelyxKey unlockKey(String passphrase, String blob) => _NativeKey(
       _int(_call({'op': 'key.unlock', 'passphrase': passphrase, 'blob': blob})));
 

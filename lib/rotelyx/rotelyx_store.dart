@@ -35,6 +35,7 @@
 library;
 
 import 'dart:convert';
+import 'dart:math' show Random;
 import 'dart:typed_data';
 
 import 'package:get_storage/get_storage.dart';
@@ -377,6 +378,9 @@ class RotelyxStore {
   static final instance = RotelyxStore._();
 
   static const _kProbe = 'rotelyx.probe';
+
+  /// The device's own vault key, base64url, when there is no passphrase.
+  static const _kDeviceKey = 'rotelyx.devicekey';
   static const _kPreviews = 'rotelyx.previews';
   static const _kFace = 'rotelyx.face';
   static const _kHomeWidget = 'rotelyx.widget.home';
@@ -712,6 +716,78 @@ class RotelyxStore {
     // anything that could verify it offline more cheaply than the real data.
     _box.write(_kProbe, RotelyxWasm.sealBlob(key, base64Encode(utf8.encode('rotelyx'))));
     _key = key;
+  }
+
+  /// Open the vault without asking anybody for anything.
+  ///
+  /// # What this changes, said plainly
+  ///
+  /// A vault used to be opened by a passphrase, and the key existed only in
+  /// somebody's head and in memory while the application ran. That protects a
+  /// phone that is off or seized, and it costs a passphrase every time the
+  /// application starts, which on iOS is every time the system decides to stop
+  /// it. A notification that needs a passphrase typed before the message
+  /// behind it can be read is a notification most people will stop opening.
+  ///
+  /// So the key is a random thirty two bytes made once and kept beside the
+  /// data. What that still protects:
+  ///
+  /// | | passphrase | device key |
+  /// |---|---|---|
+  /// | Another application on the phone | no | no |
+  /// | The phone, off or never unlocked | **nothing readable** | readable |
+  /// | Somebody holding it unlocked | **nothing readable** | readable |
+  ///
+  /// The second column is the trade, and it is deliberate: somebody holding an
+  /// unlocked phone is already reading the conversation on the screen, and the
+  /// per-conversation PIN in `chat_lock.dart` is what answers that for anybody
+  /// who wants it answered.
+  ///
+  /// # Why the key is not stretched
+  ///
+  /// It is not a passphrase. `from_platform_key` takes thirty two bytes and
+  /// derives nothing, because there is nothing to derive from: the entropy is
+  /// already there. Stretching would cost a second at every launch and add
+  /// nothing.
+  ///
+  /// Returns false where there is no keystore path at all, which is a browser.
+  /// There the passphrase is still the way in, and that is right rather than a
+  /// gap: a page has nowhere to keep a key that the next page cannot read.
+  Future<bool> openWithDeviceKey() async {
+    var stored = _box.read(_kDeviceKey) as String?;
+
+    if (stored == null && hasVault) {
+      // A vault made by a passphrase, from before this. Not opened here, and
+      // not replaced either: the data under it is only readable with what
+      // somebody knows, and throwing that away would throw the history away
+      // with it.
+      return false;
+    }
+
+    try {
+      if (stored == null) {
+        final bytes = List<int>.generate(32, (_) => Random.secure().nextInt(256));
+        stored = base64Url.encode(bytes).replaceAll('=', '');
+        _key?.dispose();
+        final key = RotelyxWasm.keyFromDeviceBytes(stored);
+        _box.write(
+            _kProbe, RotelyxWasm.sealBlob(key, base64Encode(utf8.encode('rotelyx'))));
+        _box.write(_kDeviceKey, stored);
+        _key = key;
+        return true;
+      }
+
+      final probe = _box.read(_kProbe) as String?;
+      if (probe == null) return false;
+      final key = RotelyxWasm.unlockWithDeviceBytes(stored, probe);
+      // Opening the probe is the check, exactly as it is for a passphrase.
+      RotelyxWasm.openBlob(key, probe);
+      _key?.dispose();
+      _key = key;
+      return true;
+    } on Object {
+      return false;
+    }
   }
 
   /// Open an existing vault. Returns false when the passphrase is wrong.

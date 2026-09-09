@@ -76,6 +76,12 @@ class RotelyxWasm {
   static WasmKey unlockKey(String passphrase, String blob) =>
       engine.unlockKey(passphrase, blob);
 
+  static WasmKey keyFromDeviceBytes(String keyB64) =>
+      engine.keyFromDeviceBytes(keyB64);
+
+  static WasmKey unlockWithDeviceBytes(String keyB64, String blob) =>
+      engine.unlockWithDeviceBytes(keyB64, blob);
+
   // ---- rendezvous ------------------------------------------------------------
 
   /// Derive a meeting tag from a string both sides know.

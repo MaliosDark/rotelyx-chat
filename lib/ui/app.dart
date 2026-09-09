@@ -47,7 +47,7 @@ class _RotelyxAppState extends State<RotelyxApp> with WidgetsBindingObserver {
     'home' || 'chat' => _Surface.home,
     'pair' => _Surface.pair,
     'settings' => _Surface.settings,
-    _ => _Surface.unlock,
+    _ => startsLocked ? _Surface.unlock : _Surface.home,
   };
   bool _dark = true;
   Key _homeKey = UniqueKey();
@@ -341,5 +341,11 @@ class _RotelyxAppState extends State<RotelyxApp> with WidgetsBindingObserver {
   }
 }
 
-/// Skips the unlock screen when there is nothing stored and nothing to unlock.
-bool get startsLocked => store.hasVault;
+/// Whether somebody has to be asked for a passphrase before anything opens.
+///
+/// A vault opened with the device's own key is already open by the time this
+/// is read, so the answer is no and the screen is skipped. It stays yes for a
+/// vault made by a passphrase before device keys existed, which only what
+/// somebody knows can open, and for a browser, which has no keystore to keep a
+/// key in.
+bool get startsLocked => store.hasVault && !store.isUnlocked;

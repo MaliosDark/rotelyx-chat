@@ -1753,6 +1753,41 @@ class RotelyxService {
     }
   }
 
+  /// Move a restored session to an epoch of its own, and tell the others.
+  ///
+  /// # Why the commit goes to the old epoch
+  ///
+  /// This commit is what moves the others off the epoch they are on, so it has
+  /// to be addressed there. Sent at the new one it lands under tags nobody is
+  /// listening on, and the group splits with this device an epoch ahead and
+  /// nothing saying so. `sealCommitForGroup` addresses one epoch back for
+  /// exactly this reason, which is why it and not `sealForGroup`.
+  ///
+  /// # Why a failure here is not fatal
+  ///
+  /// A conversation with one member has nobody to tell and nothing to move, and
+  /// a note to self is the ordinary case of that. Failing the conversation over
+  /// it would make history unreadable to protect a rekey nobody needed.
+  Future<void> _rekeyAfterRestore() async {
+    final session = _session;
+    if (session == null) return;
+
+    try {
+      final commit = session.rekeyAfterRestore();
+      for (final envelope in session.sealCommitForGroup(commit)) {
+        _mailbox?.deposit(envelope);
+      }
+      // The tags moved with the epoch, as they do after any commit, so what
+      // this device listens on has to move with them.
+      _resubscribe();
+    } on Object catch (e) {
+      // Recorded rather than raised. What it costs is sending, which the next
+      // attempt will refuse loudly on its own, and what raising would cost is
+      // the conversation.
+      lastError = 'this conversation could not take a fresh key: $e';
+    }
+  }
+
   /// Re-subscribe when the hour rolls over.
   ///
   /// Mailbox tags are derived from the hour bucket, so the set subscribed to at
@@ -1973,6 +2008,23 @@ class RotelyxService {
 
     _moveTo(RotelyxState.joined);
     _resubscribe();
+
+    // A session that came off the disk cannot send until it has rekeyed.
+    //
+    // `unsealSession` reopens the MLS group from storage, and a reopened group
+    // refuses to send: the copy believes it is at a generation the group has
+    // already spent, so everything it sent would be dropped by the receiver
+    // and nothing would say why. The engine answers that by refusing at the
+    // near end instead, and `rekeyAfterRestore` is how a copy earns the right
+    // back.
+    //
+    // Nothing called it. The whole path is built, in the wasm, in the C ABI,
+    // in this interface and in both implementations, and no caller existed.
+    // While conversations lived only in memory that cost nothing, because a
+    // session was never reopened. The moment history was kept, every restored
+    // conversation could receive and could not send, on both platforms and in
+    // both directions.
+    await _rekeyAfterRestore();
 
     final meeting = _meetingTag;
     if (meeting != null) _mailbox?.subscribe([meeting]);
