@@ -1133,6 +1133,48 @@ class _ChatScreenState extends State<ChatScreen> {
                   title: 'Readable, not reachable',
                 ),
               ),
+            // A call already happening in here, said on the way in.
+            //
+            // There is no way to be told about a call in a conversation that is
+            // not open without listening at every conversation's address at
+            // once, and doing that from one connection tells the mailbox that
+            // those conversations belong to one device. That was built, it
+            // broke exactly the separation this application exists for, and it
+            // was taken out again.
+            //
+            // So this is the honest half: nothing is listened to, and the room
+            // is there to walk into the moment somebody opens the door.
+            if (rotelyx.callIsLiveIn(widget.conversationId))
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                    Metrics.pad, 0, Metrics.pad, Metrics.pad),
+                child: Material(
+                  color: Tone.accent.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(12),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: calls.isPossible ? _placeCall : null,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 10),
+                      child: Row(
+                        children: [
+                          Icon(Icons.podcasts, size: 16, color: Tone.accent),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text('A call is happening here',
+                                style: Type.body.copyWith(color: t.text)),
+                          ),
+                          Text('Join',
+                              style: Type.label.copyWith(
+                                  color: Tone.accent, fontSize: 13)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
             Expanded(
               child: GestureDetector(
                 behavior: HitTestBehavior.translucent,

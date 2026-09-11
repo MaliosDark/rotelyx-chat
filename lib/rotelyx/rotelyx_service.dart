@@ -394,10 +394,58 @@ class RotelyxService {
       case SignalKind.edited:
         _theyEdited(signal.editedAt, signal.editedText);
       case SignalKind.call:
+        // Which conversation has a call happening in it, before passing it on.
+        //
+        // A ring used to be a thing that happened and then stopped happening,
+        // with nothing left behind: a person who missed it, or who was in
+        // another conversation, had no way to learn that four of their friends
+        // were in a room talking. A call with more than two people is a room,
+        // and a room is a state rather than an event.
+        _noteCallState(signal);
+
         // Ringing, answering, hanging up. Passed straight out rather than
         // acted on here: whether a call may start is a question about what is
         // on screen, and this object has no idea what is on screen.
         _calls.add(signal);
+    }
+  }
+
+  /// Conversations with a call happening in them, by id.
+  ///
+  /// In memory and not written down, deliberately: a call that was live when
+  /// the application was killed is not live when it comes back, and a list of
+  /// rooms restored from disk would show people talking who went home hours
+  /// ago.
+  final Set<String> _callsInProgress = {};
+
+  /// Whether somebody is in a call in [conversationId] right now.
+  bool callIsLiveIn(String conversationId) =>
+      _callsInProgress.contains(conversationId);
+
+  /// Update that from a call signal, and say so once when it starts.
+  void _noteCallState(Signal signal) {
+    final id = _persistId;
+    if (id == null) return;
+
+    switch (signal.callSignal) {
+      case CallSignal.ringing:
+      case CallSignal.joined:
+        if (_callsInProgress.add(id)) {
+          final name = store.load(id)?.displayTitle ?? 'a conversation';
+          _notices.add('There is a call happening in $name.');
+          _stateChanges.add(state);
+        }
+      case CallSignal.ended:
+        // Only `ended` empties the room. `left` is one person going home while
+        // the rest carry on, and treating the two the same would take the room
+        // off the screen for everybody because somebody's battery died.
+        if (_callsInProgress.remove(id)) _stateChanges.add(state);
+      case CallSignal.left:
+      case CallSignal.answered:
+      case CallSignal.declined:
+      case CallSignal.stillRinging:
+      case null:
+        break;
     }
   }
 
@@ -1482,6 +1530,25 @@ class RotelyxService {
       return;
     }
 
+    // Whether the invitation they used still opens the door.
+    //
+    // A meeting phrase used to be infinite and irrevocable: the tag is a hash
+    // of it, so it never expired, nobody counted who had walked through, and
+    // the only way to close it was to agree a different phrase with everybody
+    // already inside. Somebody removed from a group could knock again with the
+    // same words. An invitation is an object with limits and an owner now, and
+    // this is where the limits are worth anything.
+    //
+    // Only for a later arrival. The founding pair is the invitation.
+    final admittingTo = founding ? null : store.load(_persistId ?? '');
+    if (admittingTo != null && !admittingTo.meetingIsOpen) {
+      lastError = 'could not let $name in: '
+          '${admittingTo.meetingClosedBecause ?? 'that invitation is closed'}';
+      _notices.add(lastError!);
+      _stateChanges.add(state);
+      return;
+    }
+
     try {
       final invitation = session.invite(keyPackage);
 
@@ -1507,6 +1574,13 @@ class RotelyxService {
 
       for (final envelope in session.sealCommitForGroup(invitation.commit)) {
         _mailbox?.deposit(envelope);
+      }
+
+      // Spent, and written down. Counted after the commit rather than before,
+      // so an admission that failed does not use up somebody's place.
+      if (admittingTo != null) {
+        admittingTo.meetingUses += 1;
+        store.save(admittingTo);
       }
 
       // Our own tags moved with the epoch.
@@ -2206,6 +2280,12 @@ class RotelyxService {
 
     final meeting = _meetingTag;
     if (meeting != null) _mailbox?.subscribe([meeting]);
+
+    // Opened, so it stops being a conversation somebody is waiting outside of.
+    // The knock itself was never acknowledged, so the mailbox still has it and
+    // re-delivers it here, where the ordinary rendezvous path admits.
+
+
     _watchTagRotation();
     return true;
   }
@@ -2228,7 +2308,17 @@ class RotelyxService {
     // does not listen on would be a note that means nothing.
     final meeting = _meetingTag;
     if (meeting != null && _role == PairingRole.host) {
-      store.rememberMeetingTag(conversationId, meeting);
+      // With the deadline the person chose when they handed the invitation out.
+      //
+      // It was written beside the waiting invitation and thrown away the moment
+      // the conversation existed, so a phrase meant to last an hour went on
+      // opening the door for ever. The waiting record still has it here,
+      // because this runs while the pairing is being finished.
+      final held = store.waiting;
+      final until = held != null && held['until'] is int
+          ? DateTime.fromMillisecondsSinceEpoch(held['until'] as int)
+          : null;
+      store.rememberMeetingTag(conversationId, meeting, until: until);
     }
   }
 

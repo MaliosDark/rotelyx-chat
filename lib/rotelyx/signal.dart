@@ -77,6 +77,32 @@ enum CallSignal {
   /// phone ringing forever, and the only thing that stops it is somebody
   /// answering a call that is not there.
   stillRinging,
+
+  /// Somebody is in the call now.
+  ///
+  /// # Why a call with more than two people needs this
+  ///
+  /// A ring goes to the whole group, so in a group of five it rings four
+  /// phones. [answered] is read only by the device that placed the call, so
+  /// when one of the four picked up, the other three heard nothing: they went
+  /// on ringing until a timer gave up, each believing the call was still
+  /// theirs to answer.
+  ///
+  /// This is the announcement they were missing. A call with more than two
+  /// people is a room rather than an offer: it stops ringing at anybody and
+  /// starts being a thing that is happening, which they can join or not.
+  ///
+  /// Sent by whoever joins, including the person who started it, so the room's
+  /// membership is what everybody has seen rather than something one device
+  /// keeps and the rest are told about.
+  joined,
+
+  /// Somebody has left the call, which is not the call ending.
+  ///
+  /// [ended] means the call is over for everybody. In a room of four, one
+  /// person hanging up is three people still talking, and an interface that
+  /// treats the two the same empties a room because somebody's battery died.
+  left,
 }
 
 const String _marker = 'rx-signal';

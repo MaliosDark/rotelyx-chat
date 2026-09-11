@@ -609,8 +609,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     children: [
                       _Row('Version',
                           ready ? RotelyxWasm.protocolVersion : 'not loaded'),
-                      _Row('Largest group',
-                          ready ? '${RotelyxWasm.maxMembers}' : 'not loaded'),
+                      // The largest group was shown here and is not any
+                      // more. It is a ceiling rather than a promise, it invites
+                      // being read as one, and somebody comparing two
+                      // applications on a number compares the wrong thing:
+                      // what limits a group here is the cost of one deposit per
+                      // member, not a constant.
                     ],
                   ),
 
@@ -748,9 +752,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
 const _buildName = String.fromEnvironment('FLUTTER_BUILD_NAME');
 const _buildNumber = String.fromEnvironment('FLUTTER_BUILD_NUMBER');
 
+/// A second source for the version, passed on the build command line.
+///
+/// Flutter is supposed to supply the two above on every `flutter build`, and on
+/// this project it did not reach the binary: the screen read "development
+/// build" on a release that had been installed from the store. A version
+/// nobody can read is a bug report nobody can place, so there is a fallback
+/// and it no longer claims to be anything.
+const _appVersionDefine = String.fromEnvironment('APP_VERSION');
+
 String get _appVersion {
-  if (_buildName.isEmpty) return 'development build';
-  return _buildNumber.isEmpty ? _buildName : '$_buildName ($_buildNumber)';
+  if (_buildName.isNotEmpty) {
+    return _buildNumber.isEmpty ? _buildName : '$_buildName ($_buildNumber)';
+  }
+  if (_appVersionDefine.isNotEmpty) return _appVersionDefine;
+  return 'unknown';
 }
 
 class _Vendor extends StatelessWidget {

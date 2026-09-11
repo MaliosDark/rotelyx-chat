@@ -115,7 +115,15 @@ class _UnlockScreenState extends State<UnlockScreen> {
       child: SafeArea(
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(Metrics.wide),
+            // Room for the keyboard, as on the pairing screen: `SafeArea`
+            // covers the system bars and not what the system puts over the
+            // window, and this screen has a field above what it is for.
+            padding: EdgeInsets.fromLTRB(
+              Metrics.wide,
+              Metrics.wide,
+              Metrics.wide,
+              Metrics.wide + MediaQuery.viewInsetsOf(context).bottom,
+            ),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 420),
               child: AnimatedSize(

@@ -286,8 +286,72 @@ class StoredConversation {
     this.verifiedNumber,
     this.askedToVerify = false,
     this.meetingTag,
+    this.meetingExpires,
+    this.meetingMaxUses,
+    this.meetingUses = 0,
+    this.meetingNeedsApproval = true,
     List<String>? burnAcks,
   }) : burnAcks = burnAcks ?? [];
+
+  /// When the meeting phrase stops opening the door, or null for never.
+  ///
+  /// # Why a phrase needed limits at all
+  ///
+  /// The tag is a hash of the phrase, so the phrase was infinite and
+  /// irrevocable: it never expired, nobody counted how many people had walked
+  /// through it, and the only way to close it was to agree a different phrase
+  /// with everybody already inside. Somebody removed from a group could simply
+  /// knock again.
+  ///
+  /// Every comparable application treats an invitation as an object with
+  /// limits and an owner: it can be turned off, reset, given a deadline, or
+  /// capped at a number of uses, and several of those at once. These four
+  /// fields are that, and [meetingTag] set to null is the off switch.
+  DateTime? meetingExpires;
+
+  /// How many people the phrase may still let in, or null for no limit.
+  int? meetingMaxUses;
+
+  /// How many it has let in so far.
+  ///
+  /// Counted from the commits that admitted them, which every member sees, so
+  /// two members admitting at once cannot both spend the last place without
+  /// one of them noticing.
+  int meetingUses;
+
+  /// Whether somebody has to say yes, or whoever knocks simply walks in.
+  ///
+  /// True by default, which is what the application did before this existed
+  /// and is the safe answer for a phrase that has been passed around. Turning
+  /// it off is right for an invitation that was handed to one person, where the
+  /// decision was already made when it was handed over.
+  bool meetingNeedsApproval;
+
+  /// Whether the phrase still opens the door at all.
+  bool get meetingIsOpen {
+    final tag = meetingTag;
+    if (tag == null || tag.isEmpty) return false;
+    final until = meetingExpires;
+    if (until != null && DateTime.now().isAfter(until)) return false;
+    final cap = meetingMaxUses;
+    if (cap != null && meetingUses >= cap) return false;
+    return true;
+  }
+
+  /// Why it does not, for saying so rather than failing silently.
+  String? get meetingClosedBecause {
+    final tag = meetingTag;
+    if (tag == null || tag.isEmpty) return 'that invitation was turned off';
+    final until = meetingExpires;
+    if (until != null && DateTime.now().isAfter(until)) {
+      return 'that invitation has expired';
+    }
+    final cap = meetingMaxUses;
+    if (cap != null && meetingUses >= cap) {
+      return 'that invitation has been used as many times as it was meant to be';
+    }
+    return null;
+  }
 
   /// What this device calls them, overriding the label they chose.
   ///
@@ -445,6 +509,7 @@ class RotelyxStore {
   /// Prefix for "this conversation's session was written down after the last
   /// thing that moved it". See [sessionSealedClean].
   static const _kSealed = 'rotelyx.sealed.';
+
   static const _kHomeWidget = 'rotelyx.widget.home';
   static const _kLockWidget = 'rotelyx.widget.lock';
   static const _kConnected = 'rotelyx.connected';
@@ -1060,6 +1125,13 @@ class RotelyxStore {
       if (c.verifiedNumber != null) 'vnum': c.verifiedNumber,
       if (c.askedToVerify) 'asked': true,
       if (c.meetingTag != null) 'meet': c.meetingTag,
+      if (c.meetingExpires != null)
+        'meetuntil': c.meetingExpires!.millisecondsSinceEpoch,
+      if (c.meetingMaxUses != null) 'meetcap': c.meetingMaxUses,
+      if (c.meetingUses > 0) 'meetused': c.meetingUses,
+      // Written only when turned off, so a conversation from before this field
+      // reads back as needing approval, which is what it did.
+      if (!c.meetingNeedsApproval) 'meetopen': true,
       if (c.unread) 'unread': true,
       if (c.lastOpened != null)
         'opened': c.lastOpened!.millisecondsSinceEpoch,
@@ -1140,11 +1212,46 @@ class RotelyxStore {
   /// This is not a weaker [markVerified]: it stores no number, so the
   /// conversation stays unverified and a later change is still invisible to it.
   /// All it buys is that nobody is asked the same question twice.
-  /// Remember where this conversation's host answers knocks.
-  void rememberMeetingTag(String id, String tag) {
+  /// Remember where this conversation answers knocks, and until when.
+  ///
+  /// [until] is the deadline the person chose on the pairing screen. It was
+  /// already being written beside the waiting invitation and was thrown away
+  /// once the conversation existed, so a phrase that was meant to last an hour
+  /// opened the door for ever. Null leaves whatever deadline is already there.
+  void rememberMeetingTag(String id, String tag, {DateTime? until}) {
     final c = load(id);
-    if (c == null || c.meetingTag == tag) return;
+    if (c == null) return;
+    if (c.meetingTag == tag && (until == null || c.meetingExpires == until)) {
+      return;
+    }
     c.meetingTag = tag;
+    if (until != null) c.meetingExpires = until;
+    save(c);
+  }
+
+  /// Replace the invitation with a new one, closing the old one at once.
+  ///
+  /// # Why this is not a counter being reset
+  ///
+  /// Putting the count back to zero on the same phrase would reopen the door
+  /// to everybody who already had those words, which is the thing the limits
+  /// exist to stop. Every comparable application resets an invitation by
+  /// **issuing a different one**, and the old one stops working in the same
+  /// moment. So this takes the new tag and clears the count with it.
+  ///
+  /// A phrase cannot be rotated without changing the words, because the tag is
+  /// a hash of them. Deriving it from the phrase and a generation number was
+  /// considered and does not work: whoever is about to join knows the phrase
+  /// and not the number, so they would knock at the old door. For a phrase the
+  /// honest answer is different words, and the interface says so rather than
+  /// offering a reset that quietly changes nothing.
+  void replaceInvitation(String id, {required String tag, DateTime? until, int? maxUses}) {
+    final c = load(id);
+    if (c == null) return;
+    c.meetingTag = tag;
+    c.meetingExpires = until;
+    c.meetingMaxUses = maxUses;
+    c.meetingUses = 0;
     save(c);
   }
 
@@ -1232,6 +1339,14 @@ class RotelyxStore {
         verifiedNumber: json['vnum'] as String?,
         askedToVerify: json['asked'] == true,
         meetingTag: json['meet'] as String?,
+        meetingExpires: json['meetuntil'] is int
+            ? DateTime.fromMillisecondsSinceEpoch(json['meetuntil'] as int)
+            : null,
+        meetingMaxUses: json['meetcap'] as int?,
+        meetingUses: json['meetused'] as int? ?? 0,
+        // Absent means approval, which is what every conversation written
+        // before this field did.
+        meetingNeedsApproval: json['meetopen'] != true,
         unread: json['unread'] == true,
         lastOpened: json['opened'] is int
             ? DateTime.fromMillisecondsSinceEpoch(json['opened'] as int)

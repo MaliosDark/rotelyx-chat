@@ -157,6 +157,42 @@ class CallState {
           since: at,
         );
 
+      case CallSignal.joined:
+        // Somebody is in the room. Not an answer to us and not an ending.
+        //
+        // For the device that placed the call this is the same news as
+        // `answered`: the room has somebody in it, so the media path opens.
+        // For a phone that is ringing about a call somebody else answered it
+        // is the news that stops it ringing: the call is happening and is no
+        // longer an offer waiting for this person.
+        //
+        // Whoever is already talking learns nothing that changes their state.
+        if (callId != id) return null;
+        if (phase == CallPhase.ringingOut) {
+          return CallState._(
+            phase: CallPhase.talking,
+            id: id,
+            ended: null,
+            since: at,
+          );
+        }
+        if (phase == CallPhase.ringingIn) {
+          // Still offered to this person, and no longer ringing at them: a
+          // room they may walk into rather than a call they must answer now.
+          return CallState._(
+            phase: CallPhase.ringingIn,
+            id: id,
+            ended: null,
+            since: since,
+          );
+        }
+        return null;
+
+      case CallSignal.left:
+        // One person leaving a room is not the room closing. Only an `ended`
+        // does that, and in a call of two the far end sends one.
+        return null;
+
       case CallSignal.declined:
         if (!isBusy || callId != id) return null;
         return _finished(CallEnded.declined);

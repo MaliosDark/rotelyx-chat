@@ -500,9 +500,16 @@ class _NativeEngine implements RotelyxEngine {
   }
 
   @override
-  RotelyxSession newSession(String label) =>
-      _NativeSession(_int(_call({'op': 'session.new', 'label': label})));
+  RotelyxSession newSession(String label) => newDeviceSession(label, '');
 
+  @override
+  RotelyxSession newDeviceSession(String person, String device) =>
+      _NativeSession(_int(
+          _call({'op': 'session.new', 'label': person, 'device': device})));
+
+  @override
+  String deviceConfirmation(String keyPackageB64) => _string(
+      _call({'op': 'device.confirmation', 'keyPackage': keyPackageB64}));
   @override
   RotelyxSession unsealSession(String blob, RotelyxKey key) => _NativeSession(_int(
       _call({'op': 'session.unseal', 'blob': blob, 'key': (key as _NativeKey).handle})));

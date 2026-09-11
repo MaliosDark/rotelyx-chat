@@ -185,6 +185,14 @@ class Calls {
 
     _say('answering id=${_state.id} mine=$address theirs=$_theirAddress');
     // Filtered where it is produced: no IP, just the relay. See the ring.
+    // Everybody else, as well as the person who called.
+    //
+    // `answered` is read only by the device that placed the call. In a group
+    // the ring went to everybody, so without this the other phones went on
+    // ringing about a call that had already been picked up, each of them
+    // believing it was still theirs to answer, until a timer gave up.
+    rotelyx.signal(Signal.call(CallSignal.joined, id: _state.id));
+
     rotelyx.signal(
       Signal.call(CallSignal.answered, id: _state.id, address: address),
     );

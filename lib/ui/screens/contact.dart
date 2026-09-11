@@ -230,6 +230,102 @@ class _ContactSheetState extends State<ContactSheet> {
                 'the only thing that proves who you are talking to.',
               ),
 
+              // The invitation, when this conversation has one.
+              //
+              // A meeting phrase used to be infinite and irrevocable: it never
+              // expired, nobody counted who had walked through it, and the
+              // only way to close it was to agree different words with
+              // everybody already inside. These are the limits every
+              // comparable application puts on an invitation, and the off
+              // switch is what removing somebody actually needs, because
+              // nothing identifies a person across conversations and anybody
+              // refused by their key makes a new one in a second.
+              if (c.meetingTag != null) ...[
+                const SizedBox(height: Metrics.gap),
+                const _Section('Who may still join'),
+
+                _Toggle(
+                  title: 'Let them in without asking',
+                  subtitle: c.meetingNeedsApproval
+                      ? 'Somebody has to say yes to each person'
+                      : 'Anybody with the invitation walks straight in',
+                  icon: Icons.how_to_reg_outlined,
+                  value: !c.meetingNeedsApproval,
+                  onChanged: (v) => _write((c) => c.meetingNeedsApproval = !v),
+                ),
+
+                Padding(
+                  padding: const EdgeInsets.only(
+                      left: Metrics.wide, right: Metrics.wide, bottom: 8),
+                  child: Text(
+                    c.meetingNeedsApproval
+                        ? 'Right for an invitation that has been passed '
+                            'around: it does not know who it was given to.'
+                        : 'Right for one you handed to a person: the decision '
+                            'was made when you handed it over.',
+                    style: Type.small.copyWith(color: t.faint),
+                  ),
+                ),
+
+                if (c.meetingMaxUses != null || c.meetingUses > 0)
+                  Padding(
+                    padding: const EdgeInsets.only(
+                        left: Metrics.wide, right: Metrics.wide, bottom: 8),
+                    child: Text(
+                      c.meetingMaxUses == null
+                          ? 'Used ${c.meetingUses} times so far'
+                          : 'Used ${c.meetingUses} of ${c.meetingMaxUses}',
+                      style: Type.small.copyWith(color: t.muted),
+                    ),
+                  ),
+
+                if (!c.meetingIsOpen) ...[
+                  Padding(
+                    padding: const EdgeInsets.only(
+                        left: Metrics.wide, right: Metrics.wide, bottom: 4),
+                    child: Text(
+                      'Closed: ${c.meetingClosedBecause}',
+                      style: Type.small.copyWith(color: t.text),
+                    ),
+                  ),
+                  // Deliberately not a "reset" button.
+                  //
+                  // Putting the count back to zero would reopen the door to
+                  // everybody who already had the words, which is the thing
+                  // these limits exist to stop. An invitation is replaced, not
+                  // refilled, and a phrase cannot be replaced without changing
+                  // the words, because the address is made out of them. Saying
+                  // so costs a sentence; a button that appeared to reset it and
+                  // left the same door open would cost somebody their group.
+                  Padding(
+                    padding: const EdgeInsets.only(
+                        left: Metrics.wide, right: Metrics.wide, bottom: 8),
+                    child: Text(
+                      'To let somebody else in, invite them again. That makes a '
+                      'new invitation and this one stays closed. Re-opening '
+                      'this one would let back in everybody who already had it.',
+                      style: Type.small.copyWith(color: t.faint),
+                    ),
+                  ),
+                ],
+
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: Metrics.wide - 8),
+                    child: TextButton.icon(
+                      onPressed: c.meetingTag == null
+                          ? null
+                          : () => _write((c) => c.meetingTag = null),
+                      icon: Icon(Icons.link_off, size: 16, color: t.muted),
+                      label: Text('Turn the invitation off',
+                          style: Type.small.copyWith(color: t.muted)),
+                    ),
+                  ),
+                ),
+              ],
+
               const SizedBox(height: Metrics.gap),
               const _Section('On this device'),
 

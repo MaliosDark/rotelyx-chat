@@ -66,6 +66,14 @@ class RotelyxWasm {
   /// are. The safety number is what verifies.
   static WasmSession newSession(String label) => engine.newSession(label);
 
+  /// A session that is one device of a person. See `docs/DEVICES.md`.
+  static WasmSession newDeviceSession(String person, String device) =>
+      engine.newDeviceSession(person, device);
+
+  /// The digits two devices compare before one adds the other, over the key
+  /// package **as it arrived**.
+  static String deviceConfirmation(String keyPackageB64) =>
+      engine.deviceConfirmation(keyPackageB64);
   static WasmSession unsealSession(String blob, WasmKey key) =>
       engine.unsealSession(blob, key);
 

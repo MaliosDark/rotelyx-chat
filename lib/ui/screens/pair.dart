@@ -320,7 +320,24 @@ class _PairScreenState extends State<PairScreen> {
       child: SafeArea(
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(Metrics.wide),
+            // Room at the bottom for whatever is covering it.
+            //
+            // `SafeArea` handles the system bars and does not handle the
+            // keyboard, and this screen has a name field above its button. So
+            // typing a name raised the keyboard over "Create an invitation",
+            // and the screen would not scroll far enough to bring it back:
+            // the one control the screen exists for was behind something, with
+            // no way to reach it.
+            //
+            // `viewInsets.bottom` is whatever the system has put over the
+            // window, which is the keyboard here and anything else that
+            // behaves like one.
+            padding: EdgeInsets.fromLTRB(
+              Metrics.wide,
+              Metrics.wide,
+              Metrics.wide,
+              Metrics.wide + MediaQuery.viewInsetsOf(context).bottom,
+            ),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 440),
               child: Column(

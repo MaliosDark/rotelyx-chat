@@ -138,6 +138,14 @@ void main() {
     // Counting is crude and it is what can be counted: an envelope is opened in
     // exactly three places in this file, and each has to release what it
     // consumed. If a fourth appears, this fails and somebody decides.
+    //
+    // A fourth did appear, briefly: something that opened an envelope to ask
+    // which conversation it belonged to, so a call or a knock in a group that
+    // was not open could be noticed. It was removed rather than counted,
+    // because noticing anything in several conversations at once means
+    // listening at several addresses from one connection, and that tells the
+    // mailbox those conversations belong to one device. §1 of the threat model
+    // is that it cannot.
     final service =
         File('${Directory.current.path}/lib/rotelyx/rotelyx_service.dart')
             .readAsStringSync();

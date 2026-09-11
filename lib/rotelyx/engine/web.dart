@@ -24,6 +24,8 @@ extension type _Ns._(JSObject _) implements JSObject {
   external int get maxMembers;
 
   external WasmSessionJs newSession(String label);
+  external WasmSessionJs forDevice(String person, String device);
+  external String deviceConfirmation(String keyPackage);
   external WasmSessionJs unsealSession(String blob, WasmKeyJs key);
 
   external WasmKeyJs newKey(String passphrase);
@@ -321,8 +323,15 @@ class _WebEngine implements RotelyxEngine {
   }
 
   @override
-  RotelyxSession newSession(String label) =>
-      _WebSession(_require().newSession(label));
+  RotelyxSession newSession(String label) => newDeviceSession(label, '');
+
+  @override
+  RotelyxSession newDeviceSession(String person, String device) =>
+      _WebSession(_require().forDevice(person, device));
+
+  @override
+  String deviceConfirmation(String keyPackageB64) =>
+      _require().deviceConfirmation(keyPackageB64);
 
   @override
   RotelyxSession unsealSession(String blob, RotelyxKey key) =>

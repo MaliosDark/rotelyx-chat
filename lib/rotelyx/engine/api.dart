@@ -193,6 +193,30 @@ abstract interface class RotelyxEngine {
   Future<void> whenReady({Duration timeout});
 
   RotelyxSession newSession(String label);
+
+  /// A session that is one **device** of a person, rather than the person.
+  ///
+  /// Its own leaf, its own signing key, its own row in the roster, and
+  /// removable on its own while the person stays. The alternative, devices
+  /// sharing one key, cannot be taken from one device without being taken from
+  /// all of them, and leaves nothing able to say which device sent a message.
+  ///
+  /// An empty [device] is what [newSession] passes, and means the only one this
+  /// person has.
+  RotelyxSession newDeviceSession(String person, String device);
+
+  /// The digits two devices of one person compare before one adds the other.
+  ///
+  /// Taken over the key package **as it arrived**, never over the copy of what
+  /// was sent: that is the whole mechanism, and it is what lets the package
+  /// travel by any route. Adding a device is an addition to every conversation
+  /// its person is in, so a substituted package is the worst outcome available
+  /// here, and two screens that stop agreeing is what catches one.
+  ///
+  /// See `docs/DEVICES.md` for the routes, and for the one rule none of them
+  /// may break: a person has to see this.
+  String deviceConfirmation(String keyPackageB64);
+
   RotelyxSession unsealSession(String blob, RotelyxKey key);
 
   RotelyxKey newKey(String passphrase);

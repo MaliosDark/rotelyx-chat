@@ -437,6 +437,18 @@ class _ConversationTile extends StatelessWidget {
                   children: [
                     Row(
                       children: [
+                        // A call happening in here, before the name.
+                        //
+                        // A ring used to be an event that stopped happening,
+                        // so somebody who missed it had no way to learn that
+                        // their friends were in a room talking. A call with
+                        // more than two people is a state, and this is where a
+                        // state belongs: on the row, at a glance, without
+                        // opening anything.
+                        if (rotelyx.callIsLiveIn(conversation.id)) ...[
+                          Icon(Icons.podcasts, size: 13, color: Tone.accent),
+                          const SizedBox(width: 4),
+                        ],
                         if (conversation.pinned) ...[
                           Icon(Icons.push_pin, size: 12, color: t.faint),
                           const SizedBox(width: 4),
