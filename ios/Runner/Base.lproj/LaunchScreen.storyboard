@@ -1,4 +1,26 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!--
+    What iOS draws between the tap and the engine's first frame.
+
+    The colour and nothing else, deliberately.
+
+    It used to centre `LaunchImage` on it, which made the mark appear twice on
+    every cold start: once still, here, and then again assembling itself in
+    Flutter. The same logo, the first time frozen.
+
+    So this is the ground the assembly happens on, and the handover from the
+    system to Flutter is one unbroken colour. The colour is Tone.dBackdrop from
+    lib/ui/theme.dart, #0B0A0F, which is what the numbers below are.
+
+    The Android build does the same in `launch_background.xml`, and has a second
+    half in `values-v31/styles.xml` because Android 12 and later draw a splash
+    screen of their own on top. iOS has no equivalent: this file is the whole of
+    it, which is why there is nothing here to switch off.
+
+    `LaunchImage` itself is left in the asset catalogue rather than deleted. It
+    is what the Xcode project references, and removing an asset means editing
+    `project.pbxproj` for a file rather than for a feature.
+-->
 <document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="12121" systemVersion="16G29" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" launchScreen="YES" colorMatched="YES" initialViewController="01J-lp-oVM">
     <dependencies>
         <deployment identifier="iOS"/>
@@ -15,15 +37,7 @@
                     </layoutGuides>
                     <view key="view" contentMode="scaleToFill" id="Ze5-6b-2t3">
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
-                        <subviews>
-                            <imageView opaque="NO" clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="center" image="LaunchImage" translatesAutoresizingMaskIntoConstraints="NO" id="YRO-k0-Ey4">
-                            </imageView>
-                        </subviews>
                         <color key="backgroundColor" red="0.043137254901960784" green="0.039215686274509803" blue="0.058823529411764705" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
-                        <constraints>
-                            <constraint firstItem="YRO-k0-Ey4" firstAttribute="centerX" secondItem="Ze5-6b-2t3" secondAttribute="centerX" id="1a2-6s-vTC"/>
-                            <constraint firstItem="YRO-k0-Ey4" firstAttribute="centerY" secondItem="Ze5-6b-2t3" secondAttribute="centerY" id="4X2-HB-R7a"/>
-                        </constraints>
                     </view>
                 </viewController>
                 <placeholder placeholderIdentifier="IBFirstResponder" id="iYj-Kq-Ea1" userLabel="First Responder" sceneMemberID="firstResponder"/>
@@ -31,7 +45,4 @@
             <point key="canvasLocation" x="53" y="375"/>
         </scene>
     </scenes>
-    <resources>
-        <image name="LaunchImage" width="120" height="74"/>
-    </resources>
 </document>

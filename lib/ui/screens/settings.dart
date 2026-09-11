@@ -5,6 +5,8 @@
 /// can turn its protections off.
 library;
 
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 
 import '../../platform/biometrics.dart';
@@ -18,6 +20,8 @@ import '../../rotelyx/rotelyx_service.dart';
 import '../../rotelyx/rotelyx_config.dart';
 import '../../rotelyx/rotelyx_store.dart';
 import '../../rotelyx/rotelyx_wasm.dart';
+import '../../rotelyx/signal.dart';
+import 'picture.dart';
 import '../brand.dart';
 import '../theme.dart';
 import '../widgets.dart';
@@ -111,6 +115,56 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   // for the dense half; this is the same idiom applied to the
                   // rest, so the screen opens as a page of titles and each one
                   // opens where it stands. Nothing was removed.
+                  // You, as the other side sees you.
+                  //
+                  // First, because it is the only thing on this screen that
+                  // other people see, and because until now there was nowhere
+                  // at all to change it: the only picker in the application sat
+                  // on a contact's card and wrote the contact's face.
+                  const _Section('You'),
+                  _Fold(
+                    title: 'Your picture',
+                    summary: store.myPicture == null
+                        ? 'Drawn from your name'
+                        : 'A picture you chose',
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            PicturePicker(
+                              name: store.myName ?? 'anon',
+                              onChanged: () => setState(() {}),
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Text(
+                                'It travels with what you send, so a message '
+                                'is recognisable as yours. Nobody fetches it '
+                                'from anywhere: it goes to the people you are '
+                                'already talking to and nowhere else.',
+                                style: Type.small.copyWith(color: t.faint),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (store.myPicture != null)
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: TextButton(
+                            onPressed: () {
+                              setState(() => store.myPicture = null);
+                              rotelyx.signal(Signal.profile(Uint8List(0)));
+                            },
+                            child: Text('Go back to the drawn one',
+                                style: Type.small.copyWith(color: t.muted)),
+                          ),
+                        ),
+                    ],
+                  ),
+
                   const _Section('This phone'),
                   _Fold(
                     title: 'Appearance',

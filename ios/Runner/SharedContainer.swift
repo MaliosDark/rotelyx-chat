@@ -44,7 +44,53 @@ enum SharedContainer {
     }
 
     /// The path Dart hands to its storage layer.
+    ///
+    /// Marked as excluded from iCloud on the way out. See [keepOutOfBackups].
     static var path: String? {
-        url?.path
+        guard let url else { return nil }
+        keepOutOfBackups(url)
+        return url.path
+    }
+
+    /// Tell iOS that none of this may go to iCloud.
+    ///
+    /// # Why
+    ///
+    /// An App Group container is backed up to iCloud by default, and what is in
+    /// this one is the conversation history and the sealed sessions. Since the
+    /// vault stopped asking for a passphrase, the key that opens them is beside
+    /// them, so a backup carries the lock and the key together into somebody
+    /// else's cloud, and the person it belongs to has no way of knowing it is
+    /// there.
+    ///
+    /// The Android build refuses the same thing in its manifest, through
+    /// `allowBackup` and `dataExtractionRules`. This is the half that makes the
+    /// two platforms agree.
+    ///
+    /// # What it costs, said plainly
+    ///
+    /// Somebody restoring a new iPhone from iCloud arrives with no history.
+    /// That is what this protocol already promises: forward secrecy means
+    /// nobody keeps the material to rebuild a conversation, so there was never
+    /// an honest way to carry it across. Export from inside the application is
+    /// the answer for anybody who wants a copy, and it is theirs.
+    ///
+    /// Set on every launch rather than once. The flag lives on the file system
+    /// and a container recreated by a restore, a reinstall or an App Group
+    /// being reprovisioned comes back without it, and a flag that is only ever
+    /// set once is one that silently stops being true.
+    ///
+    /// A failure here is recorded and not raised: an application that refuses
+    /// to start because it could not set a file attribute is worse than one
+    /// that starts.
+    static func keepOutOfBackups(_ url: URL) {
+        var target = url
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        do {
+            try target.setResourceValues(values)
+        } catch {
+            NSLog("rotelyx: could not exclude the container from iCloud: \(error)")
+        }
     }
 }

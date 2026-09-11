@@ -26,7 +26,6 @@ import '../../rotelyx/export.dart';
 import '../../rotelyx/rotelyx_store.dart';
 import '../theme.dart';
 import '../widgets.dart';
-import 'picture.dart';
 import 'pin_set.dart';
 
 class ContactSheet extends StatefulWidget {
@@ -157,9 +156,20 @@ class _ContactSheetState extends State<ContactSheet> {
 
               Row(
                 children: [
-                  PicturePicker(
-                    conversation: c,
-                    onPicked: (bytes) => _write((c) => c.picture = bytes),
+                  // Their face, shown and not edited.
+                  //
+                  // This used to be a picker, and pressing it set your own
+                  // picture into their card while announcing it to them as
+                  // yours. A contact's face arrives from the contact; yours is
+                  // in Settings. Nobody chooses a face for somebody else.
+                  SizedBox(
+                    width: 64,
+                    height: 64,
+                    child: c.picture == null
+                        ? RxAvatar(c.displayTitle, size: 64)
+                        : ClipOval(
+                            child: Image.memory(c.picture!,
+                                width: 64, height: 64, fit: BoxFit.cover)),
                   ),
                   const SizedBox(width: 14),
                   Expanded(

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Nothing, with a size.
+
+     Android 12 and later draw a splash screen of their own before the
+     application starts, and the icon on it is not optional: the platform wants
+     one and picks the launcher icon when nothing is named. Naming this instead
+     is how an application that has its own opening gets to do it once rather
+     than after the platform has already shown a still version of the same mark.
+
+     The background stays the application's, so what a person sees is the ground
+     the mark is about to assemble on. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@android:color/transparent" />
+    <size android:width="1dp" android:height="1dp" />
+</shape>

@@ -140,6 +140,15 @@ abstract interface class RotelyxSession {
   ///
   /// Returns the commit, which has to be delivered before anything else.
   String rekeyAfterRestore();
+
+  /// Say this reopened session is the newest, so it may send as it is.
+  ///
+  /// The alternative is [rekeyAfterRestore], which works and moves the epoch.
+  /// Two devices that move it without seeing each other end up at two epochs
+  /// neither can leave, and that is not a dropped message: it is two
+  /// conversations where there was one. Only a caller that seals after
+  /// everything that moves the state may say this.
+  void trustRestoredState();
   List<String> beginGroupPq(List<String> hybridPublicKeys);
   void openGroupPq(String wrappedB64);
 

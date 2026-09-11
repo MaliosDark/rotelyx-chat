@@ -195,6 +195,38 @@ class RotelyxService {
   void _useSession(WasmSession? next) {
     final previous = _session;
     if (identical(previous, next)) return;
+
+    // Sealed on the way out, and this is the whole reason a restored session
+    // used to need a fresh key.
+    //
+    // A session was thrown away here without being written down, so everything
+    // that had moved the ratchet since the last *message* was lost: read
+    // receipts, reactions, profile pictures, and every commit received. The
+    // blob on disk was therefore genuinely behind, the copy read back from it
+    // genuinely could not send, and `rekeyAfterRestore` existed to paper over
+    // that by moving the epoch.
+    //
+    // Which was the thing that split the two ends apart, because both did it.
+    // Sealing here is what makes the blob current, so a reopened conversation
+    // is where it left off rather than behind.
+    //
+    // `_persistId` still names the conversation being left: every caller sets
+    // it after this, which is what makes sealing the outgoing one correct here.
+    if (previous != null) {
+      final id = _persistId;
+      if (id != null) {
+        try {
+          store.saveSession(id, previous);
+          store.setSessionSealedClean(id, true);
+        } on Object {
+          // A session that will not seal is one this device cannot reopen, and
+          // the next `resume` finds an older blob and rekeys, which is the old
+          // behaviour rather than a new failure. Not worth losing the
+          // conversation that is being opened over it.
+        }
+      }
+    }
+
     _session = next;
     previous?.dispose();
   }
@@ -508,15 +540,20 @@ class RotelyxService {
     });
   }
 
-  /// Keep the picture they sent.
+  /// Keep the picture they sent, or drop the one they withdrew.
+  ///
+  /// Empty means "go back to the drawn one", which is what the button in
+  /// Settings sends. It used to be discarded here along with the malformed
+  /// case, so somebody who removed their picture went on wearing it on every
+  /// other phone and had no way to learn that.
   void _theyChangedPicture(Uint8List? picture) {
     final id = _persistId;
-    if (id == null || picture == null || picture.isEmpty) return;
+    if (id == null || picture == null) return;
 
     final conversation = store.load(id);
     if (conversation == null) return;
 
-    conversation.picture = picture;
+    conversation.picture = picture.isEmpty ? null : picture;
     store.save(conversation);
     _stateChanges.add(state);
   }
@@ -827,6 +864,10 @@ class RotelyxService {
       for (final envelope in session.sealForGroup(ciphertext)) {
         _mailbox?.deposit(envelope);
       }
+      // A receipt moves the ratchet exactly as a message does, and only
+      // messages were being written down. That gap is what made a reopened
+      // session genuinely behind. See `_useSession`.
+      _persist();
     } on Object catch (e) {
       lastError = 'could not send a receipt: $e';
       return false;
@@ -1154,6 +1195,15 @@ class RotelyxService {
 
   /// Whether a reconnection is already under way.
   bool _reopening = false;
+
+  /// Conversations already told what this person looks like, this run.
+  ///
+  /// A picture is up to 96 KiB and does not change between two openings of the
+  /// same conversation, so sending it on every one would be paying for a fact
+  /// the other side already has. Once per conversation per run is enough to
+  /// cover a contact paired before a picture was chosen, and a change tells
+  /// everybody as it happens.
+  final Set<String> _toldMyPicture = {};
 
   /// Whether this device still owes the group a fresh key after unsealing.
   ///
@@ -1501,6 +1551,17 @@ class RotelyxService {
         // Acknowledged here rather than below: MLS has consumed the commit and
         // this side is at the new epoch, so re-delivery would only be refused
         // as a replay and the envelope would sit until its TTL.
+        // Somebody else moved the epoch, so this device owes nothing. A commit
+        // is exactly what the debt was for: generations nothing has spent.
+        // Answering one with a commit of its own is how two ends end up at two
+        // epochs neither can leave. The engine clears its own flag on the same
+        // reasoning; this is the half that stops us asking for it again.
+        _rekeyOwed = false;
+
+        // Written down before anything else. A commit is the largest move the
+        // ratchet makes, and losing it meant reopening at the epoch before the
+        // one this device is actually at. See `_useSession`.
+        _persist();
         _acknowledge(envelopeB64);
         _resubscribe();
         _stateChanges.add(state);
@@ -1511,6 +1572,7 @@ class RotelyxService {
         // The author travels with it. A receipt says "I read up to here" and
         // in a group it matters a great deal which "I" that was.
         _onSignal(signal, from: plaintext.from);
+        _persist();
         _acknowledge(envelopeB64);
         return;
       }
@@ -1645,6 +1707,19 @@ class RotelyxService {
   /// side sees.
   String get displayName => _displayName;
 
+  /// Say what this person looks like, once per conversation per run.
+  ///
+  /// Nothing is sent when no picture has been chosen, which is the ordinary
+  /// case: both ends draw the same initials from the same name and there is
+  /// nothing to carry.
+  void _sendMyPicture() {
+    final id = _persistId;
+    final picture = store.myPicture;
+    if (id == null || picture == null || picture.isEmpty) return;
+    if (!_toldMyPicture.add(id)) return;
+    signal(Signal.profile(picture));
+  }
+
   void _enterConversation() {
     // A guest stops listening at the meeting place; the host does not.
     //
@@ -1683,6 +1758,9 @@ class RotelyxService {
     // from the meeting phrase. Anyone who knew the phrase loses the thread.
     _resubscribe();
     _watchTagRotation();
+
+    // And what this person looks like, to somebody who has just met them.
+    _sendMyPicture();
   }
 
   /// Listen on our own tags for the current window.
@@ -2025,19 +2103,35 @@ class RotelyxService {
 
     if (key == null || blob == null) return false;
 
-    try {
-      _useSession(RotelyxWasm.unsealSession(blob, key));
-    } on Object catch (e) {
-      _moveTo(RotelyxState.failed,
-          error: 'this conversation could not be reopened: $e');
-      return false;
+    // Already in memory, so there is nothing to read back.
+    //
+    // Only one conversation is live at a time, and `resume` used to unseal
+    // unconditionally. So leaving a conversation and coming back to it, or
+    // coming back after a dropped connection, read the session off the disk
+    // again and marked a fresh key as owed, even though the very same session
+    // was sitting in memory untouched. Every switch between two conversations
+    // was an epoch, on both phones, and two phones that moved epoch without
+    // seeing each other never met again.
+    //
+    // Reusing it leaves a cold start as the only thing that unseals, which is
+    // the only case where a copy really can be behind.
+    final reusing = _persistId == conversationId && _session != null;
+
+    if (!reusing) {
+      try {
+        _useSession(RotelyxWasm.unsealSession(blob, key));
+      } on Object catch (e) {
+        _moveTo(RotelyxState.failed,
+            error: 'this conversation could not be reopened: $e');
+        return false;
+      }
     }
 
     // A note to self sealed two halves. Both come back or neither does: with
     // only the sending half the group still works, but its own notes are
     // deposited under a tag nothing on this device is listening to.
-    _usePeer(null);
-    final peerBlob = store.sessionBlob(_peerId(conversationId));
+    if (!reusing) _usePeer(null);
+    final peerBlob = reusing ? null : store.sessionBlob(_peerId(conversationId));
     if (peerBlob != null) {
       try {
         _usePeer(RotelyxWasm.unsealSession(peerBlob, key));
@@ -2067,8 +2161,14 @@ class RotelyxService {
     _moveTo(RotelyxState.joined);
     _resubscribe();
 
+    // Contacts paired before this person chose a picture, and contacts who
+    // were not listening when they changed it. Once per conversation per run.
+    _sendMyPicture();
+
     // A session that came off the disk owes the group a fresh key before it
-    // can send, and the debt is *recorded* here rather than paid.
+    // can send, and the debt is *recorded* here rather than paid. One that was
+    // never read back owes nothing: it is the same session, at the same
+    // generation, and moving its epoch would be the defect rather than the fix.
     //
     // # Why not here
     //
@@ -2084,7 +2184,25 @@ class RotelyxService {
     // debt is paid by the first thing this device actually sends, which is the
     // moment the fresh key is genuinely needed, and that is one commit for a
     // person who says something rather than one for a person who looked.
-    _rekeyOwed = true;
+    if (reusing) {
+      // Never left memory, so there is nothing to vouch for and nothing owed.
+    } else if (store.sessionSealedClean(conversationId)) {
+      // Sealed after the last thing that moved it, and nothing has used it
+      // since. It may send where it is, and the epoch stays put: moving it is
+      // what leaves two phones unable to find each other.
+      try {
+        _session?.trustRestoredState();
+      } on Object {
+        _rekeyOwed = true;
+      }
+    } else {
+      // Killed while live, or from before any of this. One rekey, once.
+      _rekeyOwed = true;
+    }
+
+    // In use from here, so it can no longer be vouched for until it is sealed
+    // again. An application killed after this point comes back and rekeys.
+    store.setSessionSealedClean(conversationId, false);
 
     final meeting = _meetingTag;
     if (meeting != null) _mailbox?.subscribe([meeting]);
@@ -2121,6 +2239,9 @@ class RotelyxService {
     final session = _session;
     if (id == null || session == null) return;
     store.saveSession(id, session);
+    // Written down after the thing that moved it, which is what lets the next
+    // reopen send without moving the epoch. See `RotelyxStore.sessionSealedClean`.
+    store.setSessionSealedClean(id, true);
   }
 
   Future<void> dispose() async {

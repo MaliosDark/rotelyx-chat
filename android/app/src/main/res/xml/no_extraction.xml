@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Nothing in this application leaves the device in a backup.
+
+  Two mechanisms, because Android 12 split them and turning off only one is
+  the mistake that makes this look done:
+
+    cloud-backup     the copy that goes to the person's Google account
+    device-transfer  the copy that goes straight to a new phone
+
+  # Why a messenger refuses both
+
+  What is stored here is the conversation history, the sealed MLS session
+  blobs, and since the vault stopped asking for a passphrase, `rotelyx.devicekey`,
+  which is the key that opens all of it. A backup takes the lock and the key
+  together and puts them somewhere this application does not control.
+
+  An application whose whole argument is that it depends on nobody cannot have
+  its plaintext history sitting in somebody else's cloud, and the person it
+  belongs to would have no way of knowing it was there.
+
+  # What it costs, said plainly
+
+  Somebody who changes phone loses their history. That is already what this
+  protocol promises: forward secrecy means nobody keeps the material to rebuild
+  a conversation, so there was never an honest way to carry it across. Export
+  from inside the application is the answer for anybody who wants a copy, and
+  it is theirs rather than Google's.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" />
+    </device-transfer>
+</data-extraction-rules>

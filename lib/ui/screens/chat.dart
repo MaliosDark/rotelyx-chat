@@ -1170,6 +1170,13 @@ class _ChatScreenState extends State<ChatScreen> {
                         final bubble = _Bubble(
                           message: message,
                           showAuthor: _startsRun(c.messages, i),
+                          // Theirs, which arrives from them. There is no
+                          // per-author picture in a group yet, so everybody in
+                          // one wears the conversation's face until there is.
+                          face: c.picture,
+                          faceName: message.author.isNotEmpty
+                              ? message.author
+                              : c.displayTitle,
                           onReply: () => _replyTo(message),
                           // Applied inside `_Bubble`, around the bubble alone.
                           // Wrapping this row put the fire across the whole
@@ -1596,11 +1603,22 @@ class _Bubble extends StatelessWidget {
     this.burning = false,
     this.onGone,
     this.onReact,
+    this.face,
+    this.faceName = '',
   });
 
   final StoredMessage message;
   final bool showAuthor;
   final VoidCallback? onReply;
+
+  /// The face of whoever sent this, when they have chosen one.
+  ///
+  /// Null is the ordinary state: `RxAvatar` draws initials from [faceName], and
+  /// both ends draw the same one from the same name with nothing travelling.
+  final Uint8List? face;
+
+  /// The name the face is drawn from when there is no picture.
+  final String faceName;
 
   /// Whether this message is being destroyed right now.
   final bool burning;
@@ -1674,10 +1692,39 @@ class _Bubble extends StatelessWidget {
     );
   }
 
+  /// The sender's face, beside the first bubble of each run.
+  ///
+  /// Reserved rather than omitted on the rest, so a run of messages keeps one
+  /// left edge instead of stepping in and out as each bubble gains or loses a
+  /// face beside it.
+  ///
+  /// Only on what arrived. Somebody does not need to be shown their own face
+  /// beside every line they wrote, and the space on that side is the side the
+  /// bubble is already against.
+  Widget _face() {
+    const size = 28.0;
+    if (!showAuthor) return const SizedBox(width: size + 8);
+
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: SizedBox(
+        width: size,
+        height: size,
+        child: face == null
+            ? RxAvatar(faceName, size: size)
+            : ClipOval(
+                child: Image.memory(face!,
+                    width: size, height: size, fit: BoxFit.cover)),
+      ),
+    );
+  }
+
   Widget _row(BuildContext context, RotelyxTheme t, bool mine) {
     return Row(
         mainAxisAlignment: mine ? MainAxisAlignment.end : MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (!mine) _face(),
           // The burn wraps the bubble and nothing else.
           //
           // It used to wrap the whole row, which is the full width of the

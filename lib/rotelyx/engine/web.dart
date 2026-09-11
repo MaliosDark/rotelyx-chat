@@ -76,6 +76,7 @@ extension type WasmSessionJs._(JSObject _) implements JSObject {
   external void openPq(String ciphertextB64);
   external String commitPq();
   external String rekeyAfterRestore();
+  external void trustRestoredState();
 
   external JSArray beginGroupPq(JSArray hybridPublicKeys);
   external void openGroupPq(String wrappedB64);
@@ -200,6 +201,9 @@ class _WebSession implements RotelyxSession {
 
   @override
   String rekeyAfterRestore() => inner.rekeyAfterRestore();
+
+  @override
+  void trustRestoredState() => inner.trustRestoredState();
   @override
   List<String> beginGroupPq(List<String> hybridPublicKeys) => _strings(
       inner.beginGroupPq(hybridPublicKeys.map((k) => k.toJS).toList().toJS));

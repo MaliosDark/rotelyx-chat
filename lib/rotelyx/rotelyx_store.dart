@@ -438,6 +438,13 @@ class RotelyxStore {
   static const _kDeviceKey = 'rotelyx.devicekey';
   static const _kPreviews = 'rotelyx.previews';
   static const _kFace = 'rotelyx.face';
+
+  /// The picture this person chose for themselves.
+  static const _kMyPicture = 'rotelyx.mypicture';
+
+  /// Prefix for "this conversation's session was written down after the last
+  /// thing that moved it". See [sessionSealedClean].
+  static const _kSealed = 'rotelyx.sealed.';
   static const _kHomeWidget = 'rotelyx.widget.home';
   static const _kLockWidget = 'rotelyx.widget.lock';
   static const _kConnected = 'rotelyx.connected';
@@ -680,6 +687,81 @@ class RotelyxStore {
       _kMyName,
       RotelyxWasm.sealBlob(key, base64Encode(utf8.encode(trimmed))),
     );
+  }
+
+  /// The picture this person chose for themselves, or null for none.
+  ///
+  /// # Why this is ours and not the conversation's
+  ///
+  /// `StoredConversation.picture` is the *other* person's, and it arrives from
+  /// them. This is the one that goes out with a pairing and whenever it
+  /// changes, so a message is recognisable as coming from a face somebody
+  /// chose rather than from a name they typed.
+  ///
+  /// Those two were one field until now, and the picker on the contact card
+  /// wrote to it: setting your own picture overwrote the contact's, and their
+  /// next profile signal overwrote yours back. One field, two owners, and both
+  /// of them losing.
+  ///
+  /// Null is the ordinary state and not a gap. `RxAvatar` draws initials from
+  /// the chosen name, both ends draw the same one from the same name, and
+  /// nothing has to travel for that to work.
+  ///
+  /// Sealed like [myName], because a face is as much a label as a name is.
+  Uint8List? get myPicture {
+    final key = _key;
+    final blob = _box.read(_kMyPicture) as String?;
+    if (key == null || blob == null) return null;
+    try {
+      return base64Decode(RotelyxWasm.openBlob(key, blob));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  set myPicture(Uint8List? value) {
+    final key = _key;
+    if (key == null) return;
+    if (value == null || value.isEmpty) {
+      _box.remove(_kMyPicture);
+      return;
+    }
+    _box.write(
+      _kMyPicture,
+      RotelyxWasm.sealBlob(key, base64Encode(value)),
+    );
+  }
+
+  /// Whether this conversation's sealed session is the newest state it has.
+  ///
+  /// # What it decides
+  ///
+  /// A session read back from storage may be behind whatever else has been
+  /// using that state, and one that is behind sends into a hole. The engine
+  /// therefore refuses until the copy has rekeyed, and rekeying moves the
+  /// epoch. Two devices that move it without seeing each other end up at two
+  /// epochs neither can leave, which is two conversations where there was one.
+  ///
+  /// So the rekey happens only when this says the state cannot be vouched for.
+  /// False is written the moment a session is put to use and true the moment it
+  /// is written down, so an application killed while a conversation was live
+  /// comes back unable to vouch and rekeys, and one that sealed on its way out
+  /// comes back and carries on at the epoch it was at.
+  ///
+  /// Absent reads as false, which is the safe answer: a conversation from
+  /// before this existed, or one whose marker was lost, rekeys once.
+  ///
+  /// Not sealed, deliberately. It is one bit about a conversation whose id is
+  /// already a key in this store, so it says nothing the file did not say.
+  bool sessionSealedClean(String conversationId) =>
+      _box.read('$_kSealed$conversationId') == true;
+
+  void setSessionSealedClean(String conversationId, bool clean) {
+    if (clean) {
+      _box.write('$_kSealed$conversationId', true);
+    } else {
+      _box.remove('$_kSealed$conversationId');
+    }
   }
 
   /// Read something that has to be legible before the vault is open.

@@ -80,9 +80,22 @@
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
     <uses-feature android:name="android.hardware.microphone" android:required="false"/>
 
+    <!-- Backups are off, by both mechanisms.
+
+         `allowBackup` had never been declared, and its default is true, so
+         every install so far has told Android that this application's data may
+         be copied to the person's Google account, handed to a new phone, and
+         pulled off by `adb backup`. What is in that data is the conversation
+         history, the sealed sessions, and the key that opens them.
+
+         `dataExtractionRules` is the Android 12 and later half and is not
+         implied by `allowBackup`: both are needed, and the rules are in
+         res/xml/no_extraction.xml with what this costs written down. -->
     <application
         android:label="Rotelyx Chat"
         android:name="${applicationName}"
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/no_extraction"
         android:icon="@mipmap/ic_launcher">
         <activity
             android:name=".MainActivity"

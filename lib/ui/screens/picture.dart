@@ -52,16 +52,30 @@ const int _side = 256;
 /// a property somebody is relying on.
 const int _maxBytes = 96 * 1024;
 
-/// The avatar, and a way to change it.
+/// Your own face, and a way to change it.
+///
+/// # What this is not
+///
+/// It used to sit on the contact card and write the *contact's* picture while
+/// announcing the same bytes as yours. Two opposite things behind one button:
+/// you set your own face and changed theirs, and their next profile signal
+/// overwrote what you had set. It now writes [RotelyxStore.myPicture] and
+/// nothing else, and a contact's face arrives from the contact.
+///
+/// [name] is only for the fallback, which is the initials avatar every build
+/// already draws. Somebody who never chooses a picture is not missing one:
+/// both ends draw the same face from the same name, with nothing travelling.
 class PicturePicker extends StatefulWidget {
   const PicturePicker({
     super.key,
-    required this.conversation,
-    required this.onPicked,
+    required this.name,
+    this.onChanged,
   });
 
-  final StoredConversation conversation;
-  final void Function(Uint8List? picture) onPicked;
+  final String name;
+
+  /// Told after a change, so a screen showing the same face can repaint.
+  final VoidCallback? onChanged;
 
   @override
   State<PicturePicker> createState() => _PicturePickerState();
@@ -81,7 +95,10 @@ class _PicturePickerState extends State<PicturePicker> {
       // A generous ceiling on the way in, because what matters is the size on
       // the way out and a large photograph shrinks to the same avatar as a
       // small one. Refusing a normal camera picture here would be absurd.
-      final picked = await pickFile(maxBytes: 24 * 1024 * 1024);
+      // `images: true`, which this call was missing: without it the platform
+      // opens a file browser, and somebody looking for a photograph is offered
+      // documents.
+      final picked = await pickFile(maxBytes: 24 * 1024 * 1024, images: true);
       if (picked == null) {
         if (mounted) setState(() => _working = false);
         return;
@@ -108,11 +125,15 @@ class _PicturePickerState extends State<PicturePicker> {
         return;
       }
 
-      widget.onPicked(shrunk);
+      store.myPicture = shrunk;
+
       // Sent as well as stored. A picture only this device knows about is a
       // picture the other side never sees, and the whole point of it is that
-      // they do.
+      // they do. Only the conversation that is live hears it here; the rest
+      // are told as they are opened, by `RotelyxService`.
       rotelyx.signal(Signal.profile(shrunk));
+
+      widget.onChanged?.call();
       if (mounted) setState(() => _working = false);
     } on NoFilePicker catch (e) {
       if (mounted) {
@@ -134,7 +155,7 @@ class _PicturePickerState extends State<PicturePicker> {
   @override
   Widget build(BuildContext context) {
     final t = RotelyxThemeScope.of(context);
-    final picture = widget.conversation.picture;
+    final picture = store.myPicture;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -146,7 +167,7 @@ class _PicturePickerState extends State<PicturePicker> {
               width: 64,
               height: 64,
               child: picture == null
-                  ? RxAvatar(widget.conversation.displayTitle, size: 64)
+                  ? RxAvatar(widget.name, size: 64)
                   : ClipOval(
                       child: Image.memory(picture,
                           width: 64, height: 64, fit: BoxFit.cover)),

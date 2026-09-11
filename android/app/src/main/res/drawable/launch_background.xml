@@ -1,20 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- What Android draws between the tap and the engine's first frame.
 
-     It was `@android:color/white` with the image commented out, which is what
-     `flutter create` leaves. On an application whose every screen is near black
-     that is a white flash on every cold start, and it is the same defect the
-     web build had before web/index.html got a boot screen.
+     The colour and nothing else, deliberately.
 
-     The colour is Tone.dBackdrop from lib/ui/theme.dart, so the launch screen,
-     the Flutter boot screen and the first real frame are all one colour and the
-     handover is invisible. -->
+     It used to centre `rotelyx_splash.png` on it. That made three things happen
+     in a row on every cold start: the system's own splash with the application
+     icon, then this static mark, and then the mark assembling itself in Flutter.
+     The same logo three times, the first two of them still.
+
+     So this is now the ground the assembly happens on, and the handover from
+     the system to Flutter is one unbroken colour. The colour is Tone.dBackdrop
+     from lib/ui/theme.dart. The system half is in values-v31/styles.xml, which
+     is where Android 12 and later moved that decision. -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:drawable="@color/rotelyx_backdrop" />
-
-    <item>
-        <bitmap
-            android:gravity="center"
-            android:src="@drawable/rotelyx_splash" />
-    </item>
 </layer-list>

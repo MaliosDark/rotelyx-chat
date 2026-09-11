@@ -367,6 +367,9 @@ class _NativeSession implements RotelyxSession {
   String rekeyAfterRestore() => _string(_op('session.rekeyAfterRestore'));
 
   @override
+  void trustRestoredState() => _op('session.trustRestoredState', {});
+
+  @override
   List<String> beginGroupPq(List<String> hybridPublicKeys) =>
       _strings(_op('session.beginGroupPq', {'hybridPublicKeys': hybridPublicKeys}));
 

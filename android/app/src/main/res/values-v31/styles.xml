@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The system's splash screen, on the versions that have one.
+
+     From Android 12 the platform draws its own screen before the application
+     is started, and it does it whatever `launch_background` says. Left alone it
+     shows the launcher icon, so a cold start was the mark still, and then the
+     mark assembling in Flutter: the same logo twice, the first time frozen.
+
+     So the background is set to the application's own, and the icon is set to a
+     transparent drawable. What is left is a plain ground that hands over to
+     Flutter without a seam, and the only time the mark is seen is the time it
+     builds itself.
+
+     `windowSplashScreenAnimationDuration` is zero because there is no animation
+     here to wait for: the one worth watching is on the other side of the
+     handover. -->
+<resources>
+    <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
+        <item name="android:windowBackground">@drawable/launch_background</item>
+        <item name="android:windowSplashScreenBackground">@color/rotelyx_backdrop</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/nothing_at_all</item>
+        <item name="android:windowSplashScreenAnimationDuration">0</item>
+    </style>
+
+    <style name="NormalTheme" parent="@android:style/Theme.Black.NoTitleBar">
+        <item name="android:windowBackground">@color/rotelyx_backdrop</item>
+    </style>
+</resources>

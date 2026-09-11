@@ -25,6 +25,7 @@ import 'screens/settings.dart';
 import 'screens/unlock.dart';
 import 'brand.dart';
 import 'gestures.dart';
+import 'splash.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -252,11 +253,16 @@ class _RotelyxAppState extends State<RotelyxApp> with WidgetsBindingObserver {
 
       home: RotelyxThemeScope(
         theme: _theme,
-        child: Scaffold(
-          backgroundColor: _theme.backdrop,
-          body: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 140),
-            child: _current(),
+        // The mark assembles over the first screen rather than in front of a
+        // wait. Nothing here is gated on it: the screen beneath is built and
+        // live from the first frame, and a tap during it reaches that screen.
+        child: Splash(
+          child: Scaffold(
+            backgroundColor: _theme.backdrop,
+            body: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 140),
+              child: _current(),
+            ),
           ),
         ),
       ),
