@@ -231,11 +231,17 @@ class _ChatScreenState extends State<ChatScreen> {
         // phone that draws edge to edge the bottom of the window is behind the
         // system's own buttons. So the last control on each of these sat under
         // them: visible, and not reachable.
+        //
+        // `viewPaddingOf`, not `paddingOf`. This context sits inside the
+        // screen's SafeArea, and SafeArea consumes `padding` for everything
+        // beneath it, so `paddingOf(context).bottom` read zero here and the
+        // sheet went on sitting behind the buttons after the first fix. The
+        // view padding is the one SafeArea leaves alone.
         padding: EdgeInsets.fromLTRB(
           Metrics.wide,
           Metrics.wide,
           Metrics.wide,
-          Metrics.wide + MediaQuery.paddingOf(context).bottom,
+          Metrics.wide + MediaQuery.viewPaddingOf(context).bottom,
         ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -342,21 +348,34 @@ class _ChatScreenState extends State<ChatScreen> {
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: t.surface,
+      // Allowed to be as tall as it needs, and to scroll when that is more
+      // than the screen has. Without this a sheet is capped at a fraction of
+      // the height and whatever does not fit is simply cut off at the bottom,
+      // which on a phone with a soft keyboard or large text is the last
+      // button.
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(Metrics.radius)),
       ),
-      builder: (_) => Padding(
+      builder: (_) => SingleChildScrollView(
+        child: Padding(
         // Room for the navigation bar underneath.
         //
         // A bottom sheet is drawn against the bottom of the window, and on a
         // phone that draws edge to edge the bottom of the window is behind the
         // system's own buttons. So the last control on each of these sat under
         // them: visible, and not reachable.
+        //
+        // `viewPaddingOf`, not `paddingOf`. This context sits inside the
+        // screen's SafeArea, and SafeArea consumes `padding` for everything
+        // beneath it, so `paddingOf(context).bottom` read zero here and the
+        // sheet went on sitting behind the buttons after the first fix. The
+        // view padding is the one SafeArea leaves alone.
         padding: EdgeInsets.fromLTRB(
           Metrics.wide,
           Metrics.wide,
           Metrics.wide,
-          Metrics.wide + MediaQuery.paddingOf(context).bottom,
+          Metrics.wide + MediaQuery.viewPaddingOf(context).bottom,
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -439,6 +458,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 onTap: () => Navigator.pop(context)),
           ],
         ),
+      ),
       ),
     );
   }
@@ -706,7 +726,7 @@ class _ChatScreenState extends State<ChatScreen> {
           Metrics.wide,
           Metrics.wide,
           Metrics.wide,
-          Metrics.wide + MediaQuery.paddingOf(context).bottom,
+          Metrics.wide + MediaQuery.viewPaddingOf(context).bottom,
         ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -2301,7 +2321,7 @@ class _Empty extends StatelessWidget {
           Metrics.wide,
           Metrics.wide,
           Metrics.wide,
-          Metrics.wide + MediaQuery.paddingOf(context).bottom,
+          Metrics.wide + MediaQuery.viewPaddingOf(context).bottom,
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
