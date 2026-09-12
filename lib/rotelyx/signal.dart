@@ -79,6 +79,22 @@ enum SignalKind {
   /// People do this anyway, with screenshots, and the group learns nothing.
   /// This is the same act done where it can be seen.
   history,
+
+  /// Somebody is asking the group to admit a person, and where to leave the
+  /// welcome if it is agreed.
+  ///
+  /// # Why the request travels beside the proposal instead of inside it
+  ///
+  /// The MLS proposal is what makes the addition real, and it carries a key
+  /// package and nothing else. Two things the other members need are not in
+  /// it: the name to show somebody making a decision, and the address to leave
+  /// the welcome at once they have made it.
+  ///
+  /// That address is the asking member's meeting place, and it has to travel
+  /// because whoever confirms is not whoever was asked. A meeting tag is a
+  /// hash of a phrase nobody stores, so a member that did not issue the
+  /// invitation has no way to work it out.
+  pendingAddition,
 }
 
 /// What a [SignalKind.call] is saying.
@@ -200,6 +216,35 @@ class Signal {
         kind: SignalKind.history,
         fields: [base64Encode(utf8.encode(messagesJson))],
       );
+
+  /// Ask the group to admit somebody, saying who and where to answer.
+  ///
+  /// The name is what a person reads before deciding. It is what the joiner
+  /// called themselves, so it is worth exactly what an unverified name is
+  /// worth, and an interface showing it has to say so.
+  factory Signal.pendingAddition({
+    required String meetingTag,
+    required String name,
+  }) =>
+      Signal(
+        kind: SignalKind.pendingAddition,
+        fields: [meetingTag, base64Encode(utf8.encode(name))],
+      );
+
+  /// Where to leave the welcome for somebody being admitted, or null when this
+  /// was not that.
+  String? get pendingMeetingTag =>
+      kind == SignalKind.pendingAddition && fields.isNotEmpty ? fields.first : null;
+
+  /// What the person asking to be admitted calls themselves.
+  String get pendingName {
+    if (fields.length < 2) return '';
+    try {
+      return utf8.decode(base64Decode(fields[1]));
+    } on Object {
+      return '';
+    }
+  }
 
   /// The messages somebody handed over, as JSON, or null when unreadable.
   String? get handedHistory {

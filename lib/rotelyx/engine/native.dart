@@ -38,6 +38,7 @@ import 'dart:io';
 
 import 'package:ffi/ffi.dart';
 
+import '../rotelyx_config.dart';
 import 'api.dart';
 import 'call_native.dart';
 import 'net_native.dart';
@@ -232,7 +233,15 @@ Object? _call(Map<String, Object?> request) {
 /// The same expression as `bucket()` in `web/rotelyx_bridge.js`, deliberately.
 /// Two devices on different platforms have to land on the same tag, so this is
 /// the one number that must not drift between the two wrappers.
-int _bucket() => DateTime.now().millisecondsSinceEpoch ~/ 3600000;
+/// Which addressing bucket the clock is in.
+///
+/// One hour, and the divisor is [tagBucketSeconds] because this number has to
+/// be identical in the terminal client, the desktop client, the browser and
+/// here. A client that disagrees derives a different address, deposits where
+/// nobody is listening, and nothing anywhere raises an error: the envelope just
+/// sits until it expires. It used to be written out four times.
+int _bucket() =>
+    DateTime.now().millisecondsSinceEpoch ~/ (tagBucketSeconds * 1000);
 
 String _string(Object? value) => value is String ? value : '';
 
@@ -349,6 +358,40 @@ class _NativeSession implements RotelyxSession {
   }
 
   @override
+  List<String> admins() {
+    final raw = _string(_op('session.admins'));
+    final decoded = jsonDecode(raw);
+    return decoded is List
+        ? decoded.whereType<String>().toList(growable: false)
+        : const <String>[];
+  }
+
+  @override
+  String setAdmins(List<String> labels) {
+    final result = _op('session.setAdmins', {'labels': jsonEncode(labels)});
+    final map = result is Map ? result : const {};
+    return _string(map['commit']);
+  }
+
+  @override
+  String propose(String keyPackageB64) {
+    final result = _op('session.propose', {'keyPackage': keyPackageB64});
+    final map = result is Map ? result : const {};
+    return _string(map['proposal']);
+  }
+
+  @override
+  RotelyxInvitation confirmAdditions() {
+    final result = _op('session.confirm');
+    final map = result is Map ? result : const {};
+    return RotelyxInvitation(
+      commit: _string(map['commit']),
+      welcome: _string(map['welcome']),
+      ratchetTree: _string(map['ratchetTree']),
+    );
+  }
+
+  @override
   void join(String welcomeB64, String ratchetTreeB64) =>
       _op('session.join', {'welcome': welcomeB64, 'ratchetTree': ratchetTreeB64});
 
@@ -403,6 +446,19 @@ class _NativeSession implements RotelyxSession {
         if (text is! String) return null;
         final from = result['from'];
         return Received(text, from: from is String && from.isNotEmpty ? from : null);
+      }
+      // Somebody asked for a member to be admitted. Nothing has happened yet
+      // and nothing will until another member confirms it, so this is neither
+      // a message nor a move: it is a decision waiting for somebody.
+      if (kind == 'proposed') {
+        final joining = result['joining'];
+        final by = result['by'];
+        return Received.proposal(
+          proposedBy: by is String && by.isNotEmpty ? by : null,
+          joining: joining is List
+              ? joining.whereType<String>().toList(growable: false)
+              : const <String>[],
+        );
       }
       // Membership and nothing both mean the group moved rather than that
       // somebody said something, which is what null means to the caller.

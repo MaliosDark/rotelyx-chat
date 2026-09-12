@@ -1265,6 +1265,25 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
               ),
 
+            // Somebody wants to let a person in, and it does not happen
+            // until a member who is not the one asking agrees.
+            //
+            // A banner rather than a line in the transcript, because this is
+            // a decision with a deadline: the person is waiting at a meeting
+            // place, and a request scrolled past is a person who never gets
+            // in. Once it is done it becomes a line like any other arrival.
+            if (rotelyx.pendingAddition != null)
+              _AdmissionRequest(
+                waiting: rotelyx.pendingAddition!,
+                onLetIn: () {
+                  if (rotelyx.confirmPendingAddition()) setState(() {});
+                },
+                onNotNow: () {
+                  rotelyx.dismissPendingAddition();
+                  setState(() {});
+                },
+              ),
+
             Expanded(
               child: GestureDetector(
                 behavior: HitTestBehavior.translucent,
@@ -1728,7 +1747,103 @@ class _SafetyPanelState extends State<_SafetyPanel> {
               style: Type.small.copyWith(color: t.faint),
             ),
           ],
+
+          // Who decides, in a conversation big enough for that to mean
+          // anything. In a pair there is only the other person, and a switch
+          // that says "only you and them may let people in" says nothing.
+          if (rotelyx.members.length > 2) ...[
+            const SizedBox(height: Metrics.pad),
+            Text('Who can let people in',
+                style: Type.label.copyWith(color: t.muted)),
+            const SizedBox(height: 6),
+            Text(
+              rotelyx.adminRuleIsRunning
+                  ? 'Only the members ticked below can turn a request into a '
+                      'member. Anybody can still ask.'
+                  : 'Anybody here can let somebody in, as long as a second '
+                      'member agrees. Tick names to narrow that to them.',
+              style: Type.small.copyWith(color: t.muted),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                for (final m in rotelyx.members)
+                  _DecidesChip(
+                    label: m.label,
+                    decides: rotelyx.admins.contains(m.label),
+                    onTap: () async {
+                      final next = rotelyx.admins.toList();
+                      next.contains(m.label)
+                          ? next.remove(m.label)
+                          : next.add(m.label);
+                      await rotelyx.setAdmins(next);
+                      setState(() {});
+                    },
+                  ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Changing this is a commit, so everybody sees it happen. If every '
+              'ticked member leaves, the rule stands down rather than leaving '
+              'a conversation that can never admit anybody again.',
+              style: Type.small.copyWith(color: t.faint),
+            ),
+          ],
         ],
+      ),
+    );
+  }
+}
+
+/// A member, and whether this conversation lets them turn a request into a
+/// member.
+class _DecidesChip extends StatelessWidget {
+  const _DecidesChip({
+    required this.label,
+    required this.decides,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool decides;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = RotelyxThemeScope.of(context);
+    return InkWell(
+      borderRadius: BorderRadius.circular(999),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: decides
+              ? Tone.accent.withValues(alpha: 0.16)
+              : t.surface.withValues(alpha: 0.6),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: decides
+                ? Tone.accent.withValues(alpha: 0.45)
+                : t.line.withValues(alpha: 0.5),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              decides ? Icons.check_circle : Icons.circle_outlined,
+              size: 13,
+              color: decides ? Tone.accent : t.faint,
+            ),
+            const SizedBox(width: 6),
+            Text(label,
+                style: Type.small
+                    .copyWith(color: decides ? t.text : t.muted, fontSize: 12)),
+          ],
+        ),
       ),
     );
   }
@@ -2033,6 +2148,93 @@ class _Bubble extends StatelessWidget {
 /// Centred and muted on purpose. It is a fact about the conversation rather
 /// than a turn in it, and the shape people already read that way is the one
 /// every messenger uses for "this happened" as opposed to "somebody said".
+/// Somebody knocking, and the two buttons that decide it.
+///
+/// # Why this is a decision and not a notification
+///
+/// Admitting a member takes two of them: one asks and a **different** one
+/// commits, and every other member refuses a commit that admits somebody on
+/// the authority of whoever sent it. So the person reading this is not being
+/// informed of something that happened. They are one of the two hands.
+///
+/// The name is what the person knocking called themselves, which is worth
+/// what an unverified name is worth, and the copy says so rather than
+/// presenting it as established.
+class _AdmissionRequest extends StatelessWidget {
+  const _AdmissionRequest({
+    required this.waiting,
+    required this.onLetIn,
+    required this.onNotNow,
+  });
+
+  final PendingAddition waiting;
+  final VoidCallback onLetIn;
+  final VoidCallback onNotNow;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = RotelyxThemeScope.of(context);
+    final who = waiting.name.isEmpty ? 'Somebody' : waiting.name;
+    final asker = waiting.askedBy == null || waiting.askedBy!.isEmpty
+        ? 'Someone here'
+        : waiting.askedBy!;
+
+    return Padding(
+      padding:
+          const EdgeInsets.fromLTRB(Metrics.pad, 0, Metrics.pad, Metrics.pad),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Tone.accent.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Tone.accent.withValues(alpha: 0.3)),
+        ),
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.door_front_door_outlined,
+                    size: 16, color: Tone.accent),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text('$asker wants to let $who in',
+                      style: Type.body.copyWith(color: t.text)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Nobody can be added by one person alone, so this waits for you '
+              'or another member. "$who" is what they call themselves, not '
+              'something anybody has checked.',
+              style: Type.body.copyWith(color: t.muted, fontSize: 13),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: onNotNow,
+                  child: Text('Not now',
+                      style: Type.label.copyWith(color: t.muted, fontSize: 13)),
+                ),
+                const SizedBox(width: 4),
+                TextButton(
+                  onPressed: onLetIn,
+                  child: Text('Let them in',
+                      style:
+                          Type.label.copyWith(color: Tone.accent, fontSize: 13)),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _CallLine extends StatelessWidget {
   const _CallLine({required this.message});
 

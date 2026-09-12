@@ -7,6 +7,32 @@
 /// bug found in production.
 library;
 
+/// How long one addressing bucket lasts, in seconds.
+///
+/// # Why this is a constant and not four copies of a number
+///
+/// It was `/ 3600` written out in the terminal client, the desktop client, the
+/// browser and here. Four copies of one number that have to agree exactly: a
+/// client that disagrees derives a different address, deposits where nobody is
+/// listening, and nothing anywhere raises an error. The envelope sits until it
+/// expires. The Rust half is `TAG_BUCKET_SECONDS` in `rotelyx-mailbox`, and
+/// these two are the pair that must not drift.
+///
+/// # Why an hour, and what a shorter one would cost
+///
+/// An address is a pseudonym for a recipient that lasts as long as the bucket,
+/// so a shorter one gives an operator less material to build a profile from.
+/// It is also the number that decides how long a phone can be offline and
+/// still find its mail: a recipient looks under one address per bucket and a
+/// subscription may carry 64 of them.
+///
+/// An hour with [RotelyxConfig.lookback] at 39 is forty addresses and forty
+/// hours of grace. Ten minute buckets on the same budget of 64 give under
+/// eleven hours, which is a phone that stops finding what arrived while its
+/// owner was asleep. Every address also carries a wake ticket, so the count is
+/// the number of seals performed on every reconnection too.
+const int tagBucketSeconds = 3600;
+
 class RotelyxConfig {
   const RotelyxConfig({
     required this.mailbox,

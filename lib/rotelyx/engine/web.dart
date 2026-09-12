@@ -69,6 +69,10 @@ extension type WasmSessionJs._(JSObject _) implements JSObject {
   // ---- membership -----------------------------------------------------------
   external void found();
   external WasmInvitationJs invite(String keyPackageB64);
+  external String propose(String keyPackageB64);
+  external String admins();
+  external String setAdmins(String labelsJson);
+  external WasmInvitationJs confirm();
   external void join(String welcomeB64, String ratchetTreeB64);
   external String encapsulateTo(String hybridPkB64);
 
@@ -191,6 +195,27 @@ class _WebSession implements RotelyxSession {
   }
 
   @override
+  List<String> admins() {
+    final decoded = jsonDecode(inner.admins());
+    return decoded is List
+        ? decoded.whereType<String>().toList(growable: false)
+        : const <String>[];
+  }
+
+  @override
+  String setAdmins(List<String> labels) => inner.setAdmins(jsonEncode(labels));
+
+  @override
+  String propose(String keyPackageB64) => inner.propose(keyPackageB64);
+
+  @override
+  RotelyxInvitation confirmAdditions() {
+    final i = inner.confirm();
+    return RotelyxInvitation(
+        commit: i.commit, welcome: i.welcome, ratchetTree: i.ratchetTree);
+  }
+
+  @override
   void join(String welcomeB64, String ratchetTreeB64) =>
       inner.join(welcomeB64, ratchetTreeB64);
   @override
@@ -238,6 +263,18 @@ class _WebSession implements RotelyxSession {
       if (text is! String) return null;
       final from = decoded['from'];
       return Received(text, from: from is String && from.isNotEmpty ? from : null);
+    }
+    // Somebody asked for a member to be admitted. Nothing has happened yet and
+    // nothing will until another member confirms it.
+    if (decoded['kind'] == 'proposed') {
+      final joining = decoded['joining'];
+      final by = decoded['by'];
+      return Received.proposal(
+        proposedBy: by is String && by.isNotEmpty ? by : null,
+        joining: joining is List
+            ? joining.whereType<String>().toList(growable: false)
+            : const <String>[],
+      );
     }
     // Membership and nothing both mean the group moved rather than that
     // somebody said something, which is what null means to the caller.

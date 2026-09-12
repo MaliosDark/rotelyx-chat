@@ -41,10 +41,37 @@ library;
 /// MLS authenticates the sending leaf and has since the beginning. The value
 /// was dropped between the core and this interface.
 class Received {
-  const Received(this.text, {this.from});
+  const Received(
+    this.text, {
+    this.from,
+    this.proposedBy,
+    this.joining = const <String>[],
+  });
 
-  /// The plaintext.
+  /// A request to admit somebody, which changes nothing until another member
+  /// confirms it.
+  ///
+  /// This is the half of an addition that anybody can still do something
+  /// about, which is why it comes back rather than being folded into "the
+  /// group moved". By the time it is a membership change it is already done.
+  const Received.proposal({required this.proposedBy, required this.joining})
+      : text = '',
+        from = null;
+
+  /// The plaintext. Empty when this was not a message.
   final String text;
+
+  /// The member asking for an addition, when that is what arrived.
+  ///
+  /// Null for a request from outside the membership, which cannot be confirmed
+  /// into anything and should be shown as unattributed.
+  final String? proposedBy;
+
+  /// Who that request would admit.
+  final List<String> joining;
+
+  /// Whether this was a request to admit somebody rather than something said.
+  bool get isProposal => joining.isNotEmpty;
 
   /// The label the author joined under, when the group still holds their leaf.
   ///
@@ -123,7 +150,40 @@ abstract interface class RotelyxSession {
   /// Start a group with this member as its only occupant.
   void found();
 
+  /// Admit somebody on this member's own authority.
+  ///
+  /// Only two cases produce a commit the rest of the group will accept: a
+  /// conversation with one member, which is first contact, and a leaf
+  /// belonging to the same person as this one, which is somebody's own second
+  /// device. Anywhere else, admitting takes two members: [propose] and then
+  /// somebody else's [confirmAdditions].
   RotelyxInvitation invite(String keyPackageB64);
+
+  /// The members this group allows to turn a request into a member, by the
+  /// labels the roster uses. Empty when it allows everybody.
+  List<String> admins();
+
+  /// Name those members. An empty list turns the rule off.
+  ///
+  /// Returns the commit to broadcast. It narrows who may let somebody in, not
+  /// who may ask: an ordinary member proposing somebody is what a request to
+  /// join looks like from inside the group.
+  String setAdmins(List<String> labels);
+
+  /// Ask the group to admit somebody. Nothing changes until another member
+  /// confirms it.
+  ///
+  /// The proposal goes to every member, not only to whoever is expected to
+  /// confirm: a commit that refers to a proposal cannot be processed by
+  /// anybody who never saw it.
+  String propose(String keyPackageB64);
+
+  /// Turn the additions somebody else proposed into a commit.
+  ///
+  /// Refused by the rest of the group if this member is the one that proposed
+  /// them.
+  RotelyxInvitation confirmAdditions();
+
   void join(String welcomeB64, String ratchetTreeB64);
 
   String encapsulateTo(String hybridPublicKeyB64);

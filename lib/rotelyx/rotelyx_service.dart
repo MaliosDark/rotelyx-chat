@@ -77,6 +77,37 @@ class RotelyxMessage {
   Delivery delivery;
 }
 
+/// Somebody waiting to be let into a conversation, and nobody has said yes yet.
+///
+/// Admitting a member takes two of them: one asks and a **different** one
+/// turns it into a commit. Every other member refuses a commit that admits
+/// somebody on the authority of whoever sent it, so this is not a courtesy
+/// the asking device could skip.
+class PendingAddition {
+  PendingAddition({
+    required this.name,
+    required this.askedBy,
+    required this.meetingTag,
+    required this.at,
+  });
+
+  /// What the person asking to come in calls themselves.
+  ///
+  /// Unverified, and an interface showing it has to say so: it is a label
+  /// chosen by whoever is knocking, not a fact the group established.
+  final String name;
+
+  /// The member who asked, as the label they joined under, or null when the
+  /// request could not be attributed to one.
+  final String? askedBy;
+
+  /// Where to leave the welcome once somebody agrees. The asking member's
+  /// meeting place, which is theirs and not derivable here.
+  final String meetingTag;
+
+  final DateTime at;
+}
+
 class RotelyxService {
   RotelyxService({RotelyxConfig config = rotelyxConfig}) : _config = config;
 
@@ -102,6 +133,16 @@ class RotelyxService {
   WasmSession? _session;
   MailboxClient? _mailbox;
   String? _meetingTag;
+
+  /// An addition somebody asked for and nobody has confirmed yet.
+  ///
+  /// Held in memory rather than written down. A request is answered in the
+  /// minutes after it is made, by whoever is looking at their phone, and a
+  /// proposal that outlives the session it arrived in refers to a key package
+  /// and an epoch that have moved on. Losing it costs the person asking one
+  /// retry; keeping it would cost somebody confirming an addition they can no
+  /// longer read the details of.
+  PendingAddition? pendingAddition;
   PairingRole? _role;
   String _displayName = 'anon';
 
@@ -395,6 +436,8 @@ class RotelyxService {
         _theyEdited(signal.editedAt, signal.editedText);
       case SignalKind.history:
         _theyHandedHistory(signal, from: from);
+      case SignalKind.pendingAddition:
+        _theyWantToAdmitSomebody(signal, from: from);
 
       case SignalKind.call:
         // Which conversation has a call happening in it, before passing it on.
@@ -425,6 +468,120 @@ class RotelyxService {
   /// it is: one person's copy, not something the group asserts. An interface
   /// that showed it as ordinary history would be claiming a fact nobody can
   /// check.
+  /// Somebody in the group wants to let a person in.
+  ///
+  /// Nothing has happened. The MLS proposal that arrived alongside this is in
+  /// the session's queue, and it stays there, changing nothing, until a member
+  /// who is not the one that asked turns it into a commit. This is the moment
+  /// worth interrupting somebody for: afterwards it is already done.
+  void _theyWantToAdmitSomebody(Signal signal, {String? from}) {
+    final tag = signal.pendingMeetingTag;
+    if (tag == null || tag.isEmpty) return;
+
+    pendingAddition = PendingAddition(
+      name: signal.pendingName,
+      askedBy: from,
+      meetingTag: tag,
+      at: DateTime.now(),
+    );
+
+    final who = signal.pendingName.isEmpty ? 'somebody' : signal.pendingName;
+    final asker = from == null || from.isEmpty ? 'Someone in this conversation' : from;
+    _notices.add('$asker wants to let $who in. Nobody is in until you or '
+        'another member agrees.');
+    _stateChanges.add(state);
+  }
+
+  /// Ask the rest of the group to let somebody in.
+  ///
+  /// Two things go out. The MLS proposal, addressed to every member, which is
+  /// what makes the addition possible and changes nothing by itself. And a
+  /// note saying who is knocking and where the welcome should be left, because
+  /// neither of those is in a key package and the member who confirms is not
+  /// the member who was asked.
+  void _askTheGroupToAdmit(String keyPackage, String name) {
+    final live = _session;
+    final meeting = _meetingTag;
+    if (live == null || meeting == null) return;
+
+    final proposal = live.propose(keyPackage);
+    for (final envelope in live.sealCommitForGroup(proposal)) {
+      _mailbox?.deposit(envelope);
+    }
+    signal(Signal.pendingAddition(meetingTag: meeting, name: name));
+
+    // And step away from the meeting place until this resolves.
+    //
+    // A tag hands an envelope to exactly one listener and then releases it.
+    // The welcome is produced by whoever confirms, not by this device, and if
+    // this device is still listening here when it lands, it collects the
+    // welcome meant for the person knocking. Nothing reports that: the joiner
+    // simply waits for ever. There is nothing left to hear here anyway, the
+    // key package is already in hand.
+    _mailbox?.unsubscribe([meeting]);
+
+    _notices.add('Asked the others to let $name in. It happens when one of '
+        'them agrees.');
+    _stateChanges.add(state);
+  }
+
+  /// Agree to an addition somebody else asked for.
+  ///
+  /// This is the second of the two hands. It produces the commit, and the
+  /// welcome that the person waiting needs, and leaves that welcome at the
+  /// meeting place the asking member named.
+  ///
+  /// Returns whether it happened, so a button can say so.
+  bool confirmPendingAddition() {
+    final waiting = pendingAddition;
+    final live = _session;
+    if (waiting == null || live == null) return false;
+
+    try {
+      final invitation = live.confirmAdditions();
+
+      // The welcome goes where the person knocking is listening, which is the
+      // asking member's meeting place and not ours. They stepped away from it
+      // when they asked, so this reaches the joiner rather than being
+      // collected by the member that is already in.
+      _depositAt(waiting.meetingTag, {
+        't': 'welcome',
+        'name': _displayName,
+        'welcome': invitation.welcome,
+        'ratchetTree': invitation.ratchetTree,
+      });
+
+      for (final envelope in live.sealCommitForGroup(invitation.commit)) {
+        _mailbox?.deposit(envelope);
+      }
+
+      pendingAddition = null;
+      _persist();
+      _resubscribe();
+      _notices.add('${waiting.name.isEmpty ? 'They' : waiting.name} are in.');
+      _stateChanges.add(state);
+      return true;
+    } on Object catch (e) {
+      lastError = 'could not let them in: $e';
+      _notices.add(lastError!);
+      _stateChanges.add(state);
+      return false;
+    }
+  }
+
+  /// Say no, which here means forgetting the request rather than telling
+  /// anybody.
+  ///
+  /// There is nothing to send. An addition happens when a member commits one,
+  /// so an addition nobody commits does not happen, and a refusal that
+  /// announced itself would only tell the asking member which of the others
+  /// declined.
+  void dismissPendingAddition() {
+    if (pendingAddition == null) return;
+    pendingAddition = null;
+    _stateChanges.add(state);
+  }
+
   void _theyHandedHistory(Signal signal, {String? from}) {
     final id = _persistId;
     final json = signal.handedHistory;
@@ -1711,6 +1868,16 @@ class RotelyxService {
     }
 
     try {
+      // Founding is first contact: one member, and the second pair of eyes
+      // would have to belong to somebody who has not arrived. Every other
+      // admission takes two members, and every other member refuses a commit
+      // that admits somebody on the authority of whoever sent it, so this is
+      // not a choice this device gets to make.
+      if (!founding) {
+        _askTheGroupToAdmit(keyPackage, name);
+        return;
+      }
+
       final invitation = session.invite(keyPackage);
 
       if (founding) {
@@ -1866,6 +2033,66 @@ class RotelyxService {
       ];
     } on Object {
       return const [];
+    }
+  }
+
+  /// The members allowed to turn a request into a member, by the labels the
+  /// roster uses. Empty when the conversation allows everybody.
+  ///
+  /// This narrows who may decide. It never narrows who may ask: an ordinary
+  /// member proposing somebody is what a request to join looks like from
+  /// inside the group, and it stays available to everybody.
+  List<String> get admins {
+    final session = _session;
+    if (session == null || state != RotelyxState.joined) return const [];
+    try {
+      return session.admins();
+    } on Object {
+      return const [];
+    }
+  }
+
+  /// Whether the rule is actually running, rather than merely written down.
+  ///
+  /// A list whose people have all left is a conversation that could otherwise
+  /// never admit anybody again, and there is no server here to be asked to fix
+  /// that, so the engine stands the rule down and this says so rather than
+  /// showing a rule the group is not under.
+  bool get adminRuleIsRunning {
+    final named = admins;
+    if (named.isEmpty) return false;
+    final here = members.map((m) => m.label).toSet();
+    return named.any(here.contains);
+  }
+
+  /// Name the members allowed to let people in. An empty list turns it off.
+  ///
+  /// Anybody in the conversation can do this, and the reason is the same as
+  /// everywhere else here: there is nobody above the members to authorise it.
+  /// What stops it being abused is that the commit is visible, so a member
+  /// quietly making itself the only one who decides is a change everybody
+  /// watches arrive.
+  Future<bool> setAdmins(List<String> labels) async {
+    final session = _session;
+    if (session == null || state != RotelyxState.joined) return false;
+
+    try {
+      final commit = session.setAdmins(labels);
+
+      // At the epoch the others are still on, because this commit is what
+      // moves them off it. The same trap the invitation path documents.
+      for (final envelope in session.sealCommitForGroup(commit)) {
+        _mailbox?.deposit(envelope);
+      }
+      _persist();
+      _resubscribe();
+      _stateChanges.add(state);
+      return true;
+    } on Object catch (e) {
+      lastError = 'could not change who lets people in: $e';
+      _notices.add(lastError!);
+      _stateChanges.add(state);
+      return false;
     }
   }
 
@@ -2063,7 +2290,11 @@ class RotelyxService {
     // heard of the token.
     const kind = PushGrant.defaultKind;
 
-    final hour = DateTime.now().millisecondsSinceEpoch ~/ 3600000;
+    // The same bucket the addresses use, from the same constant. A ticket
+    // sealed for a different bucket than the tag it sits under is a wake that
+    // never fires, and nothing reports it.
+    final hour =
+        DateTime.now().millisecondsSinceEpoch ~/ (tagBucketSeconds * 1000);
     final byTag = <String, String>{};
 
     for (final tag in tags) {
@@ -2218,8 +2449,17 @@ class RotelyxService {
   void _depositRendezvous(Map<String, Object?> payload) {
     final meeting = _meetingTag;
     if (meeting == null) return;
+    _depositAt(meeting, payload);
+  }
+
+  /// Leave something at a meeting place that is not ours.
+  ///
+  /// Used when confirming somebody else's addition: the person knocking is
+  /// listening at the asking member's meeting place, and this device has no
+  /// way to work that address out for itself. It travels in the request.
+  void _depositAt(String tagHex, Map<String, Object?> payload) {
     final encoded = base64Encode(utf8.encode(jsonEncode(payload)));
-    _mailbox?.deposit(RotelyxWasm.sealUnder(meeting, encoded));
+    _mailbox?.deposit(RotelyxWasm.sealUnder(tagHex, encoded));
   }
 
   /// 32 random bytes as hex, the shape `sealUnder` expects.
