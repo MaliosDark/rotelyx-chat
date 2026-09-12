@@ -44,6 +44,9 @@ const aTestCall = 'a-test-call-0001';
   // A call keys from the group secret, so it has to be the settled one.
   guest.openPq(host.encapsulateTo(guest.hybridPublicKey()));
   guest.receive(host.commitPq());
+  // The commit is held until it is handed over, so applying it here is what
+  // puts both sides on the same epoch. See `Conversation::settle`.
+  host.settle();
 
   return (host: host, guest: guest);
 }

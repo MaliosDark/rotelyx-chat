@@ -139,7 +139,15 @@ void main() {
       // The post-quantum step, which is separate from MLS and layered over it.
       guest.openPq(host.encapsulateTo(guest.hybridPublicKey()));
       final commit = host.commitPq();
+      // Handed over first, then applied here.
+      //
+      // A commit is held rather than applied the moment it is made, so that a
+      // member that raced somebody else can still take their commit instead of
+      // its own. Settling is what shuts that door, and it belongs after the
+      // commit is somewhere the other side can get it. See
+      // `Conversation::settle` in the protocol.
       guest.receive(commit);
+      host.settle();
 
       expect(host.memberCount, 2, reason: 'the host should see the group of two');
       expect(guest.memberCount, 2);
@@ -171,6 +179,7 @@ void main() {
       guest.join(invitation.welcome, invitation.ratchetTree);
       guest.openPq(host.encapsulateTo(guest.hybridPublicKey()));
       guest.receive(host.commitPq());
+      host.settle();
 
       final before = host.safetyNumber();
       final blob = host.sealSession(key);
@@ -190,8 +199,10 @@ void main() {
       expect(() => restored.send('before rekeying'),
           throwsA(isA<RotelyxEngineError>()));
 
-      // The commit goes first, exactly as any other commit would.
+      // The commit goes first, exactly as any other commit would, and is
+      // applied here once the other side has it.
       guest.receive(restored.rekeyAfterRestore());
+      restored.settle();
 
       expect(guest.receive(restored.send('sent after a restart'))?.text,
           equals('sent after a restart'));

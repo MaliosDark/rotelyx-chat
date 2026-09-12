@@ -65,6 +65,12 @@ void main() {
     final commit = ana.removeMember(betoKey);
     expect(commit, isNotEmpty);
 
+    // Held until the commit is somewhere the others can get it, which in a
+    // test with no mailbox is the moment it is in hand. A member that applied
+    // its own commit the instant it made one could not take somebody else's
+    // when the two raced, and that is what `settle` exists to allow.
+    ana.settle();
+
     expect(ana.memberCount, 1, reason: 'the remover moved to an epoch without them');
 
     ana.dispose();

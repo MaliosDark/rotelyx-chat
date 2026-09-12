@@ -139,6 +139,10 @@ void main() {
     // epoch first and the other has to be told. Same rule as any restored
     // conversation; a note to self is two members and gets no exemption.
     b2.receive(a2.rekeyAfterRestore());
+    // And applied here, now the other half has it. A commit is held until then
+    // so that a member which raced somebody else can take theirs instead. See
+    // `Conversation::settle`.
+    a2.settle();
 
     const written = 'this note was written before the restart';
     final envelopes = a2.sealForGroup(a2.send(written));

@@ -107,6 +107,10 @@ void main() {
     ) as Map)['key'] as String;
 
     it.phone.removeMember(laptopKey);
+    // Applied once the commit is in hand. A commit is held until then, so that
+    // a member that raced somebody else can still take theirs. See
+    // `Conversation::settle`.
+    it.phone.settle();
 
     expect(it.phone.memberCount, 2,
         reason: 'removing a device must not remove its person');
