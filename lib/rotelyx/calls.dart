@@ -23,6 +23,7 @@
 library;
 
 import 'dart:async';
+import 'dart:convert' show base64Decode;
 
 import 'package:flutter/foundation.dart';
 
@@ -301,9 +302,37 @@ class Calls {
         return 'they answered without an address to dial';
       }
 
-      final connection = dialling
-          ? endpoint.connect(_theirAddress!)
-          : await _waitForPeer(endpoint);
+      // Where the media goes.
+      //
+      // Between two people it goes straight to the other one, through the
+      // relay. With more than two, everybody dials the relay's room instead:
+      // one stream up, everybody else's back. Without a room a group call is
+      // two of the members hearing each other and the rest hearing nothing,
+      // which is what every group call was until the room existed. Every
+      // messenger that keeps group calls end to end encrypted does exactly
+      // this, and the relay can read none of it.
+      final room = rotelyxConfig.room;
+      final inARoom = room != null && room.isNotEmpty && rotelyx.memberCount > 2;
+
+      final RotelyxConnection? connection;
+      if (inARoom) {
+        _say('dialling the room for ${rotelyx.memberCount} members');
+        connection = endpoint.connect(room);
+        // The first datagram on a room connection is the join and nothing
+        // else: which room, derived from this call so every member lands in
+        // the same one, and which seat, this member's sender index so its
+        // frames are routed as its own.
+        final join = base64Decode(session.roomJoin(_state.id));
+        if (!connection.send(join)) {
+          connection.close();
+          hangUp(CallEnded.lost);
+          return 'could not join the room';
+        }
+      } else {
+        connection = dialling
+            ? endpoint.connect(_theirAddress!)
+            : await _waitForPeer(endpoint);
+      }
 
       _say('connection=${connection != null}');
       if (connection == null) {

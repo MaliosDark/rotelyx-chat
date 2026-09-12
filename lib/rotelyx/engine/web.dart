@@ -72,6 +72,7 @@ extension type WasmSessionJs._(JSObject _) implements JSObject {
   external void found();
   external WasmInvitationJs invite(String keyPackageB64);
   external String propose(String keyPackageB64);
+  external String roomJoin(String callId);
   external String admins();
   external bool settle();
   external bool isHoldingACommit();
@@ -214,6 +215,9 @@ class _WebSession implements RotelyxSession {
 
   @override
   String setAdmins(List<String> labels) => inner.setAdmins(jsonEncode(labels));
+
+  @override
+  String roomJoin(String callId) => inner.roomJoin(callId);
 
   @override
   String propose(String keyPackageB64) => inner.propose(keyPackageB64);

@@ -219,6 +219,13 @@ abstract interface class RotelyxSession {
   /// join looks like from inside the group.
   String setAdmins(List<String> labels);
 
+  /// The datagram that seats this member in a call's room, base64.
+  ///
+  /// Sent first on the room connection and nothing else. Names the room,
+  /// derived from the call so every member lands in the same one, and the
+  /// seat, this member's sender index so its frames are routed as its own.
+  String roomJoin(String callId);
+
   /// Ask the group to admit somebody. Nothing changes until another member
   /// confirms it.
   ///

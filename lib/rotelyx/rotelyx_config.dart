@@ -39,6 +39,7 @@ class RotelyxConfig {
     required this.relay,
     required this.lookback,
     this.notifierKey,
+    this.room,
   });
 
   /// Ideoa Labs production. The mailbox is store-and-forward for peers that are
@@ -57,6 +58,30 @@ class RotelyxConfig {
     relay: 'http://127.0.0.1:3340',
     lookback: 39,
   );
+
+  /// Where the relay's room answers, for group calls, or null where the relay
+  /// runs none.
+  ///
+  /// # What it is
+  ///
+  /// An endpoint address like the one a phone prints for itself. A relay
+  /// started with `--room` prints it once and serves it at `/room`, and it
+  /// stays the same for as long as the relay keeps its identity file. Each
+  /// participant in a call with more than two people dials this instead of
+  /// each other, sends the relay one stream and receives everybody else's
+  /// back. The relay cannot read any of it. Without this a call between more
+  /// than two people does not exist: it is two of them hearing each other.
+  ///
+  /// # Why it is written here and not fetched
+  ///
+  /// The application contacts the mailbox and the relay and nothing else, and
+  /// a test fails the build if any code names another host. Reading `/room`
+  /// would be one more request to a host already on that list, which is fine,
+  /// and it would be the first HTTP request this application makes, which is
+  /// a platform split and a code path for a value that changes as often as
+  /// the relay URL does. So it is configured beside the relay URL, and read
+  /// from `/room` by whoever sets it.
+  final String? room;
 
   /// The notifier's public key, base64, or null where there is none.
   ///

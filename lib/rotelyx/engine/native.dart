@@ -384,6 +384,10 @@ class _NativeSession implements RotelyxSession {
   }
 
   @override
+  String roomJoin(String callId) =>
+      _string(_op('session.roomJoin', {'call': callId}));
+
+  @override
   String propose(String keyPackageB64) {
     final result = _op('session.propose', {'keyPackage': keyPackageB64});
     final map = result is Map ? result : const {};
