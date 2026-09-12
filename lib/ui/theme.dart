@@ -87,15 +87,19 @@ Decoration groundOf(Color base) => BoxDecoration(
 
 abstract final class Tone {
   // Brand
-  /// The mark's own violet, taken from the logo rather than chosen beside it.
+  /// The violet the logo files are drawn in, measured from them.
   ///
-  /// It was `0xFF6A31EE`, which is four degrees bluer and reads as blue next to
-  /// the mark: close enough to look like a mistake rather than a decision, and
-  /// on a screen where the accent is the only colour, a button that disagrees
-  /// with the logo is the first thing somebody notices.
-  static const accent = Color(0xFF722CF5);
-  static const accentSoft = Color(0xFF9161FF);
-  static const accentDim = Color(0x33722CF5);
+  /// `rotelyx-mark.png`, `rotelyx-lockup-*.png` and `rotelyx-wordmark-*.png`
+  /// are all `#6A31ED`, so this is the value that makes a button and the mark
+  /// beside it the same colour.
+  ///
+  /// It was briefly `0xFF722CF5`, which is what `docs/brand/rotelyx-motion.svg`
+  /// uses. That file is a motion study nothing ships, and taking the brand from
+  /// it put every button out of step with every logo in the application. The
+  /// palette follows the artwork, not the other way round.
+  static const accent = Color(0xFF6A31EE);
+  static const accentSoft = Color(0xFF8B5CF6);
+  static const accentDim = Color(0x336A31EE);
 
   // Dark, designed first
   static const dBackdrop = Color(0xFF0B0A0F);

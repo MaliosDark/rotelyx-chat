@@ -34,7 +34,10 @@ class RxButton extends StatelessWidget {
     final enabled = onTap != null && !busy;
 
     final (bg, fg, border) = switch (weight) {
-      Weight.primary => (Tone.accent, Colors.white, null),
+      // `accentSoft`, which is the violet the avatars are drawn in and the one
+      // people point at when they say "the Rotelyx purple". `accent` is a
+      // shade darker and bluer, and beside the lighter one it reads as blue.
+      Weight.primary => (Tone.accentSoft, Colors.white, null),
       Weight.secondary => (Colors.transparent, Tone.accent, Tone.accent),
       Weight.quiet => (Colors.transparent, t.muted, null),
     };
