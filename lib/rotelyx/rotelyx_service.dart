@@ -2346,7 +2346,30 @@ class RotelyxService {
     store.setSessionSealedClean(conversationId, false);
 
     final meeting = _meetingTag;
-    if (meeting != null) _mailbox?.subscribe([meeting]);
+    if (meeting != null) {
+      _mailbox?.subscribe([meeting]);
+
+      // And a wake ticket there, so somebody knocking reaches this device even
+      // with the application closed.
+      //
+      // # Why this does not link the conversations
+      //
+      // Listening at every conversation's meeting place at once would, and was
+      // built and taken out for it: one connection naming several
+      // conversations' addresses tells the mailbox they belong to one device.
+      //
+      // A ticket is different in the one way that matters here. It is left
+      // **while this conversation is the live one**, in a request that names
+      // this conversation's addresses and no others, so the mailbox never sees
+      // two of them together. And two tickets from one device share no bytes,
+      // which is what `WakeTicket` was built for: the mailbox stores them,
+      // hands them on, and cannot tell that any two are related.
+      //
+      // So the notification arrives without anybody having to be looking, and
+      // the mailbox learns nothing it did not already know about this one
+      // conversation.
+      _leaveTicketsFor([meeting]);
+    }
 
     // Opened, so it stops being a conversation somebody is waiting outside of.
     // The knock itself was never acknowledged, so the mailbox still has it and
