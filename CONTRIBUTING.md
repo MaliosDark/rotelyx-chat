@@ -74,6 +74,13 @@ refuses a second conversation, and
 and counts the call sites. If that test fails on your change, the change is
 the problem, not the test.
 
+The cost of the rule is connections, and the mailbox's nginx allows ten per
+address (the server, sixteen). So the eight most recently active conversations
+listen in the background and the rest receive when opened. Raising that number
+means raising both server limits first, and the reason they are low is not a
+mistake: one address holding many sockets is the shape of a denial of
+service.
+
 ## What the tests are for
 
 Several of them read the source rather than exercise it, and they are named

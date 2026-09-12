@@ -2587,11 +2587,30 @@ class RotelyxService {
     if (key == null || _mailbox == null) return;
     final url = mailboxUrl;
 
-    var openedThisPass = 0;
+    // The most recent first, because not all of them get a socket.
+    final candidates = <String>[];
     for (final id in store.conversationIds) {
       if (id == _persistId) continue;
       if (id == _peerId(_persistId ?? '')) continue;
+      candidates.add(id);
+    }
+    candidates.sort((a, b) {
+      final at = store.load(a)?.lastActivity ?? DateTime(1970);
+      final bt = store.load(b)?.lastActivity ?? DateTime(1970);
+      return bt.compareTo(at);
+    });
+
+    // Sockets beyond the budget go to conversations that have gone quiet, so
+    // a conversation that has just spoken can have one.
+    final keep = candidates.take(_backgroundSocketBudget).toSet();
+    for (final id in _backgroundSockets.keys.toList()) {
+      if (!keep.contains(id)) _dropBackgroundSocket(id);
+    }
+
+    var openedThisPass = 0;
+    for (final id in candidates) {
       if (_backgroundSockets.containsKey(id)) continue;
+      if (_backgroundSockets.length >= _backgroundSocketBudget) break;
 
       var session = _background[id];
       if (session == null) {
@@ -2633,11 +2652,40 @@ class RotelyxService {
     }
   }
 
+  /// How many background connections this device holds at once.
+  ///
+  /// # The number, and where it comes from
+  ///
+  /// The mailbox allows one address sixteen concurrent connections, and the
+  /// nginx in front of it allows ten. Both are written with their reason: a
+  /// client needs one, a household behind one address needs a handful, and
+  /// beyond that it is either something retrying without backing off or
+  /// somebody holding sockets to consume memory. Ten, less the socket for the
+  /// conversation on screen, less one so that a reconnection is never the
+  /// request that is refused, is eight.
+  ///
+  /// So not every conversation listens in the background. The eight most
+  /// recently active do, which is where nearly every message that matters
+  /// arrives, and the rest receive when they are opened, which is what every
+  /// conversation did before any of this existed. A first version of this
+  /// opened one socket per conversation with no ceiling, and the eleventh was
+  /// refused with a 429 that nothing reported: that conversation simply never
+  /// heard anything while it looked, from the outside, exactly like the ten
+  /// that did.
+  ///
+  /// **Raising this past eight means raising both server limits first**, and
+  /// the reason they are low is not a mistake: one address holding many
+  /// sockets is the shape of a denial of service, and a limit that is high
+  /// enough for a thousand conversations is a limit that no longer stops
+  /// anybody.
+  static const _backgroundSocketBudget = 8;
+
   /// How many background connections one pass may open.
   ///
   /// The mailbox's burst is twenty. Fifteen leaves the live socket room to
   /// reconnect inside the same window, which it needs more than any
-  /// background one does.
+  /// background one does. With a budget of eight this is never reached; it
+  /// stays because the budget is the thing somebody would raise.
   static const _backgroundSocketsPerPass = 15;
 
   /// The rest of the conversations, once the meter has had a moment.
