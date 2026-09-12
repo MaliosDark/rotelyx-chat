@@ -404,6 +404,35 @@ class _ChatScreenState extends State<ChatScreen> {
               title: 'What they will and will not see',
             ),
             const SizedBox(height: Metrics.pad),
+            // Handing over what was said before they arrived.
+            //
+            // Forward secrecy means a newcomer cannot read any of it, and that
+            // is a promise rather than a gap. So there is nothing the group can
+            // give them: there is only what one person has on their device and
+            // chooses to pass on. People do this anyway with screenshots, and
+            // then the group learns nothing.
+            RxButton('Share the earlier messages',
+                icon: Icons.history,
+                weight: Weight.secondary,
+                wide: true,
+                onTap: () async {
+                  final sent = rotelyx.handOverHistory();
+                  if (!context.mounted) return;
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    content: Text(sent == null
+                        ? 'There is nothing here to share yet'
+                        : 'Shared $sent messages. Everybody here was told.'),
+                  ));
+                }),
+            const SizedBox(height: 8),
+            Text(
+              'Your copy, sent to everybody here, so the people who spoke know '
+              'it happened. They cannot read any of it otherwise: nobody keeps '
+              'the keys to what was said before somebody joined.',
+              style: Type.small.copyWith(color: t.faint),
+            ),
+            const SizedBox(height: Metrics.pad),
             RxButton('Close',
                 weight: Weight.secondary,
                 wide: true,

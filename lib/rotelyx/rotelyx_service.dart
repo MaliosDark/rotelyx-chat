@@ -393,6 +393,9 @@ class RotelyxService {
         _theyWithdrew(signal.retractedAt);
       case SignalKind.edited:
         _theyEdited(signal.editedAt, signal.editedText);
+      case SignalKind.history:
+        _theyHandedHistory(signal, from: from);
+
       case SignalKind.call:
         // Which conversation has a call happening in it, before passing it on.
         //
@@ -408,6 +411,97 @@ class RotelyxService {
         // on screen, and this object has no idea what is on screen.
         _calls.add(signal);
     }
+  }
+
+  /// Somebody handed over their copy of what was said before we arrived.
+  ///
+  /// # What is kept and what is refused
+  ///
+  /// Only messages older than the oldest this device already has. A handover is
+  /// for the part that could not be read, and taking anything newer would let
+  /// one member rewrite a conversation everybody else can see for themselves.
+  ///
+  /// Every line keeps the name of whoever handed it over, because that is what
+  /// it is: one person's copy, not something the group asserts. An interface
+  /// that showed it as ordinary history would be claiming a fact nobody can
+  /// check.
+  void _theyHandedHistory(Signal signal, {String? from}) {
+    final id = _persistId;
+    final json = signal.handedHistory;
+    if (id == null || json == null) return;
+
+    final conversation = store.load(id);
+    if (conversation == null) return;
+
+    final List<dynamic> rows;
+    try {
+      rows = jsonDecode(json) as List<dynamic>;
+    } on Object {
+      return;
+    }
+
+    // The line before which anything is older than this device could have
+    // read. Empty means everything is, which is the case this exists for.
+    final earliest = conversation.messages.isEmpty
+        ? DateTime.now()
+        : conversation.messages
+            .map((m) => m.at)
+            .reduce((a, b) => a.isBefore(b) ? a : b);
+
+    final handed = <StoredMessage>[];
+    for (final row in rows) {
+      if (row is! Map<String, dynamic>) continue;
+      final m = StoredMessage.fromJson(row);
+      if (!m.at.isBefore(earliest)) continue;
+      handed.add(StoredMessage(
+        text: m.text,
+        // Never ours, whatever the copy said. These are somebody else's words
+        // arriving from somebody else's device, and a line that claimed this
+        // device wrote them would be the one lie this feature could tell.
+        mine: false,
+        at: m.at,
+        author: from ?? m.author,
+        call: m.call,
+      ));
+    }
+    if (handed.isEmpty) return;
+
+    conversation.messages.insertAll(0, handed);
+    store.save(conversation);
+
+    _notices.add('${from ?? 'Somebody'} shared ${handed.length} earlier '
+        'messages. They are their copy, not the conversation\'s.');
+    _stateChanges.add(state);
+  }
+
+  /// Hand this device's copy of the earlier messages to whoever is here now.
+  ///
+  /// Returns how many were sent, or null when there is nothing to send.
+  ///
+  /// The whole group receives it, because that is how everything travels here
+  /// and because they are entitled to know: somebody who spoke when four
+  /// people were listening should be told when a fifth is given it.
+  int? handOverHistory({DateTime? before, int most = 200}) {
+    final id = _persistId;
+    if (id == null || state != RotelyxState.joined) return null;
+
+    final conversation = store.load(id);
+    if (conversation == null) return null;
+
+    var rows = conversation.messages.where((m) => !m.burnt).toList();
+    if (before != null) {
+      rows = rows.where((m) => m.at.isBefore(before)).toList();
+    }
+    if (rows.isEmpty) return null;
+
+    // The newest of them, capped. A whole history would not fit in one
+    // envelope on the free tier, and a feature that silently sent less than it
+    // said would be worse than one with a number on it.
+    if (rows.length > most) rows = rows.sublist(rows.length - most);
+
+    final json = jsonEncode(rows.map((m) => m.toJson()).toList());
+    if (!signal(Signal.history(json))) return null;
+    return rows.length;
   }
 
   /// Conversations with a call happening in them, by id.

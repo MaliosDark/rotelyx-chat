@@ -54,6 +54,31 @@ enum SignalKind {
 
   /// A message was changed by whoever sent it.
   edited,
+
+  /// Somebody handed over their copy of what was said before a newcomer
+  /// arrived.
+  ///
+  /// # Why a conversation cannot simply have a history
+  ///
+  /// Forward secrecy means nobody keeps the material to rebuild one. A member
+  /// added at epoch `n` cannot read anything sealed under `n-1`, and that is a
+  /// promise rather than a gap: it is why a newcomer to a group cannot read
+  /// what was said before they were let in.
+  ///
+  /// So there is nothing the *group* can give them. There is only what a
+  /// *person* has on their device, and that person choosing to hand a copy
+  /// over.
+  ///
+  /// # Why the whole group sees it
+  ///
+  /// Because what arrives is one member's copy, not a fact the group asserts,
+  /// and the difference matters to everybody who spoke. Somebody who said
+  /// something on the understanding that four people heard it is entitled to
+  /// know when a fifth is given it.
+  ///
+  /// People do this anyway, with screenshots, and the group learns nothing.
+  /// This is the same act done where it can be seen.
+  history,
 }
 
 /// What a [SignalKind.call] is saying.
@@ -166,6 +191,25 @@ class Signal {
   /// same way a photograph does and is kept locally.
   factory Signal.profile(Uint8List png) =>
       Signal(kind: SignalKind.profile, fields: [base64Encode(png)]);
+
+  /// A copy of what was said before, handed over on purpose.
+  ///
+  /// [messages] is JSON, base64 so that it survives a field separator it would
+  /// otherwise contain.
+  factory Signal.history(String messagesJson) => Signal(
+        kind: SignalKind.history,
+        fields: [base64Encode(utf8.encode(messagesJson))],
+      );
+
+  /// The messages somebody handed over, as JSON, or null when unreadable.
+  String? get handedHistory {
+    if (fields.isEmpty) return null;
+    try {
+      return utf8.decode(base64Decode(fields.first));
+    } on Object {
+      return null;
+    }
+  }
 
   Uint8List? get picture {
     if (fields.isEmpty) return null;
