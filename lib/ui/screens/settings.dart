@@ -19,6 +19,7 @@ import '../../rotelyx/push.dart';
 import '../../rotelyx/rotelyx_service.dart';
 import '../../rotelyx/rotelyx_config.dart';
 import '../../rotelyx/rotelyx_store.dart';
+import '../../rotelyx/chosen_name.dart';
 import '../../rotelyx/rotelyx_wasm.dart';
 import '../../rotelyx/signal.dart';
 import 'picture.dart';
@@ -46,6 +47,22 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  /// The name this person goes by, for the next conversation they start.
+  ///
+  /// It lived only on the pairing screen, which meant it was typed or accepted
+  /// again on the way into every conversation and there was nowhere to look at
+  /// it, change it, or keep it. `RotelyxStore.myName` was already written there
+  /// and already read back as the default; what was missing was a place to set
+  /// it on purpose.
+  late final TextEditingController _myName =
+      TextEditingController(text: store.myName ?? '');
+
+  @override
+  void dispose() {
+    _myName.dispose();
+    super.dispose();
+  }
+
   /// Whether the system will actually show anything.
   ///
   /// Read from the platform rather than remembered, because it can be turned
@@ -126,6 +143,48 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   // at all to change it: the only picker in the application sat
                   // on a contact's card and wrote the contact's face.
                   const _Section('You'),
+
+                  _Fold(
+                    title: 'Your name',
+                    summary: (store.myName ?? '').isEmpty
+                        ? 'Made up for you each time'
+                        : store.myName!,
+                    children: [
+                      RxField(
+                        controller: _myName,
+                        label: 'Your name',
+                        hint: 'Anything you like',
+                        help: 'What the people you pair with see. Only a label, '
+                            'and anyone can pick any of them: it is not how '
+                            'somebody knows who they are talking to.',
+                        onChanged: (v) => setState(() {
+                          // Written as it is typed rather than on a save
+                          // button, because a name people have to remember to
+                          // save is a name that is half saved.
+                          store.myName = v.trim();
+                        }),
+                      ),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: TextButton.icon(
+                          onPressed: () => setState(() {
+                            // The generator is still here for anybody who
+                            // would rather not choose, which is what the
+                            // pairing screen offered and what this would have
+                            // taken away.
+                            final made = suggestName();
+                            _myName.text = made;
+                            store.myName = made;
+                          }),
+                          icon: Icon(Icons.casino_outlined,
+                              size: 16, color: t.muted),
+                          label: Text('Make one up for me',
+                              style: Type.small.copyWith(color: t.muted)),
+                        ),
+                      ),
+                    ],
+                  ),
+
                   _Fold(
                     title: 'Your picture',
                     summary: store.myPicture == null
