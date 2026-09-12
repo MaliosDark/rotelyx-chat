@@ -105,9 +105,43 @@ class Attachment {
 
   /// Null when [body] is ordinary text, which is the common case and must not
   /// cost an exception.
+  ///
+  /// # Why the result is remembered
+  ///
+  /// This is called from a bubble's `build`, and a transcript rebuilds on
+  /// every keystroke in the composer, every message that arrives and every
+  /// second a countdown ticks. Decoding forty kilobytes of base64 on each of
+  /// those is work the frame cannot afford, and it is only the smaller half:
+  /// each call produced a fresh `Uint8List`, the photo widget caches decoded
+  /// pictures by the identity of their bytes, so every rebuild was a cache
+  /// miss followed by a full decode of the picture on the UI thread. That is
+  /// what made a chat with pictures in it stutter as it scrolled.
+  ///
+  /// Keyed by the body string, which is what the message stores and does not
+  /// change, so the same message hands back the same bytes every time and
+  /// everything downstream that caches by identity works.
   static Attachment? decode(String body) {
     if (!body.startsWith(_marker)) return null;
+    final held = _parsed[body];
+    if (held != null) return held;
+    final parsed = _parse(body);
+    if (parsed != null) {
+      _parsed[body] = parsed;
+      _parsedOrder.add(body);
+      while (_parsedOrder.length > _keepParsed) {
+        _parsed.remove(_parsedOrder.removeAt(0));
+      }
+    }
+    return parsed;
+  }
 
+  /// Bounded: a transcript shows a few dozen attachments at most, and the
+  /// bytes behind each are tens of kilobytes.
+  static final Map<String, Attachment> _parsed = {};
+  static final List<String> _parsedOrder = [];
+  static const int _keepParsed = 64;
+
+  static Attachment? _parse(String body) {
     final parts = body.substring(_marker.length).split('');
     if (parts.length < 3) return null;
 

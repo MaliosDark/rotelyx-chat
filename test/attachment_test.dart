@@ -64,4 +64,24 @@ void main() {
     expect(back.name, 'odd name.txt');
     expect(attachmentSummary(body), 'odd name.txt');
   });
+
+  test('the same message hands back the same bytes every time', () {
+    // A transcript rebuilds on every keystroke, and a bubble decodes its
+    // attachment in `build`. The picture widget caches decoded pictures by
+    // the identity of the bytes it was given, so if two decodes of one
+    // message produced two byte arrays, every rebuild missed the cache and
+    // decoded the picture again on the UI thread. That is what made a chat
+    // with pictures in it stutter as it scrolled.
+    final body = Attachment(
+      name: 'IMG_4812.HEIC',
+      mime: 'image/x-rotelyx',
+      bytes: Uint8List.fromList(List<int>.generate(4096, (i) => i & 0xff)),
+    ).encode();
+
+    final first = Attachment.decode(body)!;
+    final second = Attachment.decode(body)!;
+    expect(identical(first.bytes, second.bytes), isTrue,
+        reason: 'two decodes of one message produced two byte arrays, so '
+            'nothing downstream that caches by identity can ever hit');
+  });
 }

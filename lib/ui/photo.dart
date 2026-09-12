@@ -13,6 +13,7 @@ library;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart' show compute;
 import 'package:flutter/material.dart';
 
 import '../platform/save_photo.dart';
@@ -23,13 +24,20 @@ import 'theme.dart';
 
 /// Decoded pictures, keyed by the bytes they came from.
 ///
-/// Small and bounded. A transcript holds a handful of pictures at a time and
-/// the oldest is dropped rather than the map growing for the life of the
-/// application, because these are bitmaps and a bitmap is several megabytes
-/// whatever the file it came from weighed.
+/// Bounded. The oldest is dropped rather than the map growing for the life of
+/// the application, because these are bitmaps and a bitmap is several
+/// megabytes whatever the file it came from weighed. Thirty two is enough
+/// that scrolling back through a screenful of pictures does not decode them
+/// again, and at a few megabytes each is still under what a phone gives one
+/// application.
+///
+/// Keyed by the identity of the bytes, which only works because the bytes for
+/// one message are the same object every time: `Attachment.decode` remembers
+/// what it parsed. When it did not, every rebuild missed here and decoded the
+/// picture again on the UI thread, and that is what made scrolling stutter.
 final Map<Uint8List, ui.Image> _decoded = <Uint8List, ui.Image>{};
 final List<Uint8List> _order = <Uint8List>[];
-const int _keep = 12;
+const int _keep = 32;
 
 void _remember(Uint8List key, ui.Image image) {
   _decoded[key] = image;
@@ -85,11 +93,33 @@ class _RotelyxPhotoState extends State<RotelyxPhoto> {
       return;
     }
 
-    final decoded = decodePhoto(widget.bytes);
+    // Off the UI thread.
+    //
+    // The decoder is pure Dart and the inverse transform of a picture's
+    // blocks takes tens of milliseconds, which is more than a frame. Run
+    // where the frame is being drawn, every picture scrolling into view cost
+    // a dropped frame or several, and a chat with pictures in it stuttered
+    // exactly while somebody was scrolling it. An isolate costs copying the
+    // bytes in and the pixels out, and neither is anywhere near a frame.
+    //
+    // The bytes are checked first so that text that is not a picture at all
+    // is answered here without spinning anything up.
+    if (!isRotelyxPhoto(widget.bytes)) {
+      if (mounted) setState(() => _failed = true);
+      return;
+    }
+    final DecodedPhoto? decoded;
+    try {
+      decoded = await compute(decodePhoto, widget.bytes);
+    } on Object {
+      if (mounted) setState(() => _failed = true);
+      return;
+    }
     if (decoded == null) {
       if (mounted) setState(() => _failed = true);
       return;
     }
+    if (!mounted) return;
 
     final buffer = await ui.ImmutableBuffer.fromUint8List(decoded.rgba);
     final descriptor = ui.ImageDescriptor.raw(
@@ -147,7 +177,12 @@ class _RotelyxPhotoState extends State<RotelyxPhoto> {
       );
     }
 
-    return RawImage(image: image, fit: widget.fit);
+    // Its own layer. A still picture does not change while the list around
+    // it scrolls, and without a boundary it is rasterised again with every
+    // frame the list moves. See the notes at the top of the file.
+    return RepaintBoundary(
+      child: RawImage(image: image, fit: widget.fit),
+    );
   }
 }
 
