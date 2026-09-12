@@ -9,6 +9,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
+import '../../platform/apple_push.dart';
 import '../../platform/biometrics.dart';
 import '../../platform/os.dart' as os;
 import '../../platform/widgets.dart';
@@ -78,6 +79,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
   /// person wants rather than as the mechanism.
   bool _immediate = !rotelyx.wakeOnSchedule;
 
+  /// What the notification extension did the last time a push arrived.
+  ///
+  /// Read once when this screen opens. It changes only when a wake happens,
+  /// which is not while somebody is looking at this list.
+  LastWake? _lastWake;
+
+  /// How long ago, in the roughest terms that are still useful.
+  static String _ago(DateTime at) {
+    final since = DateTime.now().difference(at);
+    if (since.inMinutes < 1) return 'Just now';
+    if (since.inMinutes < 60) return '${since.inMinutes} minutes ago';
+    if (since.inHours < 24) return '${since.inHours} hours ago';
+    return '${since.inDays} days ago';
+  }
+
   /// Whether the background connection is being held.
   bool _connected = false;
 
@@ -94,6 +110,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     });
     alerts.permitted().then((yes) {
       if (mounted) setState(() => _notify = yes);
+    });
+    lastWake().then((wake) {
+      if (mounted) setState(() => _lastWake = wake);
     });
   }
 
@@ -358,6 +377,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   'cannot be told apart by when it checks',
                           style: Type.small.copyWith(color: t.faint)),
                     ),
+
+                  // What the last wake actually did.
+                  //
+                  // A notification extension runs for seconds in a process
+                  // nobody is watching and then dies, so when one shows the
+                  // wrong thing there is nothing left to look at. Working out
+                  // why turned into two people guessing, for days, about one
+                  // blank notification. This is the note it leaves behind.
+                  //
+                  // Shown only once there is one, so nobody is given a line
+                  // about plumbing they never asked about.
+                  if (_lastWake != null) ...[
+                    const SizedBox(height: Metrics.gap),
+                    RxNote(
+                      '${_lastWake!.said}\n\n'
+                      '${_ago(_lastWake!.at)}, '
+                      '${_lastWake!.decoy ? 'on the mailbox schedule' : 'carrying a message'}.',
+                      title: 'The last time a push woke this phone',
+                      tone: _lastWake!.wasBlank ? Tone.warn : Tone.good,
+                    ),
+                  ],
 
                   const SizedBox(height: Metrics.gap),
                   // Two platforms, two true answers, and the difference is the

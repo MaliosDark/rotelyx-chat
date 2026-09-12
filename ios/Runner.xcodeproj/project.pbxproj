@@ -57,6 +57,7 @@
 		E5A1B2C3D4E5F60000000031 /* Notifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5A1B2C3D4E5F60000000030 /* Notifications.swift */; };
 		E5A1B2C3D4E5F60000000033 /* WatchBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5A1B2C3D4E5F60000000032 /* WatchBridge.swift */; };
 		E5A1B2C3D4E5F60000000091 /* Waiting.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5A1B2C3D4E5F60000000090 /* Waiting.swift */; };
+		E5A1B2C3D4E5F60000000093 /* LastWake.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5A1B2C3D4E5F60000000092 /* LastWake.swift */; };
 		E729C131CC29BBF794ADADC5 /* Glance.swift in Sources */ = {isa = PBXBuildFile; fileRef = 638E3ABC18C196EB66C286E0 /* Glance.swift */; };
 /* End PBXBuildFile section */
 
@@ -211,6 +212,7 @@
 		E5A1B2C3D4E5F60000000030 /* Notifications.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Notifications.swift; sourceTree = "<group>"; };
 		E5A1B2C3D4E5F60000000032 /* WatchBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchBridge.swift; sourceTree = "<group>"; };
 		E5A1B2C3D4E5F60000000090 /* Waiting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Waiting.swift; sourceTree = "<group>"; };
+		E5A1B2C3D4E5F60000000092 /* LastWake.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LastWake.swift; sourceTree = "<group>"; };
 		EDB2A7BE97D35CAECB0701E5 /* Widgets.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Widgets.swift; sourceTree = "<group>"; };
 		F0C2D411AB9E1F1A0A86C50C /* message.wav */ = {isa = PBXFileReference; includeInIndex = 1; name = message.wav; path = ../../assets/sound/message.wav; sourceTree = "<group>"; };
 		F6CE433D5F05C82E8205F0B9 /* RotelyxComplication.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = RotelyxComplication.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -438,6 +440,7 @@
 			children = (
 				E5A1B2C3D4E5F6000000000B /* NotificationService.swift */,
 				E5A1B2C3D4E5F60000000090 /* Waiting.swift */,
+				E5A1B2C3D4E5F60000000092 /* LastWake.swift */,
 				E5A1B2C3D4E5F6000000000D /* Info.plist */,
 				E5A1B2C3D4E5F6000000000E /* NotificationService.entitlements */,
 			);
@@ -818,6 +821,7 @@
 			files = (
 				E5A1B2C3D4E5F6000000000C /* NotificationService.swift in Sources */,
 				E5A1B2C3D4E5F60000000091 /* Waiting.swift in Sources */,
+				E5A1B2C3D4E5F60000000093 /* LastWake.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

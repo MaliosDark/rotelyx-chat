@@ -71,6 +71,19 @@ class NotificationService: UNNotificationServiceExtension {
   ///
   /// Delivered notifications are shared with the application, so this reaches
   /// them from the extension as readily as from the app itself.
+  /// As close to silence as iOS allows, which is not silence.
+  ///
+  /// No sound, no wrist tap, no screen waking, no place in a summary, and
+  /// filed under a thread of its own so the next wake can take it away.
+  static func quiet() -> UNMutableNotificationContent {
+    let content = UNMutableNotificationContent()
+    content.sound = nil
+    content.interruptionLevel = .passive
+    content.relevanceScore = 0
+    content.threadIdentifier = NotificationService.quietThread
+    return content
+  }
+
   static func sweepQuiet() {
     let centre = UNUserNotificationCenter.current()
     centre.getDeliveredNotifications { delivered in
@@ -124,6 +137,7 @@ class NotificationService: UNNotificationServiceExtension {
       ?? true
 
     guard sweep else {
+      LastWake.write(decoy: false, waiting: nil, ending: .ticket)
       content.title = "Rotelyx"
       content.body = "New message"
       contentHandler(content)
@@ -132,6 +146,28 @@ class NotificationService: UNNotificationServiceExtension {
 
     // From here down it is the sweep, which genuinely may find nothing.
     Waiting.check { waiting in
+      // Not knowing is not the same as knowing there is nothing.
+      //
+      // A wake arrives when the application is closed, which is when the
+      // network is least likely to answer inside the seconds this gets. The
+      // answer used to be zero either way, and zero meant a blank banner. Now
+      // a question that could not be asked shows the message the payload came
+      // with, which is the honest thing: something woke this phone and nobody
+      // established that it was nothing.
+      // Could not ask, so this says nothing rather than guessing.
+      //
+      // Only a scheduled wake ever reaches here: a ticket says a message
+      // exists and returns above without asking anybody. So the choice at this
+      // point is between a blank and a sentence that might be false, and a
+      // notification that claims a message nobody sent is worse than one that
+      // says nothing. The blank is the sweep's cost and the sweep is what
+      // should not be running.
+      guard let waiting = waiting else {
+        LastWake.write(decoy: true, waiting: nil, ending: .unknown)
+        contentHandler(NotificationService.quiet())
+        return
+      }
+
       guard waiting > 0 else {
         // Nothing there.
         //
@@ -151,18 +187,15 @@ class NotificationService: UNNotificationServiceExtension {
         // sends the same one whether a message is waiting or not, on purpose,
         // so that somebody watching the traffic cannot tell when you are being
         // written to. The blank ones are that promise being kept.
-        let quiet = UNMutableNotificationContent()
-        quiet.sound = nil
-        quiet.interruptionLevel = .passive
-        quiet.relevanceScore = 0
-        quiet.threadIdentifier = NotificationService.quietThread
-        contentHandler(quiet)
+        LastWake.write(decoy: true, waiting: 0, ending: .nothing)
+        contentHandler(NotificationService.quiet())
         return
       }
 
       // Something arrived. It is not read here: the message stays sealed in
       // the mailbox until the application collects it, so this says that and
       // deliberately does not invent a sender.
+      LastWake.write(decoy: true, waiting: waiting, ending: .waiting)
       content.title = "Rotelyx"
       content.body = waiting == 1 ? "New message" : "\(waiting) new messages"
       contentHandler(content)
@@ -171,7 +204,16 @@ class NotificationService: UNNotificationServiceExtension {
 
   override func serviceExtensionTimeWillExpire() {
     // Out of time. Show what arrived rather than nothing at all.
+    //
+    // What arrived is the server's own wake, and since it started carrying a
+    // body that is a complete notification. A server older than that sends a
+    // title and nothing under it, and iOS draws that as a blank. Filling it in
+    // here was tried and taken out again: the only wake that can still be
+    // waiting on an answer at this point is a scheduled one, which may have
+    // found nothing, and a sentence announcing a message that does not exist
+    // is worse than the blank it replaces.
     if let handler = handler, let content = content {
+      LastWake.write(decoy: true, waiting: nil, ending: .expired)
       handler(content)
     }
   }

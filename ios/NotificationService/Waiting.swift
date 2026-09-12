@@ -39,16 +39,27 @@ enum Waiting {
     private static let group = "group.com.rotelyx.ios"
     private static let deadline: TimeInterval = 10
 
-    /// Hand back how many envelopes are waiting, or zero when that cannot be
-    /// established.
+    /// Hand back how many envelopes are waiting, or nil when that could not be
+    /// asked at all.
     ///
-    /// Zero on every failure, deliberately. The alternative is showing a
-    /// notification whenever the network is slow, which is the behaviour this
-    /// replaces: a person cannot tell "something arrived" from "we could not
-    /// ask", and being told the wrong one repeatedly is worse than being told
-    /// nothing occasionally. The application still collects everything when it
-    /// is next opened.
-    static func check(_ done: @escaping (Int) -> Void) {
+    /// # Why the two are no longer the same answer
+    ///
+    /// Every failure used to return zero: no container, no tags, no network,
+    /// no answer inside ten seconds. The reasoning was that showing a
+    /// notification whenever the network was slow is worse than showing none.
+    ///
+    /// It is not, because "none" is not what happens. iOS cannot be told to
+    /// drop a notification without an entitlement this application does not
+    /// have, so handing back empty content posts a banner with no title and no
+    /// text. The choice was never between a wrong notification and silence. It
+    /// was between a wrong notification and a blank one, and the blank is
+    /// worse: it says nothing, it cannot be acted on, and it arrives exactly
+    /// when the application is closed and the network is least likely to
+    /// answer, which is to say all the time.
+    ///
+    /// So a failure is nil now, and the caller shows the message rather than
+    /// pretending to know there was none.
+    static func check(_ done: @escaping (Int?) -> Void) {
         guard
             let container = FileManager.default
                 .containerURL(forSecurityApplicationGroupIdentifier: group),
@@ -57,7 +68,7 @@ enum Waiting {
             !listening.tags.isEmpty,
             let url = URL(string: listening.mailbox)
         else {
-            done(0)
+            done(nil)
             return
         }
 
@@ -68,7 +79,7 @@ enum Waiting {
         // deadline. Without this the socket outliving the extension would hand
         // back a count nobody is waiting for any more.
         var finished = false
-        let finish: (Int) -> Void = { count in
+        let finish: (Int?) -> Void = { count in
             guard !finished else { return }
             finished = true
             socket.cancel(with: .goingAway, reason: nil)
@@ -76,7 +87,7 @@ enum Waiting {
             done(count)
         }
 
-        DispatchQueue.global().asyncAfter(deadline: .now() + deadline) { finish(0) }
+        DispatchQueue.global().asyncAfter(deadline: .now() + deadline) { finish(nil) }
 
         socket.resume()
 
@@ -85,13 +96,13 @@ enum Waiting {
             let body = try? JSONSerialization.data(withJSONObject: request),
             let text = String(data: body, encoding: .utf8)
         else {
-            finish(0)
+            finish(nil)
             return
         }
 
         socket.send(.string(text)) { error in
             if error != nil {
-                finish(0)
+                finish(nil)
                 return
             }
             receive(socket, finish)
@@ -106,12 +117,12 @@ enum Waiting {
     /// number this came to find.
     private static func receive(
         _ socket: URLSessionWebSocketTask,
-        _ finish: @escaping (Int) -> Void
+        _ finish: @escaping (Int?) -> Void
     ) {
         socket.receive { result in
             switch result {
             case .failure:
-                finish(0)
+                finish(nil)
             case .success(let message):
                 guard
                     case .string(let text) = message,
@@ -126,7 +137,7 @@ enum Waiting {
                 case "ready":
                     finish(reply["waiting"] as? Int ?? 0)
                 case "error":
-                    finish(0)
+                    finish(nil)
                 default:
                     // An envelope, or something this does not handle. Keep
                     // reading: `ready` comes after the backlog.

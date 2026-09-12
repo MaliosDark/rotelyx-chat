@@ -80,3 +80,75 @@ Future<void> publishListeningTags(String mailbox, List<String> tags) async {
   await File('$path/listening.json')
       .writeAsString(jsonEncode({'mailbox': mailbox, 'tags': tags}));
 }
+
+/// What the last push wake did, as the extension left it.
+///
+/// Null on anything but iOS, and null until a wake has happened at all.
+///
+/// # Why the application reads its own extension's notes
+///
+/// A notification extension runs for seconds in a process nobody is watching
+/// and then dies. When one shows the wrong thing there is nothing to look at
+/// afterwards, and working out why turns into two people guessing. This is the
+/// note it leaves, shown in Settings, so the question has an answer that can
+/// be read out loud.
+Future<LastWake?> lastWake() async {
+  if (!Platform.isIOS) return null;
+  final path = await sharedContainerPath();
+  if (path == null) return null;
+
+  try {
+    final file = File('$path/last-wake.json');
+    if (!file.existsSync()) return null;
+    final row = jsonDecode(await file.readAsString()) as Map<String, Object?>;
+    final at = row['at'];
+    if (at is! num) return null;
+    return LastWake(
+      at: DateTime.fromMillisecondsSinceEpoch(at.round()),
+      decoy: row['decoy'] == true,
+      waiting: row['waiting'] as int?,
+      ending: row['ending'] as String? ?? 'unknown',
+    );
+  } on Object {
+    return null;
+  }
+}
+
+/// One line about the last time a push woke this phone.
+///
+/// Deliberately nothing about who or what: this is a note about plumbing.
+class LastWake {
+  const LastWake({
+    required this.at,
+    required this.decoy,
+    required this.waiting,
+    required this.ending,
+  });
+
+  final DateTime at;
+
+  /// Whether the server said this wake might find nothing, which is what a
+  /// scheduled sweep says and what a ticket does not.
+  final bool decoy;
+
+  /// What the mailbox answered, or null when it could not be asked.
+  final int? waiting;
+
+  /// One of `ticket`, `waiting`, `nothing`, `unknown`, `expired`.
+  final String ending;
+
+  /// What happened, in a sentence somebody can act on.
+  String get said => switch (ending) {
+        'ticket' => 'A message arrived and was shown.',
+        'waiting' =>
+          'The mailbox held ${waiting == 1 ? 'a message' : '$waiting messages'}, and it was shown.',
+        'nothing' => 'A scheduled wake found nothing, and showed a blank.',
+        'unknown' =>
+          'A scheduled wake could not reach the mailbox, and showed a blank.',
+        'expired' => 'A wake ran out of time and showed what the server sent.',
+        _ => 'A wake happened.',
+      };
+
+  /// Whether this is one of the endings that puts a blank on the screen.
+  bool get wasBlank => ending == 'nothing' || ending == 'unknown';
+}
