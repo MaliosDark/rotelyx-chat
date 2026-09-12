@@ -75,11 +75,13 @@ and counts the call sites. If that test fails on your change, the change is
 the problem, not the test.
 
 The cost of the rule is connections, and the mailbox's nginx allows ten per
-address (the server, sixteen). So the eight most recently active conversations
-listen in the background and the rest receive when opened. Raising that number
-means raising both server limits first, and the reason they are low is not a
-mistake: one address holding many sockets is the shape of a denial of
-service.
+address (the server, sixteen). So six of the most recently active
+conversations hold a socket each, and two sockets take turns through all the
+others, ten seconds at a time: subscribing is enough for the mailbox to hand
+over whatever is waiting, so a hundred quiet conversations are each visited
+about every eight minutes. Raising those numbers means raising both server
+limits first, and the reason they are low is not a mistake: one address
+holding many sockets is the shape of a denial of service.
 
 ## What the tests are for
 

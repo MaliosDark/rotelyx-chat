@@ -2573,21 +2573,30 @@ class RotelyxService {
   /// Each on a connection of its own. See [_backgroundSockets] for the rule
   /// this keeps and the two times it was broken.
   ///
-  /// Two tags each, this hour and the last, which is what a connected device
-  /// needs: the lookback is for one that was off. The hour before as well as
-  /// this one, because a message deposited a moment before the clock rolled
-  /// is addressed to the old tag and would otherwise wait until the
-  /// conversation was opened, which is the whole fault this exists to remove.
+  /// # Why some are held and some take turns
   ///
-  /// Opened a few at a time. The mailbox meters new connections at sixty a
-  /// minute with a burst of twenty, and a device with many conversations that
-  /// opened them all at once would have the tail refused and would not know.
+  /// The mailbox allows ten connections per address, so not every
+  /// conversation can hold one. Holding one for the few most recent and none
+  /// for the rest meant a message in the rest was simply never noticed, and
+  /// Android has no push to notice it with, so that was where this broke.
+  ///
+  /// So the most recent conversations hold a socket, and two sockets take
+  /// turns through everybody else. Subscribing is enough: the mailbox hands
+  /// over whatever is waiting under a tag the moment somebody subscribes to
+  /// it, so a conversation visited for ten seconds collects what arrived since
+  /// the last visit. A hundred quiet conversations are each visited about
+  /// every eight minutes, which is how long it takes to find out about a
+  /// message in one of them, and a conversation that turns out to have one
+  /// becomes recent and holds a socket from then on.
+  ///
+  /// Two tags each, this hour and the last, which is what a connected device
+  /// needs: the lookback is for one that was off.
   Future<void> _listenEverywhereElse() async {
     final key = store.key;
     if (key == null || _mailbox == null) return;
     final url = mailboxUrl;
 
-    // The most recent first, because not all of them get a socket.
+    // Everybody but the conversation on screen, most recent first.
     final candidates = <String>[];
     for (final id in store.conversationIds) {
       if (id == _persistId) continue;
@@ -2600,59 +2609,86 @@ class RotelyxService {
       return bt.compareTo(at);
     });
 
-    // Sockets beyond the budget go to conversations that have gone quiet, so
-    // a conversation that has just spoken can have one.
-    final keep = candidates.take(_backgroundSocketBudget).toSet();
+    // The held set. A socket held for a conversation that has dropped out of
+    // it is closed so the newcomer can have it.
+    final held = candidates.take(_heldSockets).toSet();
     for (final id in _backgroundSockets.keys.toList()) {
-      if (!keep.contains(id)) _dropBackgroundSocket(id);
+      if (!held.contains(id) && !_visiting.containsKey(id)) {
+        _dropBackgroundSocket(id);
+      }
     }
-
-    var openedThisPass = 0;
-    for (final id in candidates) {
+    for (final id in held) {
       if (_backgroundSockets.containsKey(id)) continue;
-      if (_backgroundSockets.length >= _backgroundSocketBudget) break;
-
-      var session = _background[id];
-      if (session == null) {
-        final blob = store.sessionBlob(id);
-        if (blob == null) continue;
-        try {
-          session = RotelyxWasm.unsealSession(blob, key);
-        } on Object {
-          continue;
-        }
-        _background[id] = session;
-      }
-
-      final List<String> tags;
-      try {
-        tags = session.myPollingTags(1);
-      } on Object {
-        continue;
-      }
-      if (tags.isEmpty) continue;
-
-      // Under the burst, with room left for the live socket to reconnect.
-      if (openedThisPass >= _backgroundSocketsPerPass) {
-        _scheduleAnotherPass();
-        return;
-      }
-      openedThisPass++;
-
-      final socket = MailboxClient(url);
-      final token = RotelyxStore.instance.capabilityToken;
-      if (token != null) socket.holdToken(token);
-      _backgroundSockets[id] = socket;
-      _backgroundListeners[id] = [
-        socket.envelopes.listen((incoming) => _openInBackground(id, incoming.envelope)),
-        socket.closes.listen((_) => _backgroundSocketClosed(id)),
-        socket.errors.listen((_) {}),
-      ];
-      _subscribeFor(socket, id, tags);
+      _openBackgroundSocket(id, key, url);
     }
+
+    // The rest take turns. The visit that has run longest ends, and the
+    // conversation that has waited longest since its last visit begins.
+    final now = DateTime.now();
+    for (final entry in _visiting.entries.toList()) {
+      if (now.difference(entry.value) >= _visitLength) {
+        _lastVisited[entry.key] = now;
+        _visiting.remove(entry.key);
+        _dropBackgroundSocket(entry.key);
+      }
+    }
+    final waiting = candidates
+        .where((id) => !held.contains(id) && !_visiting.containsKey(id))
+        .toList()
+      ..sort((a, b) {
+        final at = _lastVisited[a] ?? DateTime(1970);
+        final bt = _lastVisited[b] ?? DateTime(1970);
+        return at.compareTo(bt);
+      });
+    for (final id in waiting) {
+      if (_visiting.length >= _visitingSockets) break;
+      if (_openBackgroundSocket(id, key, url)) {
+        _visiting[id] = now;
+      }
+    }
+
+    // Round again, so the turns keep being taken while the app is open.
+    if (candidates.length > _heldSockets) _scheduleAnotherPass();
   }
 
-  /// How many background connections this device holds at once.
+  /// One conversation's socket, opened and subscribed.
+  ///
+  /// Returns whether it was, so a visit is only counted when it began.
+  bool _openBackgroundSocket(String id, WasmKey key, String url) {
+    var session = _background[id];
+    if (session == null) {
+      final blob = store.sessionBlob(id);
+      if (blob == null) return false;
+      try {
+        session = RotelyxWasm.unsealSession(blob, key);
+      } on Object {
+        return false;
+      }
+      _background[id] = session;
+    }
+
+    final List<String> tags;
+    try {
+      tags = session.myPollingTags(1);
+    } on Object {
+      return false;
+    }
+    if (tags.isEmpty) return false;
+
+    final socket = MailboxClient(url);
+    final token = RotelyxStore.instance.capabilityToken;
+    if (token != null) socket.holdToken(token);
+    _backgroundSockets[id] = socket;
+    _backgroundListeners[id] = [
+      socket.envelopes.listen((incoming) => _openInBackground(id, incoming.envelope)),
+      socket.closes.listen((_) => _backgroundSocketClosed(id)),
+      socket.errors.listen((_) {}),
+    ];
+    _subscribeFor(socket, id, tags);
+    return true;
+  }
+
+  /// How many background conversations hold a socket of their own.
   ///
   /// # The number, and where it comes from
   ///
@@ -2660,39 +2696,43 @@ class RotelyxService {
   /// nginx in front of it allows ten. Both are written with their reason: a
   /// client needs one, a household behind one address needs a handful, and
   /// beyond that it is either something retrying without backing off or
-  /// somebody holding sockets to consume memory. Ten, less the socket for the
-  /// conversation on screen, less one so that a reconnection is never the
-  /// request that is refused, is eight.
+  /// somebody holding sockets to consume memory.
   ///
-  /// So not every conversation listens in the background. The eight most
-  /// recently active do, which is where nearly every message that matters
-  /// arrives, and the rest receive when they are opened, which is what every
-  /// conversation did before any of this existed. A first version of this
-  /// opened one socket per conversation with no ceiling, and the eleventh was
-  /// refused with a 429 that nothing reported: that conversation simply never
-  /// heard anything while it looked, from the outside, exactly like the ten
-  /// that did.
+  /// Ten, less the socket for the conversation on screen, less one so that a
+  /// reconnection is never the request that is refused, is eight. Six are
+  /// held by the most recent conversations and two take turns through the
+  /// rest: see [_listenEverywhereElse].
   ///
-  /// **Raising this past eight means raising both server limits first**, and
-  /// the reason they are low is not a mistake: one address holding many
-  /// sockets is the shape of a denial of service, and a limit that is high
-  /// enough for a thousand conversations is a limit that no longer stops
-  /// anybody.
-  static const _backgroundSocketBudget = 8;
+  /// **Raising these past eight together means raising both server limits
+  /// first**, and the reason they are low is not a mistake: one address
+  /// holding many sockets is the shape of a denial of service, and a limit
+  /// high enough for a thousand conversations is a limit that no longer
+  /// stops anybody.
+  static const _heldSockets = 6;
 
-  /// How many background connections one pass may open.
-  ///
-  /// The mailbox's burst is twenty. Fifteen leaves the live socket room to
-  /// reconnect inside the same window, which it needs more than any
-  /// background one does. With a budget of eight this is never reached; it
-  /// stays because the budget is the thing somebody would raise.
-  static const _backgroundSocketsPerPass = 15;
+  /// How many sockets take turns through the conversations that do not hold
+  /// one.
+  static const _visitingSockets = 2;
 
-  /// The rest of the conversations, once the meter has had a moment.
+  /// How long a turn lasts.
+  ///
+  /// Long enough for the mailbox to hand over what is waiting, which is a
+  /// round trip. Two sockets turning every ten seconds is twelve new
+  /// connections a minute, a fifth of what the mailbox allows an address,
+  /// which leaves room for everything else that reconnects.
+  static const _visitLength = Duration(seconds: 10);
+
+  /// The conversations currently being visited, and when each visit began.
+  final Map<String, DateTime> _visiting = {};
+
+  /// When each conversation was last visited, so the longest wait goes next.
+  final Map<String, DateTime> _lastVisited = {};
+
+  /// The next turn, and the next check that the held set is still right.
   Timer? _anotherPass;
   void _scheduleAnotherPass() {
     _anotherPass?.cancel();
-    _anotherPass = Timer(const Duration(seconds: 20), () {
+    _anotherPass = Timer(_visitLength, () {
       _anotherPass = null;
       unawaited(_listenEverywhereElse());
     });
@@ -2700,6 +2740,7 @@ class RotelyxService {
 
   /// A background socket went away. Forgotten, so the next pass reopens it.
   void _backgroundSocketClosed(String id) {
+    _visiting.remove(id);
     _dropBackgroundSocket(id);
     _scheduleAnotherPass();
   }
@@ -2825,6 +2866,7 @@ class RotelyxService {
   void _forgetBackground() {
     _anotherPass?.cancel();
     _anotherPass = null;
+    _visiting.clear();
     for (final id in _backgroundSockets.keys.toList()) {
       _dropBackgroundSocket(id);
     }
