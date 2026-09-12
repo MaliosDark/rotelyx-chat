@@ -258,10 +258,29 @@ class _RotelyxAppState extends State<RotelyxApp> with WidgetsBindingObserver {
         // live from the first frame, and a tap during it reaches that screen.
         child: Splash(
           child: Scaffold(
-            backgroundColor: _theme.backdrop,
-            body: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 140),
-              child: _current(),
+            // Transparent, because the ground is painted below rather than by
+            // the scaffold. Two of them would stack and the gradient would be
+            // hidden under a flat colour.
+            backgroundColor: Colors.transparent,
+            body: DecoratedBox(
+              // The ground, with the brand somewhere in it.
+              //
+              // Every screen was one flat colour, which is what makes an
+              // interface read as a document rather than as a surface. This is
+              // the backdrop it already had, lifted very slightly towards the
+              // accent at the top left and falling back to itself by the
+              // middle: enough to catch the light, not enough to be a colour
+              // anybody would name.
+              //
+              // The stops are the palette's own, so nothing new was invented.
+              // Kept far from the text: contrast is measured against
+              // `backdrop`, and a ground that wandered would quietly break
+              // every one of those measurements.
+              decoration: groundOf(_theme.backdrop),
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 140),
+                child: _current(),
+              ),
             ),
           ),
         ),

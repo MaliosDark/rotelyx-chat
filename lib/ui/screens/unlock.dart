@@ -111,7 +111,11 @@ class _UnlockScreenState extends State<UnlockScreen> {
     final t = RotelyxThemeScope.of(context);
 
     return Container(
-      color: t.backdrop,
+      // The ground, which is a light falling from one corner rather than a
+      // flat fill. Painted here rather than left to the root because this
+      // screen used to paint its own colour over it, which is why the first
+      // two attempts at this were invisible on every screen that mattered.
+      decoration: groundOf(t.backdrop),
       child: SafeArea(
         child: Center(
           child: SingleChildScrollView(

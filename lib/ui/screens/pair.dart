@@ -123,6 +123,17 @@ class _PairScreenState extends State<PairScreen> {
 
   PairingRole? _role;
 
+  /// A name for this device, when what is being paired is another of the
+  /// person's own rather than somebody else.
+  ///
+  /// Empty is the ordinary case and means "the only device this person has".
+  /// Filling it in makes the session a leaf of its own belonging to the same
+  /// person: its own key, its own row in the roster, removable on its own if
+  /// this device is lost, and visible to everybody else as a device that was
+  /// added. See `docs/DEVICES.md`.
+  final _deviceName = TextEditingController();
+  bool _asDevice = false;
+
   /// How long a new invitation will be good for.
   ///
   /// An hour by default, which is what one person sending one to another
@@ -181,6 +192,7 @@ class _PairScreenState extends State<PairScreen> {
     _name.dispose();
     _phrase.dispose();
     _code.dispose();
+    _deviceName.dispose();
     super.dispose();
   }
 
@@ -300,6 +312,7 @@ class _PairScreenState extends State<PairScreen> {
         code: code,
         displayName: _name.text.trim(),
         role: PairingRole.guest,
+        asDevice: _asDevice ? _deviceName.text.trim() : '',
       ),
       role: PairingRole.guest,
     );
@@ -316,7 +329,11 @@ class _PairScreenState extends State<PairScreen> {
     final waiting = _busy && _invitation == null && _meeting == null;
 
     return Container(
-      color: t.backdrop,
+      // The ground, which is a light falling from one corner rather than a
+      // flat fill. Painted here rather than left to the root because this
+      // screen used to paint its own colour over it, which is why the first
+      // two attempts at this were invisible on every screen that mattered.
+      decoration: groundOf(t.backdrop),
       child: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -378,6 +395,67 @@ class _PairScreenState extends State<PairScreen> {
                       help: 'Only a label, and anyone can pick any of them. It '
                           'is not how you know who you are talking to.',
                     ),
+                    const SizedBox(height: Metrics.pad),
+
+                    // Pairing a second device of your own, rather than
+                    // meeting somebody else.
+                    //
+                    // Folded away, because almost nobody is doing this and a
+                    // switch on the front of a screen is a question everybody
+                    // has to answer. The people who want it will look; the
+                    // people who do not should not have to decide.
+                    //
+                    // The mechanism is the same pairing. What changes is what
+                    // the session is, and what everybody else is told: a
+                    // device added rather than a person, with its own key and
+                    // its own row, removable on its own if this phone is lost,
+                    // and the safety number moves so that a device nobody
+                    // mentioned shows up the next time two people compare.
+                    Theme(
+                      data: Theme.of(context)
+                          .copyWith(dividerColor: Colors.transparent),
+                      child: ExpansionTile(
+                        title: Text('Advanced',
+                            style: Type.label.copyWith(color: t.muted)),
+                        tilePadding: EdgeInsets.zero,
+                        childrenPadding: EdgeInsets.zero,
+                        iconColor: t.muted,
+                        collapsedIconColor: t.muted,
+                        children: [
+                          Row(children: [
+                            Expanded(
+                              child: Text('This is another device of mine',
+                                  style: Type.body.copyWith(color: t.text)),
+                            ),
+                            Switch(
+                              value: _asDevice,
+                              activeThumbColor: Tone.accent,
+                              onChanged: (v) => setState(() => _asDevice = v),
+                            ),
+                          ]),
+                          Text(
+                            _asDevice
+                                ? 'It joins as a device of yours. Everybody in '
+                                    'the conversation is told a device was '
+                                    'added, and their safety number changes.'
+                                : 'For pairing your own laptop or second '
+                                    'phone, not for meeting somebody else.',
+                            style: Type.small.copyWith(color: t.faint),
+                          ),
+                          if (_asDevice) ...[
+                            const SizedBox(height: Metrics.pad),
+                            RxField(
+                              controller: _deviceName,
+                              label: 'What to call this device',
+                              hint: 'laptop',
+                              help: 'So you can tell your devices apart later, '
+                                  'and remove the right one if you lose it.',
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+
                     const SizedBox(height: Metrics.pad),
                     _Tabs(
                       index: _tab,
@@ -534,6 +612,8 @@ class _PairScreenState extends State<PairScreen> {
                             phrase: _phrase.text,
                             displayName: _name.text.trim(),
                             role: PairingRole.guest,
+                            asDevice:
+                                _asDevice ? _deviceName.text.trim() : '',
                           ),
                       role: PairingRole.guest)),
             ),

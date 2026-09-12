@@ -971,11 +971,63 @@ class RotelyxService {
     required String phrase,
     required String displayName,
     required PairingRole role,
+    String asDevice = '',
   }) async {
     _displayName = displayName;
     _role = role;
+    _pairingAsDevice = asDevice;
     _meetingTag = RotelyxWasm.rendezvousTag(phrase);
     await _startPairing();
+  }
+
+  /// A fresh place for somebody to join **this** conversation, as a code.
+  ///
+  /// # Why a new one rather than the phrase that started it
+  ///
+  /// The address is a hash of the phrase, and a hash only goes one way, so the
+  /// phrase itself is nowhere on this device: the conversation knows where it
+  /// answers and not what was said to get there. "Give them the same phrase"
+  /// was the only instruction that could be offered, and it only works for
+  /// whoever still remembers it.
+  ///
+  /// So this mints a place of its own and starts answering there as well. The
+  /// conversation is untouched: same group, same keys, same people. What
+  /// changes is that there is now something to send somebody.
+  ///
+  /// # Why it replaces rather than adds
+  ///
+  /// Two open doors are two things to remember to close. The old address stops
+  /// being answered, which is what `replaceInvitation` records, and the count
+  /// and deadline start again with the new one. Anybody who had the old phrase
+  /// and has not used it is shut out, which is the same property that makes
+  /// turning an invitation off worth anything.
+  ///
+  /// Returns the code, or null when there is no conversation to join.
+  Future<String?> newInvitationHere({Duration? validFor, int? maxUses}) async {
+    final id = _persistId;
+    if (id == null || state != RotelyxState.joined) return null;
+
+    final code = newMeetingCode();
+    final tag = RotelyxWasm.rendezvousTag(code);
+
+    // Stop answering at the old place before answering at the new one, so the
+    // two never overlap and an invitation that was turned off stays off.
+    final old = _meetingTag;
+    if (old != null && old != tag) _mailbox?.unsubscribe([old]);
+
+    _meetingTag = tag;
+    _role = PairingRole.host;
+    _mailbox?.subscribe([tag]);
+
+    store.replaceInvitation(
+      id,
+      tag: tag,
+      until: validFor == null ? null : DateTime.now().add(validFor),
+      maxUses: maxUses,
+    );
+
+    _stateChanges.add(state);
+    return code;
   }
 
   /// Meet at the place a QR code names.
@@ -995,8 +1047,13 @@ class RotelyxService {
     required String code,
     required String displayName,
     required PairingRole role,
+    String asDevice = '',
   }) =>
-      pairByPhrase(phrase: code, displayName: displayName, role: role);
+      pairByPhrase(
+          phrase: code,
+          displayName: displayName,
+          role: role,
+          asDevice: asDevice);
 
   /// Hand out a meeting that survives this application being closed.
   ///
@@ -1219,8 +1276,18 @@ class RotelyxService {
     }
   }
 
+  /// The name this device goes by when it is one of several belonging to one
+  /// person, or empty when it is the only one.
+  ///
+  /// Set for the length of a pairing and cleared after, because it changes what
+  /// the session being made is: a leaf of its own belonging to a person who
+  /// already has one, rather than a new person. See `docs/DEVICES.md`.
+  String _pairingAsDevice = '';
+
   Future<void> _startPairing() async {
-    final session = RotelyxWasm.newSession(_displayName);
+    final session = _pairingAsDevice.isEmpty
+        ? RotelyxWasm.newSession(_displayName)
+        : RotelyxWasm.newDeviceSession(_displayName, _pairingAsDevice);
     _useSession(session);
 
     if (_role == PairingRole.host) session.found();

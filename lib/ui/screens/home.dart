@@ -261,7 +261,14 @@ class _ConversationList extends StatelessWidget {
     final t = RotelyxThemeScope.of(context);
 
     return Container(
-      color: t.surface,
+      // The ground, with a light in one corner.
+      //
+      // This is the surface a person actually looks at, and it was one flat
+      // fill. Three attempts at giving the application some depth were made
+      // against the wrong widgets: the root behind this, and a screen that is
+      // only shown when nothing is open. Each measured as a change and looked
+      // like nothing, because this was painted over all of them.
+      decoration: groundOf(t.surface),
       child: SafeArea(
         child: Column(
           children: [
@@ -572,7 +579,11 @@ class _NothingOpen extends StatelessWidget {
     final host = Uri.parse(rotelyxConfig.mailbox).host;
 
     return Container(
-      color: t.backdrop,
+      // The ground, which is a light falling from one corner rather than a
+      // flat fill. Painted here rather than left to the root because this
+      // screen used to paint its own colour over it, which is why the first
+      // two attempts at this were invisible on every screen that mattered.
+      decoration: groundOf(t.backdrop),
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 420),

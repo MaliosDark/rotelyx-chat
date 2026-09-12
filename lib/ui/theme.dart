@@ -29,11 +29,73 @@ import 'package:flutter/material.dart';
 /// `accent` is the purple from `docs/brand/`. Everything else is a neutral
 /// ramp: a messenger is mostly text on panels, and a second hue competing with
 /// the accent makes the accent stop meaning anything.
+/// A ground with the brand in it, for anything that would otherwise be one
+/// flat colour.
+///
+/// # Why this exists
+///
+/// Every surface was a single fill, which is what makes an interface read as a
+/// document rather than as something with a light on it.
+///
+/// The first attempt was so careful it was invisible: five per cent of the
+/// accent, which measured as a change and did not look like one. Being timid
+/// with a decision is the same as not making it, and it wasted a build.
+///
+/// # Where the light comes from
+///
+/// One corner, not the whole surface. A wash across everything reads as a
+/// tinted screen; light falling from a point reads as depth, and it leaves the
+/// far side at the exact colour every contrast measurement in this file was
+/// taken against.
+///
+/// The second, fainter one at the opposite corner stops the fall looking like
+/// a gradient that ran out and starts it looking like a room.
+Decoration groundOf(Color base) => BoxDecoration(
+      color: base,
+      gradient: RadialGradient(
+        // On the screen, not past its edge.
+        //
+        // The first version put this at y = -1.1, which is above the top of
+        // the window: the brightest part of the light was outside the picture
+        // and what reached the screen was already the faded tail. It measured
+        // as a gradient and looked like nothing, twice, and the fix was not a
+        // stronger colour.
+        // From the middle, and faint.
+        //
+        // It started at a third of the accent from the top corner, which read
+        // as a tinted screen rather than as light, and twelve per cent from
+        // the top was still enough to sit behind the header and the first row
+        // of the list. Anything near the top is behind the things a person
+        // reads first.
+        //
+        // The middle of the screen is mostly empty in a messenger: a list runs
+        // out, a conversation starts at the bottom. So the one place a colour
+        // can live without being behind text is the one place this puts it.
+        //
+        // Five per cent, which is under the threshold where anybody would name
+        // the colour and over the one where the surface stops looking flat.
+        center: Alignment.center,
+        radius: 1.0,
+        colors: [
+          Color.alphaBlend(Tone.accent.withValues(alpha: 0.05), base),
+          Color.alphaBlend(Tone.accent.withValues(alpha: 0.02), base),
+          base,
+        ],
+        stops: const [0, 0.55, 1],
+      ),
+    );
+
 abstract final class Tone {
   // Brand
-  static const accent = Color(0xFF6A31EE);
-  static const accentSoft = Color(0xFF8B5CF6);
-  static const accentDim = Color(0x336A31EE);
+  /// The mark's own violet, taken from the logo rather than chosen beside it.
+  ///
+  /// It was `0xFF6A31EE`, which is four degrees bluer and reads as blue next to
+  /// the mark: close enough to look like a mistake rather than a decision, and
+  /// on a screen where the accent is the only colour, a button that disagrees
+  /// with the logo is the first thing somebody notices.
+  static const accent = Color(0xFF722CF5);
+  static const accentSoft = Color(0xFF9161FF);
+  static const accentDim = Color(0x33722CF5);
 
   // Dark, designed first
   static const dBackdrop = Color(0xFF0B0A0F);

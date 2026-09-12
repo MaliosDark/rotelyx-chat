@@ -9,6 +9,8 @@ library;
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import '../../rotelyx/invite_link.dart';
+import '../../platform/share.dart';
 import 'package:flutter/services.dart';
 
 import '../../platform/file_pick.dart';
@@ -223,7 +225,18 @@ class _ChatScreenState extends State<ChatScreen> {
       ),
       builder: (sheet) => SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(Metrics.wide),
+          // Room for the navigation bar underneath.
+        //
+        // A bottom sheet is drawn against the bottom of the window, and on a
+        // phone that draws edge to edge the bottom of the window is behind the
+        // system's own buttons. So the last control on each of these sat under
+        // them: visible, and not reachable.
+        padding: EdgeInsets.fromLTRB(
+          Metrics.wide,
+          Metrics.wide,
+          Metrics.wide,
+          Metrics.wide + MediaQuery.paddingOf(context).bottom,
+        ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -333,7 +346,18 @@ class _ChatScreenState extends State<ChatScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(Metrics.radius)),
       ),
       builder: (_) => Padding(
-        padding: const EdgeInsets.all(Metrics.wide),
+        // Room for the navigation bar underneath.
+        //
+        // A bottom sheet is drawn against the bottom of the window, and on a
+        // phone that draws edge to edge the bottom of the window is behind the
+        // system's own buttons. So the last control on each of these sat under
+        // them: visible, and not reachable.
+        padding: EdgeInsets.fromLTRB(
+          Metrics.wide,
+          Metrics.wide,
+          Metrics.wide,
+          Metrics.wide + MediaQuery.paddingOf(context).bottom,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -341,11 +365,37 @@ class _ChatScreenState extends State<ChatScreen> {
             Text('Add someone', style: Type.title.copyWith(color: t.text)),
             const SizedBox(height: Metrics.gap),
             Text(
-              'Give them the same phrase you used the first time. This '
-              'conversation is still listening for it, and the next person to '
-              'arrive joins here.',
+              'A link makes a new place for somebody to join this '
+              'conversation. The one before it stops working, so an invitation '
+              'you sent and thought better of closes when you make another.',
               style: Type.body.copyWith(color: t.muted),
             ),
+            const SizedBox(height: Metrics.pad),
+            RxButton('Make a link and send it',
+                icon: Icons.ios_share,
+                wide: true,
+                onTap: () async {
+                  // A fresh place rather than the phrase this conversation
+                  // started with: the address is a hash of that phrase, and a
+                  // hash only goes one way, so the phrase is nowhere on this
+                  // device. "Give them the same phrase" was the only thing
+                  // that could be said before, and it only worked for whoever
+                  // still remembered it.
+                  final code = await rotelyx.newInvitationHere();
+                  if (code == null) return;
+
+                  final link = meetingLink(code, rotelyx.mailboxUrl);
+                  final shared = await shareText(link,
+                      title: 'Join this conversation',
+                      subject: 'A private conversation');
+                  if (shared) return;
+
+                  await Clipboard.setData(ClipboardData(text: link));
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Link copied')));
+                  }
+                }),
             const SizedBox(height: Metrics.pad),
             const RxNote(
               'Everybody already here gets new keys the moment somebody '
@@ -617,7 +667,18 @@ class _ChatScreenState extends State<ChatScreen> {
       ),
       builder: (sheet) => SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(Metrics.wide),
+          // Room for the navigation bar underneath.
+        //
+        // A bottom sheet is drawn against the bottom of the window, and on a
+        // phone that draws edge to edge the bottom of the window is behind the
+        // system's own buttons. So the last control on each of these sat under
+        // them: visible, and not reachable.
+        padding: EdgeInsets.fromLTRB(
+          Metrics.wide,
+          Metrics.wide,
+          Metrics.wide,
+          Metrics.wide + MediaQuery.paddingOf(context).bottom,
+        ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1072,7 +1133,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
     if (c == null) {
       return Container(
-        color: t.backdrop,
+        decoration: groundOf(t.backdrop),
         child: Center(
           child: Text('This conversation could not be opened.',
               style: Type.body.copyWith(color: t.muted)),
@@ -1086,7 +1147,7 @@ class _ChatScreenState extends State<ChatScreen> {
     return SwipeBack(
       onBack: widget.swipeToClose ? widget.onBack : null,
       child: Container(
-      color: t.backdrop,
+      decoration: groundOf(t.backdrop),
       child: SafeArea(
         child: Column(
           children: [
@@ -1350,11 +1411,18 @@ class _Header extends StatelessWidget {
                   runSpacing: 4,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    // The route is shown because it changes with context and
-                    // the user should not have to guess which one they got.
+                    // What state the conversation is in, because it changes
+                    // and somebody should not have to guess which one they got.
+                    //
+                    // It said `via mailbox` while it was working, which is the
+                    // one state where naming the route buys nothing: everything
+                    // goes through the mailbox, so it was a constant dressed up
+                    // as information, and it was the piece of machinery talking
+                    // rather than the conversation. The other three say what is
+                    // happening, so this one does too.
                     RxChip(
                         live
-                            ? 'via mailbox'
+                            ? 'connected'
                             : resuming
                                 ? 'reconnecting'
                                 : resumable
@@ -1388,7 +1456,7 @@ class _Header extends StatelessWidget {
           //
           // Four fixed width buttons beside an avatar leave about eighty
           // logical pixels for the name and the route chip on a 360dp phone,
-          // and the chip is wider than that, so `via mailbox` was painted over
+          // and the chip is wider than that, so the state chip was painted over
           // the add-member button. It read as a spacing bug and was a row that
           // had run out of room. An iPhone is wider and hid it.
           //
@@ -1992,7 +2060,18 @@ class _Empty extends StatelessWidget {
 
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(Metrics.wide),
+        // Room for the navigation bar underneath.
+        //
+        // A bottom sheet is drawn against the bottom of the window, and on a
+        // phone that draws edge to edge the bottom of the window is behind the
+        // system's own buttons. So the last control on each of these sat under
+        // them: visible, and not reachable.
+        padding: EdgeInsets.fromLTRB(
+          Metrics.wide,
+          Metrics.wide,
+          Metrics.wide,
+          Metrics.wide + MediaQuery.paddingOf(context).bottom,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -2462,7 +2541,7 @@ class _ShutState extends State<_Shut> {
     return SwipeBack(
       onBack: widget.onBack,
       child: Container(
-        color: t.backdrop,
+        decoration: groundOf(t.backdrop),
         child: SafeArea(
           child: Center(
             child: ConstrainedBox(
