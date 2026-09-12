@@ -7,6 +7,7 @@
 library;
 
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import '../../rotelyx/invite_link.dart';
@@ -17,6 +18,8 @@ import '../../platform/file_pick.dart';
 
 import '../../rotelyx/alerts.dart';
 import '../../rotelyx/attachment.dart';
+import '../../platform/pasted.dart';
+import '../../rotelyx/gif_codec.dart';
 import '../../rotelyx/photo_codec.dart';
 
 import '../../rotelyx/ephemeral.dart';
@@ -291,8 +294,20 @@ class _ChatScreenState extends State<ChatScreen> {
     // and is not worth a message.
     if (file == null) return;
 
-    var bytes = file.bytes;
-    var mime = file.mime;
+    await _sendPicture(file.bytes, file.mime, name: file.name);
+  }
+
+  /// Shrink whatever this is until one envelope holds it, then send it.
+  ///
+  /// The one path for everything that is not typed: a file from the picker, a
+  /// picture the keyboard handed over on Android, one taken off the clipboard
+  /// on iOS. They differ in where the bytes came from and in nothing after
+  /// that, and two paths would be two sets of limits that agreed until one of
+  /// them was changed.
+  Future<void> _sendPicture(Uint8List raw, String type,
+      {String name = 'picture'}) async {
+    var bytes = raw;
+    var mime = type;
 
     // What one envelope will actually hold.
     //
@@ -302,6 +317,27 @@ class _ChatScreenState extends State<ChatScreen> {
     final budget = store.capabilityToken == null
         ? freeAttachmentBytes
         : maxAttachmentBytes;
+
+    // An animation stays one.
+    //
+    // A GIF used to come through the branch below, which decodes with
+    // `dart:ui` and re-encodes as a still: what arrived at the other end was
+    // the first frame, and nothing said the rest had gone. Judged by the
+    // file's own header rather than by the type it was handed over as,
+    // because a picker names a file by its extension and a clipboard by
+    // whatever put it there.
+    if (isGif(bytes)) {
+      final fitted = await fitAnimation(bytes, maxBytes: budget);
+      if (fitted != null) {
+        if (!mounted || !_live) return;
+        rotelyx.send(
+            Attachment(name: name, mime: 'image/gif', bytes: fitted).encode());
+        return;
+      }
+      // A single frame animation, or one that will not come down far enough.
+      // Falls through to the still path, which is a better picture than a
+      // ruined animation and is what the file amounts to anyway.
+    }
 
     if (mime.startsWith('image/')) {
       // Through this application's own codec rather than the platform's.
@@ -328,14 +364,11 @@ class _ChatScreenState extends State<ChatScreen> {
 
     if (!mounted) return;
 
-    final attachment =
-        Attachment(name: file.name, mime: mime, bytes: bytes);
-
     // Same fault the composer had: an attachment sent on the shorter question
     // lands in whichever conversation is live, which for a file is worse than
     // for a sentence.
     if (!_live) return;
-    rotelyx.send(attachment.encode());
+    rotelyx.send(Attachment(name: name, mime: mime, bytes: bytes).encode());
   }
 
   /// Bring someone else in.
@@ -1197,7 +1230,15 @@ class _ChatScreenState extends State<ChatScreen> {
       onBack: widget.swipeToClose ? widget.onBack : null,
       child: Container(
       decoration: groundOf(t.backdrop),
+      // Not at the bottom, which the composer takes care of itself.
+      //
+      // Inset here, the composer stopped where the safe area did and the strip
+      // below it was bare backdrop: a bar floating above a gap rather than the
+      // bottom of the screen. The composer now runs to the edge and carries
+      // the inset inside its own surface, which is what every bar that sits
+      // at the bottom of a phone does.
       child: SafeArea(
+        bottom: false,
         child: Column(
           children: [
             _Header(
@@ -1379,6 +1420,9 @@ class _ChatScreenState extends State<ChatScreen> {
               focus: _focus,
               onSend: _send,
               onAttach: _attach,
+              conversationId: widget.conversationId,
+              onInspect: () => setState(() => _showSafety = !_showSafety),
+              onPicture: _sendPicture,
               burnSeconds: _burnSeconds,
               onBurn: _pickBurn,
             ),
@@ -2397,7 +2441,7 @@ class _ReplyingTo extends StatelessWidget {
   }
 }
 
-class _Composer extends StatelessWidget {
+class _Composer extends StatefulWidget {
   const _Composer({
     required this.controller,
     required this.focus,
@@ -2405,7 +2449,20 @@ class _Composer extends StatelessWidget {
     required this.onAttach,
     required this.burnSeconds,
     required this.onBurn,
+    required this.conversationId,
+    required this.onInspect,
+    required this.onPicture,
   });
+
+  /// Which conversation the line underneath is about.
+  final String conversationId;
+
+  /// A picture that arrived without going through the picker: handed over by
+  /// the keyboard on Android, taken off the clipboard on iOS.
+  final void Function(Uint8List bytes, String mime) onPicture;
+
+  /// Open the members, which is also what marks the set as looked at.
+  final VoidCallback onInspect;
 
   final FocusNode focus;
 
@@ -2418,20 +2475,76 @@ class _Composer extends StatelessWidget {
   final VoidCallback onAttach;
 
   @override
+  State<_Composer> createState() => _ComposerState();
+}
+
+class _ComposerState extends State<_Composer> {
+  /// Whether there is a picture on the clipboard worth offering.
+  ///
+  /// Asked when the field is focused and not before. The question is free and
+  /// tells nobody; reading the clipboard is what raises the banner iOS shows,
+  /// and that only happens if somebody taps the offer. See
+  /// `platform/pasted.dart`.
+  bool _pasteReady = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.focus.addListener(_lookForPaste);
+  }
+
+  @override
+  void dispose() {
+    widget.focus.removeListener(_lookForPaste);
+    super.dispose();
+  }
+
+  void _lookForPaste() {
+    if (!widget.focus.hasFocus) {
+      if (_pasteReady) setState(() => _pasteReady = false);
+      return;
+    }
+    hasPastedImage().then((yes) {
+      if (mounted && yes != _pasteReady) setState(() => _pasteReady = yes);
+    });
+  }
+
+  Future<void> _sendPasted() async {
+    setState(() => _pasteReady = false);
+    final pasted = await pastedImage();
+    if (pasted == null) return;
+    widget.onPicture(pasted.bytes, pasted.mime);
+  }
+
+  @override
   Widget build(BuildContext context) {
     final t = RotelyxThemeScope.of(context);
 
     return Container(
-      padding: const EdgeInsets.all(Metrics.gap + 2),
       decoration: BoxDecoration(
         color: t.surface,
         border: Border(top: BorderSide(color: t.line)),
       ),
-      child: Row(
+      // The surface reaches the bottom of the screen and the controls sit
+      // above the home indicator, rather than the bar stopping short and
+      // leaving the backdrop showing underneath it.
+      //
+      // A `SafeArea` rather than `viewPadding` read by hand, because this one
+      // has to disappear when the keyboard is up: the indicator is not drawn
+      // then, and thirty four points of nothing between the field and the
+      // keyboard is the same fault upside down. SafeArea already knows that.
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+        Padding(
+        padding: const EdgeInsets.all(Metrics.gap + 2),
+        child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           IconButton(
-            onPressed: onAttach,
+            onPressed: widget.onAttach,
             tooltip: 'Attach a photo or a file',
             icon: Icon(Icons.attach_file, size: 20, color: t.muted),
           ),
@@ -2440,11 +2553,11 @@ class _Composer extends StatelessWidget {
           // duration, because a mode this consequential should never be on
           // without saying so.
           IconButton(
-            onPressed: onBurn,
-            tooltip: burnSeconds == null
+            onPressed: widget.onBurn,
+            tooltip: widget.burnSeconds == null
                 ? 'Destroy after reading'
-                : 'Burns ${burnLabel(burnSeconds!)} after it is read',
-            icon: burnSeconds == null
+                : 'Burns ${burnLabel(widget.burnSeconds!)} after it is read',
+            icon: widget.burnSeconds == null
                 ? Icon(Icons.local_fire_department_outlined,
                     size: 20, color: t.muted)
                 : Row(
@@ -2453,7 +2566,7 @@ class _Composer extends StatelessWidget {
                       const Icon(Icons.local_fire_department,
                           size: 20, color: Tone.fire),
                       const SizedBox(width: 3),
-                      Text(burnLabel(burnSeconds!),
+                      Text(burnLabel(widget.burnSeconds!),
                           style: Type.small.copyWith(
                               color: Tone.fire,
                               fontSize: 11,
@@ -2476,7 +2589,7 @@ class _Composer extends StatelessWidget {
               curve: Motion.enterCurve,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(Metrics.pill),
-                boxShadow: burnSeconds == null
+                boxShadow: widget.burnSeconds == null
                     ? null
                     : [
                         BoxShadow(
@@ -2486,21 +2599,42 @@ class _Composer extends StatelessWidget {
                       ],
               ),
               child: TextField(
-                controller: controller,
+                controller: widget.controller,
                 minLines: 1,
                 maxLines: 5,
                 textInputAction: TextInputAction.send,
-                focusNode: focus,
-                onSubmitted: (_) => onSend(),
+                focusNode: widget.focus,
+                onSubmitted: (_) => widget.onSend(),
+                // What a keyboard hands over directly.
+                //
+                // Android only, and that is Flutter's limit rather than a
+                // choice: a GIF keyboard there commits its content to the
+                // field and this is where it arrives. An iPhone gives a text
+                // field rich content that a Flutter field cannot take, so
+                // there the same picture comes through the clipboard. See
+                // `platform/pasted.dart`.
+                contentInsertionConfiguration: ContentInsertionConfiguration(
+                  allowedMimeTypes: const [
+                    'image/gif',
+                    'image/png',
+                    'image/jpeg',
+                    'image/webp',
+                  ],
+                  onContentInserted: (content) {
+                    final data = content.data;
+                    if (data == null) return;
+                    widget.onPicture(Uint8List.fromList(data), content.mimeType);
+                  },
+                ),
                 style: Type.body.copyWith(color: t.text),
                 decoration: InputDecoration(
-                  hintText: burnSeconds == null
+                  hintText: widget.burnSeconds == null
                       ? 'Message'
-                      : 'Burns ${burnLabel(burnSeconds!)} after it is read',
+                      : 'Burns ${burnLabel(widget.burnSeconds!)} after it is read',
                   hintStyle: Type.body.copyWith(
-                      color: burnSeconds == null ? t.faint : Tone.fire),
+                      color: widget.burnSeconds == null ? t.faint : Tone.fire),
                   filled: true,
-                  fillColor: burnSeconds == null
+                  fillColor: widget.burnSeconds == null
                       ? t.raised
                       : Color.alphaBlend(
                           Tone.fire.withOpacity(0.10), t.raised),
@@ -2512,14 +2646,14 @@ class _Composer extends StatelessWidget {
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(Metrics.pill),
-                    borderSide: burnSeconds == null
+                    borderSide: widget.burnSeconds == null
                         ? BorderSide.none
                         : BorderSide(color: Tone.fire.withOpacity(0.55)),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(Metrics.pill),
                     borderSide: BorderSide(
-                        color: burnSeconds == null
+                        color: widget.burnSeconds == null
                             ? Tone.accent.withOpacity(0.5)
                             : Tone.fire),
                   ),
@@ -2529,11 +2663,11 @@ class _Composer extends StatelessWidget {
           ),
           const SizedBox(width: Metrics.gap),
           Material(
-            color: burnSeconds == null ? Tone.accent : Tone.fire,
+            color: widget.burnSeconds == null ? Tone.accent : Tone.fire,
             shape: const CircleBorder(),
             child: InkWell(
               customBorder: const CircleBorder(),
-              onTap: onSend,
+              onTap: widget.onSend,
               child: const Padding(
                 padding: EdgeInsets.all(11),
                 child: Icon(Icons.arrow_upward, size: 19, color: Colors.white),
@@ -2541,11 +2675,143 @@ class _Composer extends StatelessWidget {
             ),
           ),
         ],
+        ),
+        ),
+        // The picture somebody copied, offered rather than pasted.
+        //
+        // This is how a sticker reaches an iPhone application: Memoji, an
+        // app's own pack and any GIF keyboard all hand their picture to the
+        // keyboard's own field, which Flutter cannot take, and all of them
+        // can be copied. So it is offered when there is one and never taken
+        // without being asked for. See `platform/pasted.dart`.
+        if (_pasteReady)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+                Metrics.gap + 4, 0, Metrics.gap + 4, Metrics.gap),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: RxButton('Send the picture you copied',
+                  weight: Weight.secondary,
+                  icon: Icons.content_paste_outlined,
+                  onTap: _sendPasted),
+            ),
+          ),
+        _WhoCanRead(
+            conversationId: widget.conversationId,
+            onInspect: widget.onInspect),
+          ],
+        ),
       ),
     );
   }
 }
 
+
+/// Who can read this conversation, under the place you type into it.
+///
+/// # Why this is here and not in a menu
+///
+/// Every documented attack on a group messenger has the same shape and none of
+/// them break the encryption. A WhatsApp group's management messages are not
+/// signed by the administrator, so a server can add somebody. A device linked
+/// to an account through the official feature reads everything and is never
+/// mentioned again. What they have in common is that the set of people the
+/// message is for changed and nobody noticed.
+///
+/// Every messenger can already tell you who is in a conversation. All of them
+/// put it one tap away, or in a line of the transcript that scrolls past and
+/// is gone. That is the right place for a fact somebody might want and the
+/// wrong place for a fact somebody needs at a particular moment, and the
+/// moment is this one: about to say something.
+///
+/// So it sits under the field, it cannot be dismissed, and when the set
+/// changes it says so and goes on saying so until somebody looks.
+///
+/// # What it does not claim
+///
+/// That the people are who they say. That is the safety number, and this says
+/// whether it has been compared. This is a count and a state, and it is drawn
+/// from the group itself rather than from anything a server said, which is the
+/// one reason it can be trusted at all.
+class _WhoCanRead extends StatefulWidget {
+  const _WhoCanRead({required this.conversationId, required this.onInspect});
+
+  final String conversationId;
+  final VoidCallback onInspect;
+
+  @override
+  State<_WhoCanRead> createState() => _WhoCanReadState();
+}
+
+class _WhoCanReadState extends State<_WhoCanRead> {
+  @override
+  Widget build(BuildContext context) {
+    final t = RotelyxThemeScope.of(context);
+
+    final keys = [for (final m in rotelyx.members) m.key];
+    if (keys.length < 2) return const SizedBox.shrink();
+
+    final changed = store.rosterChanged(widget.conversationId, keys);
+    final verification =
+        store.verificationOf(widget.conversationId, rotelyx.safetyNumber);
+
+    final people = '${keys.length} devices';
+    final String state;
+    final Color colour;
+
+    if (changed) {
+      state = 'this is not who it was';
+      colour = Tone.warn;
+    } else {
+      switch (verification) {
+        case Verification.matches:
+          state = 'compared';
+          colour = Tone.good;
+        case Verification.changed:
+          state = 'the number changed';
+          colour = Tone.bad;
+        case Verification.never:
+        case Verification.declined:
+          state = 'not compared';
+          colour = t.faint;
+      }
+    }
+
+    return InkWell(
+      onTap: () {
+        // Looking is what settles it. The mark is taken as read here rather
+        // than when the panel closes, because somebody who opened it has been
+        // shown the answer whatever they do next.
+        store.markRosterSeen(widget.conversationId, keys);
+        widget.onInspect();
+        setState(() {});
+      },
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+            Metrics.gap + 4, 0, Metrics.gap + 4, Metrics.gap),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              changed ? Icons.error_outline : Icons.lock_outline,
+              size: 12,
+              color: colour,
+            ),
+            const SizedBox(width: 5),
+            Flexible(
+              child: Text(
+                '$people, $state',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Type.small.copyWith(color: colour),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 /// A bubble's contents: text, a picture, or a file the mailbox carried whole.
 /// How long a message has left, beside its timestamp.

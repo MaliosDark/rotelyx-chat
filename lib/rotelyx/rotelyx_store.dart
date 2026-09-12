@@ -285,6 +285,7 @@ class StoredConversation {
     this.lastOpened,
     this.verifiedNumber,
     this.askedToVerify = false,
+    this.seenRoster,
     this.meetingTag,
     this.meetingExpires,
     this.meetingMaxUses,
@@ -397,6 +398,25 @@ class StoredConversation {
   /// conversation. An interruption that returns on every cold open is one
   /// people learn to dismiss without reading, which costs more than it buys.
   bool askedToVerify;
+
+  /// The set of members this person has looked at, as a short digest.
+  ///
+  /// # Why a conversation remembers who was in it
+  ///
+  /// Every documented attack on a group messenger has the same shape: somebody
+  /// is added and nobody notices. A server that adds a member to a WhatsApp
+  /// group because the management message is not signed; a device linked to an
+  /// account through the official feature and never mentioned again. None of
+  /// them break the encryption. They change who it is for.
+  ///
+  /// The safety number moves when membership does, so a person who had
+  /// compared digits is told. Somebody who never compared them is told
+  /// nothing, and that is most people. This is the memory that lets the
+  /// conversation say "this is not the same set of people it was" to them too.
+  ///
+  /// Null in a conversation nobody has looked at yet, which reads as "no
+  /// claim" rather than as a change.
+  String? seenRoster;
 
   /// The meeting place this conversation was made at, for the host only.
   ///
@@ -1124,6 +1144,7 @@ class RotelyxStore {
       if (c.receipts) 'rcpt': true,
       if (c.verifiedNumber != null) 'vnum': c.verifiedNumber,
       if (c.askedToVerify) 'asked': true,
+      if (c.seenRoster != null) 'seen': c.seenRoster,
       if (c.meetingTag != null) 'meet': c.meetingTag,
       if (c.meetingExpires != null)
         'meetuntil': c.meetingExpires!.millisecondsSinceEpoch,
@@ -1187,6 +1208,52 @@ class RotelyxStore {
       return c.askedToVerify ? Verification.declined : Verification.never;
     }
     return c.verifiedNumber == current ? Verification.matches : Verification.changed;
+  }
+
+  /// What the current set of members hashes to, or null when there is none.
+  ///
+  /// Sorted first, because the roster's order is the engine's business and the
+  /// same people must reach the same digest whatever order they came in.
+  ///
+  /// FNV-1a rather than a cryptographic hash, and it is worth saying why that
+  /// is enough. This value never leaves the device and is only ever compared
+  /// with itself: nobody is being authenticated by it, and there is nobody to
+  /// forge it for. What it has to do is change when the set of members does,
+  /// and sixty four bits of it does that.
+  static String rosterDigest(Iterable<String> keys) {
+    final sorted = keys.toList()..sort();
+    if (sorted.isEmpty) return '';
+
+    var hash = BigInt.parse('14695981039346656037');
+    final prime = BigInt.parse('1099511628211');
+    final mask = (BigInt.one << 64) - BigInt.one;
+    for (final byte in utf8.encode(sorted.join('\u0000'))) {
+      hash = ((hash ^ BigInt.from(byte)) * prime) & mask;
+    }
+    return hash.toRadixString(16).padLeft(16, '0');
+  }
+
+  /// Whether the set of people in this conversation has changed since somebody
+  /// last looked at it.
+  ///
+  /// False where there is nothing to compare: a conversation nobody has opened
+  /// the members of makes no claim about who used to be in it, and announcing
+  /// a change against a claim that was never made would cry wolf on every
+  /// first open.
+  bool rosterChanged(String id, Iterable<String> keys) {
+    final seen = load(id)?.seenRoster;
+    if (seen == null || seen.isEmpty) return false;
+    return seen != rosterDigest(keys);
+  }
+
+  /// Record the set of members as looked at.
+  void markRosterSeen(String id, Iterable<String> keys) {
+    final c = load(id);
+    if (c == null) return;
+    final digest = rosterDigest(keys);
+    if (digest.isEmpty || c.seenRoster == digest) return;
+    c.seenRoster = digest;
+    save(c);
   }
 
   /// Record that somebody compared the digits and they matched.
@@ -1338,6 +1405,7 @@ class RotelyxStore {
         receipts: json['rcpt'] == true,
         verifiedNumber: json['vnum'] as String?,
         askedToVerify: json['asked'] == true,
+        seenRoster: json['seen'] as String?,
         meetingTag: json['meet'] as String?,
         meetingExpires: json['meetuntil'] is int
             ? DateTime.fromMillisecondsSinceEpoch(json['meetuntil'] as int)

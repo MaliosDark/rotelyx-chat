@@ -31,6 +31,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 
 import '../../platform/file_pick.dart';
+import '../../rotelyx/gif_codec.dart';
 import '../../rotelyx/photo_codec.dart';
 import '../../rotelyx/rotelyx_service.dart';
 import '../../rotelyx/rotelyx_store.dart';
@@ -424,5 +425,114 @@ Future<Uint8List?> _pixels(ui.Image source, int w, int h) async {
     return data?.buffer.asUint8List();
   } finally {
     drawn.dispose();
+  }
+}
+
+/// Fit an animation into a byte budget, and keep it animated.
+///
+/// Returns null when the bytes are not an animation this platform can decode,
+/// or when even the last step is still too big.
+///
+/// # What is given up, and in what order
+///
+/// Frames first, then pixels, then colours. A dropped frame costs the least:
+/// an animation at ten a second still reads as one, and a reaction GIF is
+/// usually a second of loop. Pixels are next because a small animation is
+/// still an animation. Colours are last because a palette under thirty two
+/// starts to band, and banding is the one artefact people describe as broken
+/// rather than as small.
+///
+/// Every combination is not tried. The steps go down together, which lands
+/// slightly above the best possible file and takes a second rather than a
+/// minute: re-encoding a GIF is the expensive part and each attempt pays it
+/// again.
+Future<Uint8List?> fitAnimation(Uint8List bytes,
+    {required int maxBytes}) async {
+  ui.Codec codec;
+  try {
+    codec = await ui.instantiateImageCodec(bytes);
+  } on Object {
+    return null;
+  }
+
+  if (codec.frameCount <= 1) return null;
+
+  // Read once. Decoding is the slow half and the frames do not change between
+  // attempts, only which of them are kept and how large they are drawn.
+  final frames = <({ui.Image image, Duration delay})>[];
+  try {
+    for (var i = 0; i < codec.frameCount; i++) {
+      final frame = await codec.getNextFrame();
+      frames.add((image: frame.image, delay: frame.duration));
+    }
+  } on Object {
+    for (final f in frames) {
+      f.image.dispose();
+    }
+    return null;
+  }
+
+  try {
+    // Keep every frame, then every other, and so on. A cap as well, because a
+    // long animation with a modest budget cannot spend it on frames.
+    // Measured rather than guessed. `tool/` has no harness for this, so the
+    // rungs come from `test/gif_codec_test.dart`, which prints what each one
+    // costs: at 128 colours a frame runs to about a tenth of a byte a pixel,
+    // so 24 frames at 320 across is 170 KiB and 8 at 200 is 27.
+    for (final (:keep, :edge, :colours) in const [
+      (keep: 1, edge: 480, colours: 192),
+      (keep: 1, edge: 320, colours: 128),
+      (keep: 1, edge: 240, colours: 96),
+      (keep: 2, edge: 240, colours: 96),
+      (keep: 2, edge: 200, colours: 64),
+      (keep: 3, edge: 180, colours: 64),
+      (keep: 4, edge: 160, colours: 48),
+      (keep: 5, edge: 128, colours: 32),
+    ]) {
+      final chosen = <({ui.Image image, Duration delay})>[];
+      for (var i = 0; i < frames.length; i += keep) {
+        chosen.add(frames[i]);
+      }
+      // Two frames is the floor. One is a still, and a still should have gone
+      // through `fitPicture` and come out smaller and sharper.
+      if (chosen.length < 2) continue;
+
+      final first = chosen.first.image;
+      final longest = first.width > first.height ? first.width : first.height;
+      final scale = edge >= longest ? 1.0 : edge / longest;
+      final w = (first.width * scale).round().clamp(8, 1024);
+      final h = (first.height * scale).round().clamp(8, 1024);
+
+      // Skip a rung that cannot fit, rather than paying for it to find out.
+      //
+      // Re-encoding is the expensive half and a phone pays it in whole
+      // seconds. A tenth of a byte a pixel a frame is what the measurements
+      // give, and half of that is a floor no rung has come near, so anything
+      // over the budget at that rate is hopeless and is not attempted.
+      if (chosen.length * w * h * 0.05 > maxBytes) continue;
+
+      final out = <GifFrame>[];
+      for (final frame in chosen) {
+        final rgba = await _pixels(frame.image, w, h);
+        if (rgba == null) return null;
+        out.add(GifFrame(
+          rgba: rgba,
+          width: w,
+          height: h,
+          // The dropped frames' time is given to the one that replaces them,
+          // so the animation runs at the speed it was made at rather than
+          // sprinting through what is left.
+          delay: frame.delay * keep,
+        ));
+      }
+
+      final encoded = encodeGif(out, colours: colours);
+      if (encoded.length <= maxBytes) return encoded;
+    }
+    return null;
+  } finally {
+    for (final f in frames) {
+      f.image.dispose();
+    }
   }
 }

@@ -129,6 +129,9 @@ import UserNotifications
   /// is collected.
   private var keeper: SaveToPhotos?
 
+  /// Held for the same reason as the two above.
+  private var board: Clipboard?
+
   override func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
@@ -244,6 +247,12 @@ import UserNotifications
       FlutterMethodChannel(name: FilePicker.channel,
                            binaryMessenger: controller.binaryMessenger)
         .setMethodCallHandler { call, result in picker.handle(call, result) }
+
+      let clipboard = Clipboard()
+      board = clipboard
+      FlutterMethodChannel(name: Clipboard.channel,
+                           binaryMessenger: controller.binaryMessenger)
+        .setMethodCallHandler { call, result in clipboard.handle(call, result) }
 
       let photos = SaveToPhotos()
       keeper = photos
