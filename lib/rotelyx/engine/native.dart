@@ -358,6 +358,16 @@ class _NativeSession implements RotelyxSession {
   }
 
   @override
+  bool settle() {
+    final result = _op('session.settle');
+    final map = result is Map ? result : const {};
+    return map['settled'] == true;
+  }
+
+  @override
+  bool isHoldingACommit() => _op('session.isHoldingACommit') == true;
+
+  @override
   List<String> admins() {
     final raw = _string(_op('session.admins'));
     final decoded = jsonDecode(raw);
@@ -459,6 +469,13 @@ class _NativeSession implements RotelyxSession {
               ? joining.whereType<String>().toList(growable: false)
               : const <String>[],
         );
+      }
+      // The group processed this and deliberately did not apply it. Not an
+      // error, and above all not a decryption failure: the sender has moved
+      // to an epoch this device has not.
+      if (kind == 'refused') {
+        final why = result['why'];
+        return Received.refused(why is String ? why : 'the group refused it');
       }
       // Membership and nothing both mean the group moved rather than that
       // somebody said something, which is what null means to the caller.

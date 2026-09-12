@@ -46,6 +46,7 @@ class Received {
     this.from,
     this.proposedBy,
     this.joining = const <String>[],
+    this.refused,
   });
 
   /// A request to admit somebody, which changes nothing until another member
@@ -56,7 +57,16 @@ class Received {
   /// group moved". By the time it is a membership change it is already done.
   const Received.proposal({required this.proposedBy, required this.joining})
       : text = '',
-        from = null;
+        from = null,
+        refused = null;
+
+  /// The group declined to apply what arrived, and why.
+  const Received.refused(String why)
+      : text = '',
+        from = null,
+        proposedBy = null,
+        joining = const <String>[],
+        refused = why;
 
   /// The plaintext. Empty when this was not a message.
   final String text;
@@ -72,6 +82,14 @@ class Received {
 
   /// Whether this was a request to admit somebody rather than something said.
   bool get isProposal => joining.isNotEmpty;
+
+  /// Why the group refused to apply what arrived, when it did.
+  ///
+  /// A refusal is not a failure to decrypt and must never be reported as one.
+  /// It means the sender moved to an epoch this device did not, so from here
+  /// on their messages cannot be read: two ends at two points with nothing
+  /// saying so is the exact failure this application spent a week chasing.
+  final String? refused;
 
   /// The label the author joined under, when the group still holds their leaf.
   ///
@@ -158,6 +176,22 @@ abstract interface class RotelyxSession {
   /// device. Anywhere else, admitting takes two members: [propose] and then
   /// somebody else's [confirmAdditions].
   RotelyxInvitation invite(String keyPackageB64);
+
+  /// Apply this member's own commit, once every copy of it is in the mailbox.
+  ///
+  /// Until this is called the device is still standing where the other members
+  /// are, which is what lets it take a commit somebody else made at the same
+  /// moment instead of its own. Two devices reopening at once is exactly how
+  /// two ends used to end up at two epochs neither could leave.
+  ///
+  /// Never before the deposit: sealing addresses the epoch the others are
+  /// still on, and that is what moves them off it.
+  ///
+  /// Returns whether there was anything to settle.
+  bool settle();
+
+  /// Whether this device is holding a commit it has not applied.
+  bool isHoldingACommit();
 
   /// The members this group allows to turn a request into a member, by the
   /// labels the roster uses. Empty when it allows everybody.

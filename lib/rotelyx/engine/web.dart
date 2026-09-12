@@ -71,6 +71,8 @@ extension type WasmSessionJs._(JSObject _) implements JSObject {
   external WasmInvitationJs invite(String keyPackageB64);
   external String propose(String keyPackageB64);
   external String admins();
+  external bool settle();
+  external bool isHoldingACommit();
   external String setAdmins(String labelsJson);
   external WasmInvitationJs confirm();
   external void join(String welcomeB64, String ratchetTreeB64);
@@ -195,6 +197,12 @@ class _WebSession implements RotelyxSession {
   }
 
   @override
+  bool settle() => inner.settle();
+
+  @override
+  bool isHoldingACommit() => inner.isHoldingACommit();
+
+  @override
   List<String> admins() {
     final decoded = jsonDecode(inner.admins());
     return decoded is List
@@ -275,6 +283,13 @@ class _WebSession implements RotelyxSession {
             ? joining.whereType<String>().toList(growable: false)
             : const <String>[],
       );
+    }
+    // The group processed this and deliberately did not apply it. Not an
+    // error, and above all not a decryption failure: the sender has moved
+    // to an epoch this device has not.
+    if (decoded['kind'] == 'refused') {
+      final why = decoded['why'];
+      return Received.refused(why is String ? why : 'the group refused it');
     }
     // Membership and nothing both mean the group moved rather than that
     // somebody said something, which is what null means to the caller.

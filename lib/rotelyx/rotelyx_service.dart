@@ -1946,6 +1946,27 @@ class RotelyxService {
 
     try {
       final plaintext = session.receive(payload);
+
+      // The group processed this and deliberately did not apply it.
+      //
+      // This has to be loud. A refusal means whoever sent it moved to a point
+      // this device did not, so from here on their messages cannot be read.
+      // Two ends at two points with nothing saying so is the exact failure
+      // that cost a week of wrong diagnoses, and it used to reach here as
+      // "a message failed to decrypt", which is untrue and which nobody sees.
+      if (plaintext?.refused != null) {
+        lastError = 'Somebody was added without a second member agreeing, so '
+            'this device did not accept it. Whoever sent it has moved on and '
+            'their messages will not arrive here until this is sorted out.';
+        _notices.add(lastError!);
+
+        // Not acknowledged. The envelope stays in the mailbox: this device did
+        // not apply it, and releasing something that was refused would throw
+        // away the only copy of the thing that has to be looked at.
+        _stateChanges.add(state);
+        return;
+      }
+
       if (plaintext == null) {
         // A commit. The epoch moved, so our tags moved with it, listening on
         // the old set would go quiet with nothing saying why.
@@ -1984,7 +2005,12 @@ class RotelyxService {
       _emit(RotelyxMessage(text: plaintext.text, mine: false, at: DateTime.now()));
       _acknowledge(envelopeB64);
     } on Object catch (e) {
+      // A genuine failure to open one, which is a different thing from the
+      // group refusing to apply what it opened. Both used to land here and say
+      // the same sentence.
       lastError = 'a message failed to decrypt: $e';
+      _notices.add(lastError!);
+      _stateChanges.add(state);
     }
   }
 
@@ -2084,6 +2110,7 @@ class RotelyxService {
       for (final envelope in session.sealCommitForGroup(commit)) {
         _mailbox?.deposit(envelope);
       }
+      session.settle();
       _persist();
       _resubscribe();
       _stateChanges.add(state);
@@ -2122,6 +2149,12 @@ class RotelyxService {
       for (final envelope in session.sealCommitForGroup(commit)) {
         _mailbox?.deposit(envelope);
       }
+
+      // Applied once every copy is deposited. Two people reaching for the same
+      // removal at the same moment is not contrived, and until this line runs
+      // this device can still take theirs instead of its own.
+      session.settle();
+
       // Our own tags moved with the epoch, as they do after any commit.
       _resubscribe();
       _stateChanges.add(state);
@@ -2376,6 +2409,18 @@ class RotelyxService {
       for (final envelope in session.sealCommitForGroup(commit)) {
         _mailbox?.deposit(envelope);
       }
+
+      // Applied once every copy is in the mailbox, and not a line earlier.
+      //
+      // This is the one that cost a week. Two devices reopening at the same
+      // moment each used to apply its own fresh key immediately, and then
+      // neither could ever process the other's: not a dropped message, two
+      // conversations where there was one. Between the deposit above and this
+      // line, this device is still standing where the other one is, so if
+      // theirs arrives it can be taken instead and both end up in the same
+      // place.
+      session.settle();
+
       // The tags moved with the epoch, as they do after any commit, so what
       // this device listens on has to move with them.
       _resubscribe();
