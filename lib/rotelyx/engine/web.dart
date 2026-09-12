@@ -270,7 +270,10 @@ class _WebSession implements RotelyxSession {
       final text = decoded['text'];
       if (text is! String) return null;
       final from = decoded['from'];
-      return Received(text, from: from is String && from.isNotEmpty ? from : null);
+      final key = decoded['fromKey'];
+      return Received(text,
+          from: from is String && from.isNotEmpty ? from : null,
+          fromKey: key is String && key.isNotEmpty ? key : null);
     }
     // Somebody asked for a member to be admitted. Nothing has happened yet and
     // nothing will until another member confirms it.

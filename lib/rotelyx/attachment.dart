@@ -37,6 +37,37 @@ const int maxAttachmentBytes = 5 * 1024 * 1024;
 /// watched fail for no reason they can see.
 const int freeAttachmentBytes = 44 * 1024;
 
+/// What an attachment should read as in one line.
+///
+/// Null when this body is not an attachment, so a caller can fall through to
+/// showing the text.
+///
+/// # Why this exists
+///
+/// A conversation list and a notification both show the last thing said, and
+/// both were showing the encoded attachment: `rx-file`, the filename, the
+/// percent-escaped type and the first characters of the base64. It looked
+/// like the application had broken.
+///
+/// The notification path meant to handle this and could not. It asked whether
+/// the body was empty, which is true of a message that is only a picture in
+/// some other design and is never true here: an attachment's body is the
+/// marker and the bytes, which is a long way from empty.
+String? attachmentSummary(String body) {
+  final file = Attachment.decode(body);
+  if (file == null) return null;
+
+  // The kind rather than the filename, for a picture.
+  //
+  // A camera names a photograph `IMG_4812.HEIC` and a keyboard names a
+  // sticker whatever it likes, and neither tells somebody glancing at a list
+  // anything they wanted to know. A file keeps its name because the name is
+  // the only thing that distinguishes one.
+  if (file.mime == 'image/gif') return 'GIF';
+  if (file.isImage) return 'Picture';
+  return file.name.isEmpty ? 'File' : file.name;
+}
+
 /// A byte count somebody can read.
 String readableBytes(int count) {
   final kb = count / 1024;

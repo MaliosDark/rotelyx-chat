@@ -292,7 +292,11 @@ class StoredConversation {
     this.meetingUses = 0,
     this.meetingNeedsApproval = true,
     List<String>? burnAcks,
-  }) : burnAcks = burnAcks ?? [];
+    List<String>? blocked,
+    List<String>? reports,
+  })  : burnAcks = burnAcks ?? [],
+        blocked = blocked ?? [],
+        reports = reports ?? [];
 
   /// When the meeting phrase stops opening the door, or null for never.
   ///
@@ -454,6 +458,37 @@ class StoredConversation {
   /// whole mechanism exists to avoid. So the identifier waits here and goes
   /// out on the next join. See `signal.dart`.
   final List<String> burnAcks;
+
+  /// Members nothing is accepted from, by the key that identifies them.
+  ///
+  /// # Why blocking here beats hiding it on arrival
+  ///
+  /// Most messengers block by receiving a message and not showing it. That is
+  /// the only thing they can do, because the address a message arrives at
+  /// belongs to the account rather than to the sender.
+  ///
+  /// Here it is the member's own signature key, checked before the message is
+  /// written down or counted or notified about. Nothing from them reaches the
+  /// transcript, the unread count, the notification, the widget or the watch.
+  /// The one thing it cannot do is stop the envelope being deposited, because
+  /// the mailbox cannot be told who to refuse without being told who is who.
+  ///
+  /// Kept per conversation rather than globally, because a key is what a
+  /// member is here and the same person in another conversation is another
+  /// key. There is nobody to block across all of them, which is what having
+  /// no accounts means.
+  final List<String> blocked;
+
+  /// What somebody in this conversation said should not be here.
+  ///
+  /// Each is `when|reason|who`: the moment the reported message was sent, the
+  /// reason picked from a list, and the label of whoever reported it.
+  ///
+  /// Kept rather than shown once. The people who can act on a report are the
+  /// conversation's admins and they may not be looking when it arrives, and
+  /// the requirement this answers is about acting rather than about being
+  /// told.
+  final List<String> reports;
 
   /// When this conversation was last opened.
   ///
@@ -1157,6 +1192,8 @@ class RotelyxStore {
       if (c.lastOpened != null)
         'opened': c.lastOpened!.millisecondsSinceEpoch,
       if (c.burnAcks.isNotEmpty) 'acks': c.burnAcks,
+      if (c.blocked.isNotEmpty) 'blocked': c.blocked,
+      if (c.reports.isNotEmpty) 'reports': c.reports,
     });
 
     // A locked conversation is sealed twice: once under its own PIN and then
@@ -1253,6 +1290,40 @@ class RotelyxStore {
     final digest = rosterDigest(keys);
     if (digest.isEmpty || c.seenRoster == digest) return;
     c.seenRoster = digest;
+    save(c);
+  }
+
+  /// Write down a report somebody made.
+  ///
+  /// Bounded, because a conversation somebody is flooding is exactly the one
+  /// that collects these, and a list that grows without limit is the same
+  /// abuse by another route. The oldest goes.
+  void recordReport(
+    String id, {
+    required DateTime reportedAt,
+    required String reason,
+    required String by,
+  }) {
+    final c = load(id);
+    if (c == null) return;
+
+    final row = '${reportedAt.millisecondsSinceEpoch}|'
+        '${reason.replaceAll('|', ' ')}|'
+        '${by.replaceAll('|', ' ')}';
+    if (c.reports.contains(row)) return;
+
+    c.reports.add(row);
+    while (c.reports.length > 50) {
+      c.reports.removeAt(0);
+    }
+    save(c);
+  }
+
+  /// Forget the reports, once somebody has dealt with them.
+  void clearReports(String id) {
+    final c = load(id);
+    if (c == null || c.reports.isEmpty) return;
+    c.reports.clear();
     save(c);
   }
 
@@ -1420,6 +1491,8 @@ class RotelyxStore {
             ? DateTime.fromMillisecondsSinceEpoch(json['opened'] as int)
             : null,
         burnAcks: (json['acks'] as List? ?? []).cast<String>(),
+        blocked: (json['blocked'] as List? ?? []).cast<String>(),
+        reports: (json['reports'] as List? ?? []).cast<String>(),
       );
     } on Object {
       // A blob that will not open is a blob from another passphrase or a

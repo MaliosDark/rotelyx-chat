@@ -95,6 +95,35 @@ enum SignalKind {
   /// hash of a phrase nobody stores, so a member that did not issue the
   /// invitation has no way to work it out.
   pendingAddition,
+
+  /// Somebody is telling whoever runs this conversation that a message in it
+  /// should not be here.
+  ///
+  /// # Why a report goes to the group and not to us
+  ///
+  /// The App Store requires a way to report objectionable content, and the
+  /// obvious reading of that is a report that reaches whoever publishes the
+  /// application. Here that is impossible and pretending otherwise would be a
+  /// button that does nothing: nobody outside a conversation can read a word
+  /// of it, including us, and a report we could act on would mean a
+  /// conversation we could read.
+  ///
+  /// So it goes where the only people who can already read it are. A
+  /// conversation's admins see what was reported and can take the member out,
+  /// which is a real commit and not a local hiding. SimpleX answers the same
+  /// requirement the same way and ships on the App Store with it.
+  ///
+  /// # Who else sees it
+  ///
+  /// Everybody. An application message is sealed for the group, and a group
+  /// is the only address MLS has: there is no way to send this to two members
+  /// out of six. The screen says so before anybody sends one, because a
+  /// report somebody believed was private and was not is worse than no report
+  /// at all.
+  ///
+  /// In a conversation of two there is nobody to tell who is not the person
+  /// being reported, which is why the screen offers blocking there instead.
+  report,
 }
 
 /// What a [SignalKind.call] is saying.
@@ -305,6 +334,28 @@ class Signal {
   /// Only the author may withdraw. A retract naming somebody else's message is
   /// ignored, because otherwise anybody in a group could delete anybody's
   /// history.
+  /// Report the message sent at [at], with a reason somebody chose from a
+  /// list rather than typed.
+  ///
+  /// A list, because a free text box in a report is a place to put abuse of
+  /// its own, and because a reason nobody reads is worth less than a reason
+  /// that can be counted.
+  factory Signal.report(DateTime at, String reason) => Signal(
+        kind: SignalKind.report,
+        fields: [at.millisecondsSinceEpoch.toString(), reason],
+      );
+
+  /// When the reported message was sent, or null where this is not a report.
+  DateTime? get reportedAt {
+    if (kind != SignalKind.report || fields.isEmpty) return null;
+    final at = int.tryParse(fields.first);
+    return at == null ? null : DateTime.fromMillisecondsSinceEpoch(at);
+  }
+
+  /// Why, in the words of whoever reported it.
+  String get reportReason =>
+      kind == SignalKind.report && fields.length > 1 ? fields[1] : '';
+
   factory Signal.retract(DateTime at) => Signal(
         kind: SignalKind.retract,
         fields: [at.millisecondsSinceEpoch.toString()],

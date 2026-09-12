@@ -156,7 +156,34 @@ during automated review. The permission list is `INTERNET`,
 only host contacted is the mailbox. Both hold up.
 
 A privacy policy URL is required whatever the answers are, and it must be
-reachable from a browser with no login.
+reachable from a browser with no login. [PRIVACY.md](PRIVACY.md) is the text;
+publishing it somewhere with a URL is the part that is not in this repository.
+
+## Guideline 1.2, which is what rejects a messenger
+
+Apple asks for four things from anything carrying what people write to each
+other, and all four exist:
+
+  * **A way to report objectionable content.** Holding somebody else's message
+    offers one, with a reason from a list.
+  * **A way to block an abusive user.** Tapping a member in a conversation.
+    The sender's key is checked before anything is written down, so nothing
+    from them reaches the transcript, the count, the notification, the widget
+    or the watch.
+  * **Published contact information.** `contact@ideoa.co.uk`, in Settings
+    under "Rules and privacy", copyable without a network.
+  * **Acting on reports within 24 hours.** In the terms, and true: the in-app
+    tools act immediately and anything written to the address is answered by a
+    person within a day.
+
+Worth being ready to say in review notes, because it is the question a
+reviewer will have: a report goes to the conversation and not to the operator,
+for the same reason SimpleX's do, which is that nobody outside a conversation
+can read one. Removing a member is a change to the group that every member
+sees, and whoever administers the conversation is who can make it.
+
+An EULA is not written. Apple's standard one applies by default and
+[TERMS.md](TERMS.md) is the acceptable use policy beside it.
 
 ## Other console requirements
 

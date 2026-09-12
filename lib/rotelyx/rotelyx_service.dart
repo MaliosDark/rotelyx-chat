@@ -439,6 +439,9 @@ class RotelyxService {
       case SignalKind.pendingAddition:
         _theyWantToAdmitSomebody(signal, from: from);
 
+      case SignalKind.report:
+        _theyReported(signal, from: from);
+
       case SignalKind.call:
         // Which conversation has a call happening in it, before passing it on.
         //
@@ -474,6 +477,74 @@ class RotelyxService {
   /// the session's queue, and it stays there, changing nothing, until a member
   /// who is not the one that asked turns it into a commit. This is the moment
   /// worth interrupting somebody for: afterwards it is already done.
+  /// Somebody reported a message in this conversation.
+  ///
+  /// # Why this is written down rather than shown at once
+  ///
+  /// The people who can act on it are the conversation's admins, and they may
+  /// not be looking. A report that arrives as a banner and is gone is a report
+  /// nobody acted on, and the requirement it answers is about acting.
+  ///
+  /// Kept on the conversation, so it survives being closed, and shown to
+  /// anybody who can remove a member.
+  void _theyReported(Signal signal, {String? from}) {
+    final id = _persistId;
+    final at = signal.reportedAt;
+    if (id == null || at == null) return;
+
+    final conversation = store.load(id);
+    if (conversation == null) return;
+
+    store.recordReport(
+      id,
+      reportedAt: at,
+      reason: signal.reportReason,
+      by: from ?? '',
+    );
+    _stateChanges.add(state);
+  }
+
+  /// Report a message to whoever runs this conversation.
+  ///
+  /// Everybody in it sees this, because a group is the only address MLS has.
+  /// The screen that offers it says so.
+  bool report(DateTime at, String reason) {
+    rekeyIfOwed();
+    return signal(Signal.report(at, reason));
+  }
+
+  /// Stop accepting anything from a member.
+  ///
+  /// Local and immediate. Nothing from them is written down, counted,
+  /// notified about or drawn, from the next envelope onwards. It does not
+  /// remove them from the group, which is a commit and belongs to whoever
+  /// administers it: this is one person deciding what reaches their own
+  /// phone, which is the thing that should never need anybody's permission.
+  void block(String conversationId, String memberKey) {
+    final c = store.load(conversationId);
+    if (c == null || memberKey.isEmpty) return;
+    if (c.blocked.contains(memberKey)) return;
+    c.blocked.add(memberKey);
+    store.save(c);
+    _stateChanges.add(state);
+  }
+
+  /// Whether the live conversation refuses this member.
+  bool _isBlocked(String memberKey) {
+    final id = _persistId;
+    if (id == null) return false;
+    return store.load(id)?.blocked.contains(memberKey) ?? false;
+  }
+
+  /// Take the block off again.
+  void unblock(String conversationId, String memberKey) {
+    final c = store.load(conversationId);
+    if (c == null) return;
+    if (!c.blocked.remove(memberKey)) return;
+    store.save(c);
+    _stateChanges.add(state);
+  }
+
   void _theyWantToAdmitSomebody(Signal signal, {String? from}) {
     final tag = signal.pendingMeetingTag;
     if (tag == null || tag.isEmpty) return;
@@ -1990,6 +2061,24 @@ class RotelyxService {
         _stateChanges.add(state);
         return;
       }
+      // Blocked, and that is the end of it.
+      //
+      // Before the signal is read, before it is written down, before it is
+      // counted or notified about or drawn on a widget or sent to a watch.
+      // Most messengers block by receiving and then not showing, because the
+      // address a message arrives at belongs to the account rather than to
+      // the sender; here MLS authenticates the sending leaf, so the key is
+      // known at exactly this point and nothing from them goes any further.
+      //
+      // The envelope is acknowledged, because the mailbox should let go of
+      // something that has been dealt with, and refusing to read somebody is
+      // dealing with it.
+      final sender = plaintext.fromKey;
+      if (sender != null && _isBlocked(sender)) {
+        _acknowledge(envelopeB64);
+        return;
+      }
+
       final signal = Signal.decode(plaintext.text);
       if (signal != null) {
         // The author travels with it. A receipt says "I read up to here" and

@@ -8,6 +8,7 @@ library;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../platform/apple_push.dart';
 import '../../platform/biometrics.dart';
@@ -46,6 +47,11 @@ class SettingsScreen extends StatefulWidget {
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
 }
+
+/// Where a person answers, published because the App Store requires it to be
+/// findable and because an application that carries what people write to each
+/// other should have somebody at the end of it.
+const String _contact = 'contact@ideoa.co.uk';
 
 class _SettingsScreenState extends State<SettingsScreen> {
   /// The name this person goes by, for the next conversation they start.
@@ -670,6 +676,98 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         'so the slower path is the one that keeps it to '
                         'yourself. There is no switch for this.',
                         title: 'Why calls take a moment to connect',
+                      ),
+                    ],
+                  ),
+
+                  // The rules, and how to reach a person.
+                  //
+                  // Required by the App Store for anything carrying what
+                  // people write to each other: a way to report, a way to
+                  // block, published contact information, and a commitment to
+                  // act. The first two are in a conversation, where they are
+                  // any use. This is the part that has to be findable when
+                  // somebody goes looking for it, which is why it is a plain
+                  // section and not a link to a page that needs a network.
+                  const SizedBox(height: Metrics.pad),
+                  const _Section('Rules and privacy'),
+                  _Fold(
+                    title: 'Reporting, blocking and the rules',
+                    summary: 'What is not allowed, and what happens about it',
+                    children: [
+                      const RxNote(
+                        'Hold a message somebody else sent to report it. Tap a '
+                        'member in a conversation to block them: nothing they '
+                        'send after that is written down or shown on this '
+                        'phone, they are not told, and it needs no network.',
+                        title: 'What you can do, now',
+                      ),
+                      const SizedBox(height: Metrics.gap),
+                      const RxNote(
+                        'Nothing sexual involving a child. No threats of '
+                        'violence and nothing whose purpose is to harass a '
+                        'particular person. Nothing illegal to hold where you '
+                        'are. Short on purpose: it is what gets somebody '
+                        'removed, not a list of everything anybody dislikes.',
+                        title: 'What you may not send',
+                      ),
+                      const SizedBox(height: Metrics.gap),
+                      const RxNote(
+                        'A report goes to the conversation, and the screen '
+                        'says so before you send one. It does not come to us, '
+                        'because a report we could act on would be a '
+                        'conversation we could read, and we cannot. Whoever '
+                        'can admit and remove members is who can act on it.',
+                        title: 'Where a report goes',
+                      ),
+                      const SizedBox(height: Metrics.gap),
+                      RxNote(
+                        'Write to $_contact and a person answers within 24 '
+                        'hours. What we can do is limited by what we can see, '
+                        'which is nothing inside a conversation: we have '
+                        'never held one of your messages and cannot delete '
+                        'one from a phone.',
+                        title: 'Reaching us',
+                        tone: Tone.good,
+                      ),
+                      const SizedBox(height: Metrics.gap),
+                      RxButton('Copy the address',
+                          weight: Weight.secondary,
+                          icon: Icons.alternate_email,
+                          wide: true, onTap: () {
+                        Clipboard.setData(const ClipboardData(text: _contact));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Copied')));
+                      }),
+                    ],
+                  ),
+                  _Fold(
+                    title: 'What is kept, and by whom',
+                    summary: 'No account, no analytics, nothing we can read',
+                    children: const [
+                      RxNote(
+                        'No name, no email, no phone number, no username. '
+                        'There is no code path that makes an account, which '
+                        'is why there is none to delete.',
+                        title: 'There is no account',
+                      ),
+                      SizedBox(height: Metrics.gap),
+                      RxNote(
+                        'That a device connected and from where, the rotating '
+                        'addresses it listens on, and sealed envelopes for up '
+                        'to seven days. A push token where you turned on '
+                        'delivery while the app is closed, stored on its own '
+                        'with no address beside it.',
+                        title: 'What the mailbox necessarily sees',
+                      ),
+                      SizedBox(height: Metrics.gap),
+                      RxNote(
+                        'No analytics, no crash reporter, no advertising '
+                        'identifier, and no third party that phones home. '
+                        'Sending a picture or a GIF calls nobody: it is '
+                        'shrunk on this phone and sealed like any message.',
+                        title: 'What is not here at all',
+                        tone: Tone.good,
                       ),
                     ],
                   ),

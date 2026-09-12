@@ -44,6 +44,7 @@ class Received {
   const Received(
     this.text, {
     this.from,
+    this.fromKey,
     this.proposedBy,
     this.joining = const <String>[],
     this.refused,
@@ -58,12 +59,14 @@ class Received {
   const Received.proposal({required this.proposedBy, required this.joining})
       : text = '',
         from = null,
+        fromKey = null,
         refused = null;
 
   /// The group declined to apply what arrived, and why.
   const Received.refused(String why)
       : text = '',
         from = null,
+        fromKey = null,
         proposedBy = null,
         joining = const <String>[],
         refused = why;
@@ -97,6 +100,18 @@ class Received {
   /// this field. A caller must treat null as "unattributed" rather than as
   /// anybody in particular.
   final String? from;
+
+  /// The key that identifies the author, when the group still holds their
+  /// leaf.
+  ///
+  /// A label is what somebody joined under and two members can both claim
+  /// one, so anything that acts on a particular member has to read this
+  /// instead. It is the same value `rosterDetail` gives, which is what
+  /// removal and blocking take.
+  ///
+  /// Null for a sender the group no longer has, and for an engine older than
+  /// this field.
+  final String? fromKey;
 }
 
 abstract interface class RotelyxKey {

@@ -26,6 +26,7 @@ import 'dart:async';
 import '../platform/notify.dart';
 import '../platform/watch.dart';
 import '../platform/widgets.dart';
+import 'attachment.dart';
 import 'ephemeral.dart';
 import 'quoted.dart';
 import 'rotelyx_service.dart';
@@ -230,8 +231,9 @@ class Alerts {
   static String preview(String text) {
     final burns = Ephemeral.isEphemeral(text);
     final body = Quoted.plain(Ephemeral.plain(text));
-    if (body.trim().isEmpty) return burns ? '🔥 Attachment' : 'Attachment';
-    return burns ? '🔥 $body' : body;
+    final said = attachmentSummary(body) ??
+        (body.trim().isEmpty ? 'Attachment' : body);
+    return burns ? '🔥 $said' : said;
   }
 }
 

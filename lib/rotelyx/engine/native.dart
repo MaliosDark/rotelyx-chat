@@ -455,7 +455,10 @@ class _NativeSession implements RotelyxSession {
         final text = result['text'];
         if (text is! String) return null;
         final from = result['from'];
-        return Received(text, from: from is String && from.isNotEmpty ? from : null);
+        final key = result['fromKey'];
+        return Received(text,
+            from: from is String && from.isNotEmpty ? from : null,
+            fromKey: key is String && key.isNotEmpty ? key : null);
       }
       // Somebody asked for a member to be admitted. Nothing has happened yet
       // and nothing will until another member confirms it, so this is neither

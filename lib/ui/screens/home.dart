@@ -8,10 +8,9 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../rotelyx/alerts.dart';
 import '../../rotelyx/rotelyx_config.dart';
 import '../../rotelyx/rotelyx_service.dart';
-import '../../rotelyx/ephemeral.dart';
-import '../../rotelyx/quoted.dart';
 import '../../rotelyx/rotelyx_store.dart';
 import '../brand.dart';
 import '../theme.dart';
@@ -488,8 +487,12 @@ class _ConversationTile extends StatelessWidget {
                           ? 'No messages yet'
                           // A reply's body is wrapped with the message it
                           // answers, and one line is no place for a quote.
+                          // An attachment reads as what it is. Its body is
+                          // the marker and the bytes, so shown as text it was
+                          // `rx-file`, a filename, an escaped type and the
+                          // start of the base64, which looked like a fault.
                           : '${last.mine ? "You: " : ""}'
-                              '${Quoted.plain(Ephemeral.plain(last.text))}',
+                              '${Alerts.preview(last.text)}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Type.small.copyWith(

@@ -836,6 +836,109 @@ class _ChatScreenState extends State<ChatScreen> {
   /// Reactions first, because that is what a long press mostly means now, and
   /// the rest under them. Everything here acts on one message and everything
   /// here is reversible except the last, which asks.
+  /// The reasons a message can be reported for.
+  ///
+  /// A list rather than a box to type in. A free text field inside a report
+  /// is a place to put abuse of its own, it arrives in a language whoever
+  /// reads it may not have, and a reason nobody reads is worth less than one
+  /// that can be counted.
+  static const _reportReasons = [
+    'Spam',
+    'Abuse or harassment',
+    'Content involving a child',
+    'Something else',
+  ];
+
+  /// Report somebody else's message.
+  ///
+  /// # Where it goes, and why not to us
+  ///
+  /// To the conversation. Nobody outside one can read a word of it, including
+  /// whoever publishes this application, so a report that reached us would be
+  /// a report about something we cannot see, and acting on it would mean
+  /// being able to read what we say we cannot. The people who can already
+  /// read it are the other members, and the ones who can act are whoever
+  /// administers it: removing somebody is a commit, and they are the ones who
+  /// can make it.
+  ///
+  /// SimpleX answers the same App Store requirement the same way and says so
+  /// plainly: reports are private to the group and are not sent to the
+  /// operator.
+  ///
+  /// # Why the screen says who will see it
+  ///
+  /// Everybody will. An application message is sealed for the group and a
+  /// group is the only address MLS has, so there is no sending this to two
+  /// members out of six. Somebody who believed a report was private and finds
+  /// out it was not is worse off than somebody who never sent one.
+  ///
+  /// In a conversation of two there is nobody to tell except the person being
+  /// reported, so there it offers blocking instead, which is the thing that
+  /// actually helps.
+  Future<void> _report(StoredMessage message) async {
+    final t = RotelyxThemeScope.of(context);
+    final alone = rotelyx.members.length <= 2;
+
+    final reason = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: t.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius:
+            BorderRadius.vertical(top: Radius.circular(Metrics.radius)),
+      ),
+      builder: (sheet) => SafeArea(
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(Metrics.wide, Metrics.wide, Metrics.wide,
+              Metrics.wide + MediaQuery.viewPaddingOf(context).bottom),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('Report this message',
+                  style: Type.title.copyWith(color: t.text)),
+              const SizedBox(height: Metrics.gap),
+              Text(
+                alone
+                    ? 'There is nobody in this conversation but the two of '
+                        'you, so a report has nobody to go to. Blocking them '
+                        'is what stops it, and it is immediate.'
+                    : 'This goes to everybody in this conversation, including '
+                        'the person you are reporting. Whoever can admit and '
+                        'remove members is who can act on it.',
+                style: Type.body.copyWith(color: t.muted),
+              ),
+              const SizedBox(height: Metrics.pad),
+              if (!alone)
+                for (final why in _reportReasons) ...[
+                  RxButton(why,
+                      weight: Weight.secondary,
+                      wide: true,
+                      onTap: () => Navigator.of(sheet).pop(why)),
+                  const SizedBox(height: Metrics.gap),
+                ],
+              const RxNote(
+                'Nobody outside this conversation can read a word of it, and '
+                'that includes us. A report we could act on would be a '
+                'conversation we could read.',
+                title: 'Why it does not come to Rotelyx',
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (reason == null || !mounted) return;
+
+    final sent = rotelyx.report(message.at, reason);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(sent
+          ? 'Reported. Everybody here can see it.'
+          : 'That could not be sent: ${rotelyx.lastError ?? "not connected"}'),
+    ));
+  }
+
   Future<void> _messageActions(StoredMessage message) async {
     final t = RotelyxThemeScope.of(context);
     final body = Ephemeral.plain(Quoted.plain(message.text));
@@ -911,6 +1014,25 @@ class _ChatScreenState extends State<ChatScreen> {
                 onTap: () {
                   Navigator.of(sheet).pop();
                   unawaited(_forward(body));
+                },
+              ),
+            // Reporting, which is for what somebody else sent.
+            //
+            // Offered on anybody else's message and not on your own, because
+            // reporting yourself is not a thing anybody means to do.
+            if (!message.mine)
+              ListTile(
+                leading: Icon(Icons.flag_outlined, size: 20, color: t.muted),
+                title:
+                    Text('Report', style: Type.body.copyWith(color: t.text)),
+                subtitle: Text(
+                    rotelyx.members.length > 2
+                        ? 'Tells everybody in this conversation'
+                        : 'There is nobody here but the two of you',
+                    style: Type.small.copyWith(color: t.faint)),
+                onTap: () {
+                  Navigator.of(sheet).pop();
+                  unawaited(_report(message));
                 },
               ),
             if (message.mine)
@@ -1710,6 +1832,111 @@ class _SafetyPanelState extends State<_SafetyPanel> {
     setState(() {});
   }
 
+  /// What has been reported in this conversation and not yet dealt with.
+  List<String> get _reports =>
+      store.load(widget.conversationId)?.reports ?? const [];
+
+  /// One stored report, as a sentence.
+  ///
+  /// The stored form is `when|reason|who`, three fields with the separator
+  /// stripped out of each on the way in, so splitting is safe.
+  static String _readReport(String row) {
+    final parts = row.split('|');
+    if (parts.length < 3) return row;
+
+    final at = int.tryParse(parts[0]);
+    final String when;
+    if (at == null) {
+      when = 'a message';
+    } else {
+      final sent = DateTime.fromMillisecondsSinceEpoch(at);
+      when = 'the message from '
+          '${sent.hour.toString().padLeft(2, '0')}:'
+          '${sent.minute.toString().padLeft(2, '0')}';
+    }
+    final who = parts[2].isEmpty ? 'Somebody' : parts[2];
+    return '$who reported $when: ${parts[1]}';
+  }
+
+  /// What one member can be done to.
+  ///
+  /// Blocking and removing are different acts and the sheet says so. Blocking
+  /// is one person deciding what reaches their own phone: local, immediate,
+  /// and nobody's business but theirs. Removing is a commit the whole group
+  /// sees and cannot be undone, which is why it is still behind a long press
+  /// and a second question.
+  Future<void> _memberActions(String label, String key) async {
+    final t = RotelyxThemeScope.of(context);
+    final conversation = store.load(widget.conversationId);
+    final isBlocked = conversation?.blocked.contains(key) ?? false;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: t.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius:
+            BorderRadius.vertical(top: Radius.circular(Metrics.radius)),
+      ),
+      builder: (sheet) => SafeArea(
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(Metrics.wide, Metrics.wide, Metrics.wide,
+              Metrics.wide + MediaQuery.viewPaddingOf(context).bottom),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(label, style: Type.title.copyWith(color: t.text)),
+              const SizedBox(height: Metrics.gap),
+              Text(
+                isBlocked
+                    ? 'Nothing from them reaches this phone. They are not '
+                        'told, and they are still in the conversation for '
+                        'everybody else.'
+                    : 'Blocking is yours alone. Nothing they send is written '
+                        'down, counted or shown here from the next message '
+                        'on. They are not told, and the others go on seeing '
+                        'them.',
+                style: Type.body.copyWith(color: t.muted),
+              ),
+              const SizedBox(height: Metrics.pad),
+              RxButton(
+                isBlocked ? 'Unblock them' : 'Block them',
+                weight: isBlocked ? Weight.secondary : Weight.primary,
+                icon: isBlocked
+                    ? Icons.lock_open_outlined
+                    : Icons.block_outlined,
+                wide: true,
+                onTap: () {
+                  if (isBlocked) {
+                    rotelyx.unblock(widget.conversationId, key);
+                  } else {
+                    rotelyx.block(widget.conversationId, key);
+                  }
+                  Navigator.of(sheet).pop();
+                },
+              ),
+              const SizedBox(height: Metrics.gap),
+              RxButton('Remove from the conversation',
+                  weight: Weight.secondary,
+                  icon: Icons.person_remove_outlined,
+                  wide: true, onTap: () {
+                Navigator.of(sheet).pop();
+                _confirmRemoval(label, key);
+              }),
+              const SizedBox(height: Metrics.pad),
+              const RxNote(
+                'Removing is a commit every member sees and it cannot be '
+                'undone. Blocking is not sent anywhere.',
+                title: 'The difference',
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (mounted) setState(() {});
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = RotelyxThemeScope.of(context);
@@ -1799,17 +2026,50 @@ class _SafetyPanelState extends State<_SafetyPanel> {
               children: [
                 for (final m in rotelyx.members)
                   GestureDetector(
+                    onTap: () => _memberActions(m.label, m.key),
                     onLongPress: () => _confirmRemoval(m.label, m.key),
-                    child: RxChip(m.label),
+                    child: RxChip(
+                      store.load(widget.conversationId)
+                                  ?.blocked
+                                  .contains(m.key) ==
+                              true
+                          ? '${m.label} (blocked)'
+                          : m.label,
+                    ),
                   ),
               ],
             ),
             const SizedBox(height: 6),
             Text(
-              'These are labels each member chose. The group authenticates '
-              'them; nothing outside it does.',
+              'Tap a member to block them. Hold to remove them. These are '
+              'labels each member chose: the group authenticates them, and '
+              'nothing outside it does.',
               style: Type.small.copyWith(color: t.faint),
             ),
+          ],
+
+          // What somebody reported, for whoever can act on it.
+          //
+          // A report arrives while nobody is looking and the requirement it
+          // answers is about acting rather than about being told, so it is
+          // kept and shown here, beside the members and the button that
+          // removes one.
+          if (_reports.isNotEmpty) ...[
+            const SizedBox(height: Metrics.pad),
+            RxNote(
+              _reports.map(_readReport).join('\n'),
+              title: _reports.length == 1
+                  ? 'Somebody reported a message'
+                  : '${_reports.length} messages were reported',
+              tone: Tone.warn,
+            ),
+            const SizedBox(height: Metrics.gap),
+            RxButton('Mark these as dealt with',
+                weight: Weight.secondary,
+                wide: true, onTap: () {
+              store.clearReports(widget.conversationId);
+              setState(() {});
+            }),
           ],
 
           // Who decides, in a conversation big enough for that to mean
