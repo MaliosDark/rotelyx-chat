@@ -77,6 +77,50 @@ class RotelyxMessage {
   Delivery delivery;
 }
 
+/// One mailbox connection asks about one conversation.
+///
+/// The mailbox files envelopes by tag and holds every tag, and that is fine:
+/// tags rotate and a tag on its own names nothing. What the mailbox must never
+/// be handed is *which tags go together*. A connection that subscribes to the
+/// tags of two conversations has told the mailbox those conversations belong
+/// to one device, and from there to a person's whole social graph is a matter
+/// of waiting. That is the first thing the threat model says the mailbox
+/// cannot learn, and it is why every connection is given a fresh capability id
+/// and nothing else.
+///
+/// This was broken twice, both times to make something work that people
+/// rightly expected to work: noticing a call in a group nobody had open, and
+/// receiving in conversations that were not on screen. Both times every test
+/// passed. The second time the guard looked for the shape of the first change
+/// and the second had a different shape. So the rule is no longer a pattern
+/// somebody looks for in the source. It is this object, every subscription
+/// goes through it, and a socket that has spoken for one conversation refuses
+/// tags for another.
+///
+/// Keys are opaque. A background socket claims with its conversation id; the
+/// socket for the conversation on screen claims with a token minted when it was
+/// opened, so replacing it starts clean and nothing about the on screen
+/// conversation's identity has to be known while it is still being paired.
+class SocketOwnership {
+  final Map<Object, String> _owner = {};
+
+  /// Whether [socket] may carry tags for [claimant]. True the first time and
+  /// every time after for the same claimant; false, and nothing changes, for
+  /// any other.
+  bool claim(Object socket, String claimant) {
+    final held = _owner[socket];
+    if (held != null && held != claimant) return false;
+    _owner[socket] = claimant;
+    return true;
+  }
+
+  /// The socket is gone, so its claim is too.
+  void release(Object socket) => _owner.remove(socket);
+
+  /// Who a socket speaks for, or null when nobody has claimed it.
+  String? ownerOf(Object socket) => _owner[socket];
+}
+
 /// Somebody waiting to be let into a conversation, and nobody has said yes yet.
 ///
 /// Admitting a member takes two of them: one asks and a **different** one
@@ -1350,7 +1394,7 @@ class RotelyxService {
 
     _meetingTag = tag;
     _role = PairingRole.host;
-    _mailbox?.subscribe([tag]);
+    _subscribeLive([tag]);
 
     store.replaceInvitation(
       id,
@@ -1470,7 +1514,7 @@ class RotelyxService {
     _session!.found();
 
     await _openMailbox();
-    _mailbox!.subscribe([tag]);
+    _subscribeLive([tag]);
     _moveTo(RotelyxState.pairing);
     return true;
   }
@@ -1512,7 +1556,7 @@ class RotelyxService {
 
     _meetingTag = _randomTag();
     await _openMailbox();
-    _mailbox!.subscribe([_meetingTag!]);
+    _subscribeLive([_meetingTag!]);
     _moveTo(RotelyxState.pairing);
 
     return base64Encode(utf8.encode(jsonEncode({
@@ -1590,7 +1634,7 @@ class RotelyxService {
     session.found();
 
     await _openMailbox();
-    _mailbox!.subscribe([tag]);
+    _subscribeLive([tag]);
     _moveTo(RotelyxState.pairing);
 
     _admit(
@@ -1626,7 +1670,7 @@ class RotelyxService {
     if (_role == PairingRole.host) session.found();
 
     await _openMailbox();
-    _mailbox!.subscribe([_meetingTag!]);
+    _subscribeLive([_meetingTag!]);
     _moveTo(RotelyxState.pairing);
 
     // The guest speaks first: the host has nothing to say until it knows who
@@ -1679,11 +1723,81 @@ class RotelyxService {
   /// next.
   final Map<String, WasmSession> _background = {};
 
-  /// Which conversation a tag belongs to, for routing an arriving envelope.
+  /// One mailbox connection for each background conversation.
   ///
-  /// The delivery frame carries the envelope and nothing else, and the tag is
-  /// the first thirty two bytes of it. See `RotelyxWasm.tagOf`.
-  final Map<String, String> _tagOwner = {};
+  /// # The rule, and why it is a rule
+  ///
+  /// **One connection asks the mailbox about one conversation. Never two.**
+  ///
+  /// The mailbox files envelopes by tag and holds every tag, and that is fine:
+  /// tags rotate and a tag on its own names nothing. What the mailbox must
+  /// never be handed is *which tags go together*. A connection that
+  /// subscribes to the tags of two conversations has told the mailbox that
+  /// those two conversations belong to one device, and from there to a
+  /// person's whole social graph is a matter of waiting. That is the first
+  /// thing the threat model says the mailbox cannot learn, and it is the reason
+  /// every connection is given a fresh capability id and nothing else.
+  ///
+  /// This has now been broken twice, both times to make something work that
+  /// people rightly expected to work: noticing a call in a group nobody had
+  /// open, and receiving in conversations that were not on screen. Both times
+  /// the change put every conversation's tags on the one socket, both times
+  /// every test passed, and both times it had to come out. The second time
+  /// the guard test looked for the shape of the first change and the second
+  /// change had a different shape.
+  ///
+  /// So the fix that keeps the promise is the one here: each conversation that
+  /// listens gets a socket of its own. The mailbox sees N connections that
+  /// share nothing, which is exactly what it saw when N people each opened one
+  /// conversation. What it costs is connections, and the mailbox meters new
+  /// ones at sixty a minute with a burst of twenty, so they are opened a few at
+  /// a time rather than all at once.
+  ///
+  /// If you are about to add a conversation's tags to a socket that is
+  /// already listening for another conversation, stop. Whatever it is for,
+  /// open a socket for it instead. [_subscribeFor] is the only door and it
+  /// refuses in debug builds.
+  final Map<String, MailboxClient> _backgroundSockets = {};
+
+  /// Who each socket speaks for. See [SocketOwnership].
+  final _ownership = SocketOwnership();
+
+  /// The claim the socket for the conversation on screen subscribes under.
+  ///
+  /// Minted when that socket is opened, so a new socket starts with a clean
+  /// claim and the conversation's id need not be known yet while it is being
+  /// paired.
+  String _liveClaim = 'live:0';
+  int _liveClaims = 0;
+
+  /// Subscriptions from background sockets, closed with them.
+  final Map<String, List<StreamSubscription<Object?>>> _backgroundListeners = {};
+
+  /// The one way tags reach a mailbox connection.
+  ///
+  /// Every subscription goes through here so the rule above is enforced in
+  /// one place rather than remembered in several. A socket that has spoken for
+  /// one conversation refuses tags for another, loudly in a debug build and
+  /// silently in a release, because a release that crashed here would be a
+  /// release that stopped receiving, and the rule exists to protect people
+  /// rather than to punish code.
+  void _subscribeFor(MailboxClient socket, String claimant, List<String> tags) {
+    if (!_ownership.claim(socket, claimant)) {
+      assert(false,
+          'one mailbox connection asks about one conversation: this socket '
+          'speaks for ${_ownership.ownerOf(socket)} and was handed tags for '
+          '$claimant. Open a socket for it instead. See SocketOwnership.');
+      return;
+    }
+    socket.subscribe(tags);
+  }
+
+  /// Subscribe the socket for the conversation on screen.
+  void _subscribeLive(List<String> tags) {
+    final socket = _mailbox;
+    if (socket == null) return;
+    _subscribeFor(socket, _liveClaim, tags);
+  }
 
   /// Conversations already told what this person looks like, this run.
   ///
@@ -1737,7 +1851,7 @@ class RotelyxService {
         // it a newcomer knocks at nobody after a reconnection.
         final meeting = _meetingTag;
         if (meeting != null && _role == PairingRole.host) {
-          _mailbox?.subscribe([meeting]);
+          _subscribeLive([meeting]);
         }
         _reopening = false;
         return;
@@ -1777,7 +1891,10 @@ class RotelyxService {
     mailboxCanWake = true;
 
     final mailbox = MailboxClient(mailboxUrl);
+    final previous = _mailbox;
+    if (previous != null) _ownership.release(previous);
     _mailbox = mailbox;
+    _liveClaim = 'live:${++_liveClaims}';
 
     // Held, not presented. It goes to the mailbox only if the free tier refuses
     // something: see `MailboxClient.holdToken` for why waiting is the safe
@@ -2068,15 +2185,6 @@ class RotelyxService {
       return;
     }
 
-    // Somebody else's conversation, on the same socket.
-    //
-    // One socket carries all of them, and the delivery frame says only "here
-    // is an envelope". The tag is the first thirty two bytes of it, so which
-    // conversation this belongs to is already in hand. Opened with that
-    // conversation's own session and written down there, which is what makes
-    // a message arrive while somebody is looking at a different chat.
-    if (_openInBackground(envelopeB64, payload)) return;
-
     try {
       final plaintext = session.receive(payload);
 
@@ -2176,6 +2284,22 @@ class RotelyxService {
   /// refuses as a replay, so the cost is battery rather than correctness. The
   /// other direction, acknowledging something unstored, loses a message, which
   /// is why this is never called before the write.
+  /// Release an envelope on the socket it arrived on.
+  ///
+  /// A receipt tells one connection that one envelope may go, and the mailbox
+  /// holds each connection's subscriptions apart. Releasing on the live socket
+  /// something that arrived on a background one would be refused, and the
+  /// envelope would be redelivered until it expired.
+  void _acknowledgeOn(String id, String envelopeB64) {
+    final socket = _backgroundSockets[id];
+    if (socket == null) return;
+    try {
+      socket.collected([RotelyxWasm.receiptFor(envelopeB64)]);
+    } on Object {
+      // Re-delivery is the recoverable failure and it is this one.
+    }
+  }
+
   void _acknowledge(String envelopeB64) {
     try {
       _mailbox?.collected([RotelyxWasm.receiptFor(envelopeB64)]);
@@ -2435,7 +2559,7 @@ class RotelyxService {
 
     final fresh = now.difference(_listening).toList();
     if (fresh.isNotEmpty) {
-      _mailbox?.subscribe(fresh);
+      _subscribeLive(fresh);
       _leaveTicketsFor(fresh);
       _listening.addAll(fresh);
     }
@@ -2446,24 +2570,28 @@ class RotelyxService {
 
   /// Listen on every other conversation as well as the one on screen.
   ///
-  /// Two tags each, this hour and the last, which is what a connected device
-  /// needs: the lookback is for one that was off. See [_background] for the
-  /// arithmetic that makes the difference between six conversations and a
-  /// hundred and twenty eight.
+  /// Each on a connection of its own. See [_backgroundSockets] for the rule
+  /// this keeps and the two times it was broken.
   ///
-  /// The hour before as well as this one, because a message deposited a
-  /// moment before the clock rolled is addressed to the old tag and would
-  /// otherwise wait until the conversation was opened, which is the whole
-  /// fault this exists to remove.
+  /// Two tags each, this hour and the last, which is what a connected device
+  /// needs: the lookback is for one that was off. The hour before as well as
+  /// this one, because a message deposited a moment before the clock rolled
+  /// is addressed to the old tag and would otherwise wait until the
+  /// conversation was opened, which is the whole fault this exists to remove.
+  ///
+  /// Opened a few at a time. The mailbox meters new connections at sixty a
+  /// minute with a burst of twenty, and a device with many conversations that
+  /// opened them all at once would have the tail refused and would not know.
   Future<void> _listenEverywhereElse() async {
     final key = store.key;
     if (key == null || _mailbox == null) return;
+    final url = mailboxUrl;
 
-    final wanted = <String>[];
-
+    var openedThisPass = 0;
     for (final id in store.conversationIds) {
       if (id == _persistId) continue;
       if (id == _peerId(_persistId ?? '')) continue;
+      if (_backgroundSockets.containsKey(id)) continue;
 
       var session = _background[id];
       if (session == null) {
@@ -2472,49 +2600,78 @@ class RotelyxService {
         try {
           session = RotelyxWasm.unsealSession(blob, key);
         } on Object {
-          // A session that will not open is one this conversation cannot use
-          // in the background either. Opening it is what reports that, and
-          // this is not the place: it happens without anybody asking.
           continue;
         }
         _background[id] = session;
       }
 
-      // A lookback of one, which is this hour and the last, rather than the
-      // forty a conversation on screen asks for. The tag budget is the
-      // constraint and this is where it is spent.
+      final List<String> tags;
       try {
-        for (final tag in session.myPollingTags(1)) {
-          if (_listening.contains(tag)) continue;
-          _tagOwner[tag] = id;
-          wanted.add(tag);
-        }
+        tags = session.myPollingTags(1);
       } on Object {
-        // A session that cannot name its tags yet contributes none.
+        continue;
       }
-    }
+      if (tags.isEmpty) continue;
 
-    if (wanted.isEmpty) return;
+      // Under the burst, with room left for the live socket to reconnect.
+      if (openedThisPass >= _backgroundSocketsPerPass) {
+        _scheduleAnotherPass();
+        return;
+      }
+      openedThisPass++;
 
-    // In batches, because a subscription carries 64 tags and the connection
-    // carries 256. Over the ceiling the mailbox refuses the frame rather than
-    // trimming it, and a refused subscription is a conversation that goes
-    // quiet with nothing saying why.
-    const perFrame = 64;
-    final room = 256 - _listening.length;
-    final sending = wanted.length > room ? wanted.sublist(0, room) : wanted;
-
-    for (var at = 0; at < sending.length; at += perFrame) {
-      final slice = sending.sublist(
-          at, at + perFrame > sending.length ? sending.length : at + perFrame);
-      _mailbox?.subscribe(slice);
-      _listening.addAll(slice);
+      final socket = MailboxClient(url);
+      final token = RotelyxStore.instance.capabilityToken;
+      if (token != null) socket.holdToken(token);
+      _backgroundSockets[id] = socket;
+      _backgroundListeners[id] = [
+        socket.envelopes.listen((incoming) => _openInBackground(id, incoming.envelope)),
+        socket.closes.listen((_) => _backgroundSocketClosed(id)),
+        socket.errors.listen((_) {}),
+      ];
+      _subscribeFor(socket, id, tags);
     }
   }
 
-  /// Open an envelope that belongs to a conversation which is not on screen.
+  /// How many background connections one pass may open.
   ///
-  /// Returns whether it was handled here, so the caller stops.
+  /// The mailbox's burst is twenty. Fifteen leaves the live socket room to
+  /// reconnect inside the same window, which it needs more than any
+  /// background one does.
+  static const _backgroundSocketsPerPass = 15;
+
+  /// The rest of the conversations, once the meter has had a moment.
+  Timer? _anotherPass;
+  void _scheduleAnotherPass() {
+    _anotherPass?.cancel();
+    _anotherPass = Timer(const Duration(seconds: 20), () {
+      _anotherPass = null;
+      unawaited(_listenEverywhereElse());
+    });
+  }
+
+  /// A background socket went away. Forgotten, so the next pass reopens it.
+  void _backgroundSocketClosed(String id) {
+    _dropBackgroundSocket(id);
+    _scheduleAnotherPass();
+  }
+
+  void _dropBackgroundSocket(String id) {
+    final socket = _backgroundSockets.remove(id);
+    for (final sub in _backgroundListeners.remove(id) ?? const []) {
+      unawaited(sub.cancel());
+    }
+    if (socket != null) {
+      _ownership.release(socket);
+      unawaited(socket.close());
+    }
+  }
+
+  /// Open an envelope that arrived on a background conversation's own socket.
+  ///
+  /// Which conversation it belongs to is known from the socket it came in on,
+  /// not read off the envelope: the socket speaks for exactly one
+  /// conversation, which is the rule at [_backgroundSockets].
   ///
   /// # What this deliberately does not do
   ///
@@ -2523,28 +2680,25 @@ class RotelyxService {
   /// application has had. A background conversation receives and writes down
   /// and that is all; anything it owes is paid when somebody opens it and
   /// says something.
-  bool _openInBackground(String envelopeB64, String payload) {
-    final String tag;
-    try {
-      tag = RotelyxWasm.tagOf(envelopeB64);
-    } on Object {
-      return false;
-    }
-
-    final id = _tagOwner[tag];
-    if (id == null) return false;
-
+  void _openInBackground(String id, String envelopeB64) {
     final session = _background[id];
-    if (session == null) return false;
+    if (session == null) return;
+
+    final String payload;
+    try {
+      payload = session.openMine(envelopeB64, 1);
+    } on Object {
+      // Not addressed to this conversation in this window. Left in the
+      // mailbox, because an envelope this device cannot open is not this
+      // device's to release.
+      return;
+    }
 
     final plaintext;
     try {
       plaintext = session.receive(payload);
     } on Object {
-      // Left for the live path to try, which is what happened before this
-      // existed. A tag this device claims and cannot open is worth no louder
-      // a failure than that.
-      return false;
+      return;
     }
 
     // A commit, or something with nothing in it to write down. The ratchet
@@ -2552,16 +2706,16 @@ class RotelyxService {
     // means reopening at the epoch before the one this copy is at.
     if (plaintext == null || plaintext.refused != null) {
       _sealBackground(id, session);
-      _acknowledge(envelopeB64);
-      return true;
+      _acknowledgeOn(id, envelopeB64);
+      return;
     }
 
     final sender = plaintext.fromKey;
     if (sender != null &&
         (store.load(id)?.blocked.contains(sender) ?? false)) {
       _sealBackground(id, session);
-      _acknowledge(envelopeB64);
-      return true;
+      _acknowledgeOn(id, envelopeB64);
+      return;
     }
 
     // Signals are for the conversation they belong to and most of them are
@@ -2569,15 +2723,15 @@ class RotelyxService {
     // picture. Written down where they can be, and otherwise let go of.
     if (Signal.decode(plaintext.text) != null) {
       _sealBackground(id, session);
-      _acknowledge(envelopeB64);
-      return true;
+      _acknowledgeOn(id, envelopeB64);
+      return;
     }
 
     final conversation = store.load(id);
     if (conversation == null) {
       _sealBackground(id, session);
-      _acknowledge(envelopeB64);
-      return true;
+      _acknowledgeOn(id, envelopeB64);
+      return;
     }
 
     final message = StoredMessage(
@@ -2592,7 +2746,7 @@ class RotelyxService {
     store.save(conversation);
 
     _sealBackground(id, session);
-    _acknowledge(envelopeB64);
+    _acknowledgeOn(id, envelopeB64);
 
     // Announced on its own stream rather than on [messages].
     //
@@ -2602,7 +2756,6 @@ class RotelyxService {
     // and notified about as if it were the conversation on screen.
     _elsewhere.add((conversationId: id, message: message));
     _stateChanges.add(state);
-    return true;
   }
 
   /// Write a background session back, because receiving moved its ratchet.
@@ -2622,6 +2775,11 @@ class RotelyxService {
   /// Sealed on the way out, because each has been receiving and a copy left
   /// behind cannot read what comes next.
   void _forgetBackground() {
+    _anotherPass?.cancel();
+    _anotherPass = null;
+    for (final id in _backgroundSockets.keys.toList()) {
+      _dropBackgroundSocket(id);
+    }
     for (final entry in _background.entries) {
       try {
         store.saveSession(entry.key, entry.value);
@@ -2632,7 +2790,6 @@ class RotelyxService {
       entry.value.dispose();
     }
     _background.clear();
-    _tagOwner.clear();
   }
 
   /// Leave a wake ticket under each tag just subscribed to.
@@ -2905,7 +3062,6 @@ class RotelyxService {
     _persistId = conversationId;
     _role = PairingRole.host;
     _listening.clear();
-    _tagOwner.clear();
 
     // The row in the list, written on first open rather than at install, so a
     // device nobody has used yet does not show a conversation nobody started.
@@ -2990,12 +3146,10 @@ class RotelyxService {
     // epoch for no reason, which is the fault that split two ends apart.
     final held = _background.remove(conversationId);
     if (held != null && !reusing) {
-      for (final tag in _tagOwner.entries
-          .where((e) => e.value == conversationId)
-          .map((e) => e.key)
-          .toList()) {
-        _tagOwner.remove(tag);
-      }
+      // Its own socket is closed and the live one takes over. Two sockets
+      // listening for one conversation would collect the same envelope twice
+      // and release it once.
+      _dropBackgroundSocket(conversationId);
       _useSession(held);
       reusing = true;
     }
@@ -3028,7 +3182,6 @@ class RotelyxService {
     _persistId = conversationId;
     _role = PairingRole.host;
     _listening.clear();
-    _tagOwner.clear();
 
     // Back to the meeting place, when this device is the one that answers
     // there. `_resubscribe` below covers the conversation's own tags and knew
@@ -3090,7 +3243,7 @@ class RotelyxService {
 
     final meeting = _meetingTag;
     if (meeting != null) {
-      _mailbox?.subscribe([meeting]);
+      _subscribeLive([meeting]);
 
       // And a wake ticket there, so somebody knocking reaches this device even
       // with the application closed.

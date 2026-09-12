@@ -146,6 +146,14 @@ void main() {
     // listening at several addresses from one connection, and that tells the
     // mailbox those conversations belong to one device. §1 of the threat model
     // is that it cannot.
+    //
+    // A fourth is now counted, and it is a different thing: a conversation
+    // that is not on screen receiving on a connection of its own. Nothing is
+    // shared with the live socket, so the mailbox learns nothing it did not
+    // already have, and what that path opens it releases on the socket it
+    // arrived on, through `_acknowledgeOn`. See
+    // `one_connection_never_asks_about_two_conversations_test.dart` for the
+    // rule that keeps those sockets apart.
     final service =
         File('${Directory.current.path}/lib/rotelyx/rotelyx_service.dart')
             .readAsStringSync();
@@ -155,13 +163,14 @@ void main() {
     // has to release them. Naming only what exists today is how a guard ends
     // up watching the wrong three things.
     final opens = RegExp(r'\.(open|openMine|openUnder)\(').allMatches(service).length;
-    final releases = RegExp(r'_acknowledge\(').allMatches(service).length;
+    // A release on the live socket or on a background conversation's own.
+    final releases = RegExp(r'_acknowledge(On)?\(').allMatches(service).length;
 
-    expect(opens, 3,
+    expect(opens, 4,
         reason: 'an envelope is opened somewhere new. Whatever it is, decide '
             'whether it consumes the envelope, and release it if it does');
 
-    // Three call sites plus the declaration and the doc reference to it.
+    // The call sites plus the two declarations and the doc references.
     expect(releases, greaterThanOrEqualTo(opens + 1),
         reason: 'each of the $opens paths that opens an envelope has to '
             'release it, or the mailbox holds it for seven days and the tag '

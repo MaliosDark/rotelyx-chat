@@ -3,61 +3,102 @@
 /// # What this guards
 ///
 /// The mailbox must not be able to tell that two conversations belong to one
-/// person. §1 of the threat model is that it cannot, and §ADV-4 explains how:
-/// a caller presenting nothing is given a fresh capability id per connection,
-/// so there is no value tying its requests together.
+/// person. Section 1 of the threat model is that it cannot, and ADV-4 explains
+/// how: a caller presenting nothing is given a fresh capability id per
+/// connection, so there is no value tying its requests together.
 ///
-/// That holds because one conversation is live at a time and reopening one
-/// opens a new socket. It is **true by accident**, and an accident is not a
-/// promise: the change that broke it was three lines, passed every test in this
-/// suite, and had to be taken out the same night it was written. It subscribed
-/// to every conversation's addresses from one connection so that a call in a
-/// group nobody had open could be noticed, and in doing so told the mailbox
-/// which groups belonged to one device.
+/// A connection that subscribes to the tags of two conversations hands the
+/// mailbox exactly that value. It has happened twice. The first change
+/// subscribed every conversation's addresses from the live socket so a call in
+/// a group nobody had open could be noticed. The second did the same so that
+/// messages arrived in conversations that were not on screen. Both were right
+/// about what people needed and wrong about how to get it, both passed every
+/// test, and both had to come out.
 ///
-/// So this reads the source. It is a crude test and it is the one that would
-/// have caught that change: what matters is not what the service does with a
-/// mailbox it already has, but whether anybody ever hands it a list of
-/// addresses drawn from more than one conversation.
+/// The first version of this test looked for the shape of the first change in
+/// the source, and the second change had a different shape, so it passed. That
+/// is what a pattern buys. So the rule is no longer a pattern: it is
+/// `SocketOwnership`, every subscription in the service goes through one door
+/// that consults it, and this file checks both halves. The object refuses a
+/// second conversation, and the service has no other way to subscribe.
 library;
 
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:rotelyx_chat/rotelyx/rotelyx_service.dart';
 
 void main() {
-  test('nothing subscribes to addresses from more than one conversation', () {
-    final service =
-        File('${Directory.current.path}/lib/rotelyx/rotelyx_service.dart')
-            .readAsStringSync();
+  group('the rule itself', () {
+    test('a socket that speaks for one conversation refuses another', () {
+      final rule = SocketOwnership();
+      final socket = Object();
 
-    // Every conversation this device knows about, read from storage rather
-    // than from the live session, is the shape that produced the defect: the
-    // live session can only name its own addresses, and `loadAll` can name
-    // everybody's.
-    final walksEveryConversation = RegExp(
-      r'store\.loadAll\(\)[\s\S]{0,400}?subscribe\(',
-    ).hasMatch(service);
+      expect(rule.claim(socket, 'alice-and-bob'), isTrue);
+      expect(rule.claim(socket, 'alice-and-bob'), isTrue,
+          reason: 'the same conversation again is not a second one');
+      expect(rule.claim(socket, 'the-book-club'), isFalse,
+          reason: 'this is the whole rule');
+      expect(rule.ownerOf(socket), 'alice-and-bob',
+          reason: 'a refused claim changes nothing');
+    });
 
-    expect(walksEveryConversation, isFalse,
-        reason: 'something is collecting addresses across every stored '
-            'conversation and subscribing to them. One connection asking about '
-            'several conversations tells the mailbox they belong to one '
-            'device, which is the first thing the threat model says it cannot '
-            'know.');
+    test('two sockets may speak for two conversations', () {
+      final rule = SocketOwnership();
+      expect(rule.claim(Object(), 'alice-and-bob'), isTrue);
+      expect(rule.claim(Object(), 'the-book-club'), isTrue);
+    });
+
+    test('a released socket starts clean', () {
+      // The socket for the conversation on screen is replaced when somebody
+      // opens a different one. The new socket must not inherit the old claim,
+      // or opening a second conversation would be refused as a second one.
+      final rule = SocketOwnership();
+      final socket = Object();
+      expect(rule.claim(socket, 'alice-and-bob'), isTrue);
+      rule.release(socket);
+      expect(rule.ownerOf(socket), isNull);
+      expect(rule.claim(socket, 'the-book-club'), isTrue);
+    });
   });
 
-  test('the subscription set comes from the live session alone', () {
+  group('the service has one door', () {
     final service =
-        File('${Directory.current.path}/lib/rotelyx/rotelyx_service.dart')
-            .readAsStringSync();
+        File('lib/rotelyx/rotelyx_service.dart').readAsStringSync();
 
-    // `myPollingTags` is on a session, so a set built from it can only ever
-    // describe the conversation whose session is loaded. Anything else that
-    // ends up in `subscribe` is worth a second look by whoever changed it.
-    expect(service, contains('session.myPollingTags'),
-        reason: 'the addresses subscribed to are derived from the live '
-            'session, and that is what keeps one connection about one '
-            'conversation');
+    test('every subscription goes through the door that consults the rule',
+        () {
+      // Count the calls to the mailbox client's `subscribe`. There must be
+      // exactly one, inside `_subscribeFor`, which is the method that asks
+      // `SocketOwnership` first. A second call site is a way around the rule,
+      // whatever it is for.
+      final calls = RegExp(r'\.subscribe\(').allMatches(service).length;
+      expect(calls, 1,
+          reason: 'something subscribes to the mailbox without going through '
+              '_subscribeFor. One connection asking about several '
+              'conversations tells the mailbox they belong to one device, '
+              'which is the first thing the threat model says it cannot '
+              'learn. Route it through _subscribeFor, and if it is for '
+              'another conversation, give it a socket of its own.');
+
+      final door = RegExp(
+        r'void _subscribeFor\([^)]*\)\s*\{[\s\S]{0,600}?_ownership\.claim\(',
+      );
+      expect(door.hasMatch(service), isTrue,
+          reason: '_subscribeFor no longer consults SocketOwnership before '
+              'subscribing');
+    });
+
+    test('background conversations each open a socket of their own', () {
+      // The shape that keeps the promise: inside the function that listens on
+      // every other conversation, a new client is constructed. If somebody
+      // rewrites it to reuse the live socket, this is the line that goes.
+      final listens = RegExp(
+        r'_listenEverywhereElse\(\)[\s\S]{0,3000}?MailboxClient\(url\)',
+      );
+      expect(listens.hasMatch(service), isTrue,
+          reason: 'listening on other conversations no longer opens a '
+              'connection per conversation');
+    });
   });
 }

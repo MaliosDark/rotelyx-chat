@@ -50,6 +50,30 @@ Both, and both clean. The `LD_LIBRARY_PATH` is not optional: without it the
 tests that touch the engine fail to load it and report as failures, which looks
 like broken code and is a missing path.
 
+## One rule that is not obvious from the code
+
+**One mailbox connection asks about one conversation.** If you need the
+application to listen on more than one conversation, open more than one
+connection. Never add a second conversation's addresses to a socket that is
+already listening for another.
+
+The reason is not in the code you will be editing, which is why it is here. The
+mailbox holds every address and that is fine, because addresses rotate and one
+on its own names nobody. What it must never be handed is which addresses go
+together: a connection subscribed to two conversations has told the mailbox
+those conversations belong to one device, and that is the first thing the
+threat model promises the mailbox cannot learn. Every page on the website and
+the privacy policy make that promise in Ideoa Labs' name.
+
+It has been done twice, both times for a good reason (a call in a group nobody
+had open; messages arriving in conversations not on screen), both times every
+test passed, and both times it came out. `SocketOwnership` in
+`rotelyx_service.dart` is the object every subscription now goes through, it
+refuses a second conversation, and
+`test/one_connection_never_asks_about_two_conversations_test.dart` checks it
+and counts the call sites. If that test fails on your change, the change is
+the problem, not the test.
+
 ## What the tests are for
 
 Several of them read the source rather than exercise it, and they are named
