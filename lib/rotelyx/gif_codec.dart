@@ -48,6 +48,20 @@ bool isGif(Uint8List bytes) =>
     (bytes[4] == 0x37 || bytes[4] == 0x39) && // 7 or 9
     bytes[5] == 0x61; // a
 
+/// How big an animation is, without decoding it.
+///
+/// Null when the bytes are not a GIF. The logical screen size is bytes six to
+/// nine of the header, least significant byte first, and it is there so that
+/// a row can be the right height before the first frame exists. See
+/// `photoSize` for why that matters.
+({int width, int height})? gifSize(Uint8List bytes) {
+  if (!isGif(bytes) || bytes.length < 10) return null;
+  final width = bytes[6] | (bytes[7] << 8);
+  final height = bytes[8] | (bytes[9] << 8);
+  if (width <= 0 || height <= 0) return null;
+  return (width: width, height: height);
+}
+
 /// One frame, as pixels and how long it stays.
 class GifFrame {
   const GifFrame({

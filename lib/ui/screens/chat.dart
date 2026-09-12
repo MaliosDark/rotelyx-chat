@@ -262,6 +262,21 @@ class _ChatScreenState extends State<ChatScreen> {
                   icon: Icons.insert_drive_file_outlined,
                   wide: true,
                   onTap: () => Navigator.of(sheet).pop(false)),
+              const SizedBox(height: Metrics.pad),
+              // What a file can be, said before somebody picks one.
+              //
+              // A photograph is shrunk to fit and a file is not, so the same
+              // limit means very different things to the two of them. Video
+              // is the case that matters: there is no encoder for it here, so
+              // anything long enough to be worth sending is refused, and
+              // finding that out after choosing is the annoying way round.
+              RxNote(
+                'A photograph is shrunk to fit. A file is sent as it is, so '
+                'it has to be under ${readableBytes(store.capabilityToken == null ? freeAttachmentBytes : maxAttachmentBytes)}. '
+                'Video is not shrunk either, so all but the shortest clips '
+                'are refused.',
+                title: 'What fits',
+              ),
             ],
           ),
         ),
@@ -274,19 +289,30 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _pickFile({bool images = false}) async {
+    // What one envelope holds, worked out before the picker opens.
+    final budget = store.capabilityToken == null
+        ? freeAttachmentBytes
+        : maxAttachmentBytes;
+
     final PickedFile? file;
     try {
-      // Picked well above what can be sent, because a picture is shrunk below
-      // and the old limit refused a camera photograph at the picker, before
-      // anything had a chance to make it smaller. Anything that is not a
-      // picture is still held to the real limit, a few lines down.
-      file = await pickFile(maxBytes: 24 * 1024 * 1024, images: images);
+      // A picture is allowed well over the budget and a file is not.
+      //
+      // A photograph is shrunk before it is sent, so holding the picker to
+      // the envelope size refused a camera photograph before anything had a
+      // chance to make it smaller. Nothing shrinks a file, so its real limit
+      // is the one to apply at the picker: refusing there costs nothing,
+      // while letting it through means reading tens of megabytes off the
+      // disk in order to say no afterwards.
+      file = await pickFile(
+          maxBytes: images ? 24 * 1024 * 1024 : budget, images: images);
     } on NoFilePicker catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('${e.message}. The mailbox pads envelopes to a fixed '
-              'ladder and the largest is 8 MB, so anything over 5 MB is refused '
-              'before it is sealed.')));
+          content: Text('${e.message}. One message holds '
+              '${readableBytes(budget)}, because the mailbox pads every '
+              'envelope to a fixed ladder and refuses anything over the top '
+              'of it.')));
       return;
     }
 
@@ -330,8 +356,8 @@ class _ChatScreenState extends State<ChatScreen> {
       final fitted = await fitAnimation(bytes, maxBytes: budget);
       if (fitted != null) {
         if (!mounted || !_live) return;
-        rotelyx.send(
-            Attachment(name: name, mime: 'image/gif', bytes: fitted).encode());
+        _sendAttachment(
+            Attachment(name: name, mime: 'image/gif', bytes: fitted));
         return;
       }
       // A single frame animation, or one that will not come down far enough.
@@ -368,7 +394,26 @@ class _ChatScreenState extends State<ChatScreen> {
     // lands in whichever conversation is live, which for a file is worse than
     // for a sentence.
     if (!_live) return;
-    rotelyx.send(Attachment(name: name, mime: mime, bytes: bytes).encode());
+    _sendAttachment(Attachment(name: name, mime: mime, bytes: bytes));
+  }
+
+  /// Send a file, through the same timer a sentence goes through.
+  ///
+  /// # Why this is not `rotelyx.send` directly
+  ///
+  /// It was, and a picture set to burn did not. The timer is applied in
+  /// `_send`, which is the path a typed message takes, and an attachment
+  /// went straight past it: the flame was lit, the composer was orange, and
+  /// what arrived at the other end stayed there for good.
+  ///
+  /// A picture is the thing people most mean to have disappear, so this is
+  /// the worst place for that gap to have been.
+  void _sendAttachment(Attachment file) {
+    final seconds = _burnSeconds;
+    final body = file.encode();
+    rotelyx.send(seconds == null
+        ? body
+        : Ephemeral.wrap(seconds: seconds, body: body).encode());
   }
 
   /// Bring someone else in.

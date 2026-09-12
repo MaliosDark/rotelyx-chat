@@ -293,7 +293,8 @@ Future<Uint8List?> _redraw(ui.Image source, int w, int h) async {
   }
 }
 
-Future<Uint8List?> shrinkToAvatar(Uint8List bytes, {int side = _side}) async {
+Future<Uint8List?> shrinkToAvatar(Uint8List bytes,
+    {int side = _side, int maxBytes = _maxBytes}) async {
   ui.Image source;
   try {
     final codec = await ui.instantiateImageCodec(bytes);
@@ -319,11 +320,43 @@ Future<Uint8List?> shrinkToAvatar(Uint8List bytes, {int side = _side}) async {
     final shrunk =
         await recorder.endRecording().toImage(side, side);
     try {
-      // PNG because it is what `toByteData` offers and what every platform
-      // decodes without argument. An avatar at this size is small either way.
+      // PNG first, because it is lossless and because a drawn avatar, a logo
+      // or a letter on a flat ground is both smaller and sharper that way.
       final data = await shrunk.toByteData(format: ui.ImageByteFormat.png);
       if (data == null) return null;
-      return data.buffer.asUint8List();
+      final png = data.buffer.asUint8List();
+      if (png.length <= maxBytes) return png;
+
+      // A photograph, which PNG is the wrong format for.
+      //
+      // `toByteData` offers PNG and raw pixels and nothing else, and a
+      // photograph at 256 square is well over a hundred kilobytes losslessly.
+      // So picking a face off a camera roll was refused, with a message that
+      // told somebody to find a smaller photograph. Nobody has one.
+      //
+      // Down to a palette instead. `gif_codec.dart` is here for animations
+      // and its quantiser does not care how many frames there are: one frame
+      // is a still GIF, which every platform draws through `Image.memory`
+      // without being told, including a build from before this existed. A
+      // face at 256 colours is a few kilobytes and looks like the face.
+      final pixels = await shrunk.toByteData(format: ui.ImageByteFormat.rawRgba);
+      if (pixels == null) return png;
+
+      final frame = GifFrame(
+        rgba: pixels.buffer.asUint8List(),
+        width: side,
+        height: side,
+        delay: const Duration(milliseconds: 100),
+      );
+
+      for (final colours in const [256, 192, 128, 96, 64]) {
+        final small = encodeGif([frame], colours: colours);
+        if (small.length <= maxBytes) return small;
+      }
+
+      // Nothing fitted, which at this size should not happen. The PNG goes
+      // back so the caller reports a size rather than a failure to decode.
+      return png;
     } finally {
       shrunk.dispose();
     }

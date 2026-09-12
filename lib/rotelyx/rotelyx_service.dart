@@ -173,6 +173,17 @@ class RotelyxService {
   final _stateChanges = StreamController<RotelyxState>.broadcast();
 
   Stream<RotelyxMessage> get messages => _messages.stream;
+
+  /// A message that arrived in a conversation which is not the one on screen.
+  ///
+  /// Separate from [messages] because that one says nothing about where it
+  /// belongs: everything listening to it reads [conversationId], which names
+  /// the conversation being persisted to. This one carries its own.
+  Stream<({String conversationId, StoredMessage message})> get arrivedElsewhere =>
+      _elsewhere.stream;
+  final _elsewhere =
+      StreamController<({String conversationId, StoredMessage message})>
+          .broadcast();
   Stream<RotelyxState> get stateChanges => _stateChanges.stream;
 
   /// Something the person needs told while the conversation is still working.
@@ -1633,6 +1644,47 @@ class RotelyxService {
   /// Whether a reconnection is already under way.
   bool _reopening = false;
 
+  /// The conversations this device listens on besides the one on screen.
+  ///
+  /// # Why there was only ever one
+  ///
+  /// A session is an MLS state and the application held exactly one, swapping
+  /// it when somebody opened a different conversation. So only the
+  /// conversation on screen was listening: everything else sat in the mailbox
+  /// until it was opened, and opening the application showed yesterday's
+  /// messages until you tapped into each chat. For a messenger that is not a
+  /// shortcoming, it is the thing not working.
+  ///
+  /// # Why this is bounded, and by what
+  ///
+  /// Not by connections. The mailbox meters those, sixty a minute with a
+  /// burst of twenty, and polling is what multiplies them: one socket with
+  /// subscription frames costs nothing against that. What it does meter is
+  /// tags, 64 to a subscription and **256 to a connection**.
+  ///
+  /// A conversation's polling set is 40 tags, because the lookback is 40
+  /// hours, so subscribing every conversation in full would fit six of them.
+  /// The lookback exists for a phone that was off; once connected and drained
+  /// it is dead weight. So a background conversation holds two tags, this
+  /// hour and the last, and 256 divided by two is a hundred and twenty eight
+  /// conversations rather than six.
+  ///
+  /// # What these may and may not do
+  ///
+  /// Receive, and nothing else. A background session never commits, never
+  /// rekeys and never sends: those move the epoch, and two ends that move it
+  /// without seeing each other is the failure this application has spent the
+  /// longest on. It is written down after every message, because receiving
+  /// advances the ratchet and a copy that is behind cannot read what comes
+  /// next.
+  final Map<String, WasmSession> _background = {};
+
+  /// Which conversation a tag belongs to, for routing an arriving envelope.
+  ///
+  /// The delivery frame carries the envelope and nothing else, and the tag is
+  /// the first thirty two bytes of it. See `RotelyxWasm.tagOf`.
+  final Map<String, String> _tagOwner = {};
+
   /// Conversations already told what this person looks like, this run.
   ///
   /// A picture is up to 96 KiB and does not change between two openings of the
@@ -1715,6 +1767,7 @@ class RotelyxService {
     await _mailbox?.close();
     _mailbox = null;
     _listening.clear();
+    _forgetBackground();
 
     // A fresh connection is a fresh question. Whether a mailbox can wake a
     // device is a property of how the operator started it, and one that is
@@ -2014,6 +2067,15 @@ class RotelyxService {
       _peerConfirm(envelopeB64);
       return;
     }
+
+    // Somebody else's conversation, on the same socket.
+    //
+    // One socket carries all of them, and the delivery frame says only "here
+    // is an envelope". The tag is the first thirty two bytes of it, so which
+    // conversation this belongs to is already in hand. Opened with that
+    // conversation's own session and written down there, which is what makes
+    // a message arrive while somebody is looking at a different chat.
+    if (_openInBackground(envelopeB64, payload)) return;
 
     try {
       final plaintext = session.receive(payload);
@@ -2378,7 +2440,199 @@ class RotelyxService {
       _listening.addAll(fresh);
     }
     _subscribedBucket = _bucket();
+    unawaited(_listenEverywhereElse());
     unawaited(_publishTagsForTheExtension());
+  }
+
+  /// Listen on every other conversation as well as the one on screen.
+  ///
+  /// Two tags each, this hour and the last, which is what a connected device
+  /// needs: the lookback is for one that was off. See [_background] for the
+  /// arithmetic that makes the difference between six conversations and a
+  /// hundred and twenty eight.
+  ///
+  /// The hour before as well as this one, because a message deposited a
+  /// moment before the clock rolled is addressed to the old tag and would
+  /// otherwise wait until the conversation was opened, which is the whole
+  /// fault this exists to remove.
+  Future<void> _listenEverywhereElse() async {
+    final key = store.key;
+    if (key == null || _mailbox == null) return;
+
+    final wanted = <String>[];
+
+    for (final id in store.conversationIds) {
+      if (id == _persistId) continue;
+      if (id == _peerId(_persistId ?? '')) continue;
+
+      var session = _background[id];
+      if (session == null) {
+        final blob = store.sessionBlob(id);
+        if (blob == null) continue;
+        try {
+          session = RotelyxWasm.unsealSession(blob, key);
+        } on Object {
+          // A session that will not open is one this conversation cannot use
+          // in the background either. Opening it is what reports that, and
+          // this is not the place: it happens without anybody asking.
+          continue;
+        }
+        _background[id] = session;
+      }
+
+      // A lookback of one, which is this hour and the last, rather than the
+      // forty a conversation on screen asks for. The tag budget is the
+      // constraint and this is where it is spent.
+      try {
+        for (final tag in session.myPollingTags(1)) {
+          if (_listening.contains(tag)) continue;
+          _tagOwner[tag] = id;
+          wanted.add(tag);
+        }
+      } on Object {
+        // A session that cannot name its tags yet contributes none.
+      }
+    }
+
+    if (wanted.isEmpty) return;
+
+    // In batches, because a subscription carries 64 tags and the connection
+    // carries 256. Over the ceiling the mailbox refuses the frame rather than
+    // trimming it, and a refused subscription is a conversation that goes
+    // quiet with nothing saying why.
+    const perFrame = 64;
+    final room = 256 - _listening.length;
+    final sending = wanted.length > room ? wanted.sublist(0, room) : wanted;
+
+    for (var at = 0; at < sending.length; at += perFrame) {
+      final slice = sending.sublist(
+          at, at + perFrame > sending.length ? sending.length : at + perFrame);
+      _mailbox?.subscribe(slice);
+      _listening.addAll(slice);
+    }
+  }
+
+  /// Open an envelope that belongs to a conversation which is not on screen.
+  ///
+  /// Returns whether it was handled here, so the caller stops.
+  ///
+  /// # What this deliberately does not do
+  ///
+  /// Commit, rekey, or send. Those move the epoch, and two ends that move it
+  /// without seeing each other is the longest running failure this
+  /// application has had. A background conversation receives and writes down
+  /// and that is all; anything it owes is paid when somebody opens it and
+  /// says something.
+  bool _openInBackground(String envelopeB64, String payload) {
+    final String tag;
+    try {
+      tag = RotelyxWasm.tagOf(envelopeB64);
+    } on Object {
+      return false;
+    }
+
+    final id = _tagOwner[tag];
+    if (id == null) return false;
+
+    final session = _background[id];
+    if (session == null) return false;
+
+    final plaintext;
+    try {
+      plaintext = session.receive(payload);
+    } on Object {
+      // Left for the live path to try, which is what happened before this
+      // existed. A tag this device claims and cannot open is worth no louder
+      // a failure than that.
+      return false;
+    }
+
+    // A commit, or something with nothing in it to write down. The ratchet
+    // moved either way, so it is sealed before anything else: losing a commit
+    // means reopening at the epoch before the one this copy is at.
+    if (plaintext == null || plaintext.refused != null) {
+      _sealBackground(id, session);
+      _acknowledge(envelopeB64);
+      return true;
+    }
+
+    final sender = plaintext.fromKey;
+    if (sender != null &&
+        (store.load(id)?.blocked.contains(sender) ?? false)) {
+      _sealBackground(id, session);
+      _acknowledge(envelopeB64);
+      return true;
+    }
+
+    // Signals are for the conversation they belong to and most of them are
+    // about what is on screen: a read receipt, a reaction, somebody typing a
+    // picture. Written down where they can be, and otherwise let go of.
+    if (Signal.decode(plaintext.text) != null) {
+      _sealBackground(id, session);
+      _acknowledge(envelopeB64);
+      return true;
+    }
+
+    final conversation = store.load(id);
+    if (conversation == null) {
+      _sealBackground(id, session);
+      _acknowledge(envelopeB64);
+      return true;
+    }
+
+    final message = StoredMessage(
+      text: plaintext.text,
+      mine: false,
+      at: DateTime.now(),
+      author: plaintext.from ?? '',
+    );
+    conversation.messages.add(message);
+    conversation.lastActivity = message.at;
+    conversation.unread = true;
+    store.save(conversation);
+
+    _sealBackground(id, session);
+    _acknowledge(envelopeB64);
+
+    // Announced on its own stream rather than on [messages].
+    //
+    // That one carries what arrived in the conversation being persisted to,
+    // and everything listening reads `conversationId` to know where it
+    // belongs. A message from elsewhere pushed onto it would be filed, shown
+    // and notified about as if it were the conversation on screen.
+    _elsewhere.add((conversationId: id, message: message));
+    _stateChanges.add(state);
+    return true;
+  }
+
+  /// Write a background session back, because receiving moved its ratchet.
+  void _sealBackground(String id, WasmSession session) {
+    try {
+      store.saveSession(id, session);
+      store.setSessionSealedClean(id, true);
+    } on Object {
+      // A session that will not seal is reopened from an older blob and
+      // rekeyed, which is the behaviour from before this existed rather than
+      // a new failure.
+    }
+  }
+
+  /// Let go of every background session.
+  ///
+  /// Sealed on the way out, because each has been receiving and a copy left
+  /// behind cannot read what comes next.
+  void _forgetBackground() {
+    for (final entry in _background.entries) {
+      try {
+        store.saveSession(entry.key, entry.value);
+      } on Object {
+        // A session that will not seal is reopened from an older blob and
+        // rekeyed, which is the behaviour from before this existed.
+      }
+      entry.value.dispose();
+    }
+    _background.clear();
+    _tagOwner.clear();
   }
 
   /// Leave a wake ticket under each tag just subscribed to.
@@ -2651,6 +2905,7 @@ class RotelyxService {
     _persistId = conversationId;
     _role = PairingRole.host;
     _listening.clear();
+    _tagOwner.clear();
 
     // The row in the list, written on first open rather than at install, so a
     // device nobody has used yet does not show a conversation nobody started.
@@ -2724,7 +2979,26 @@ class RotelyxService {
     //
     // Reusing it leaves a cold start as the only thing that unseals, which is
     // the only case where a copy really can be behind.
-    final reusing = _persistId == conversationId && _session != null;
+    var reusing = _persistId == conversationId && _session != null;
+
+    // Already open, in the background.
+    //
+    // It has been receiving on the same socket and its ratchet has moved, so
+    // reading the blob back would be reading a copy of a session this process
+    // already holds. Worse, unsealing is what records a rekey as owed, and a
+    // session that never left memory owes nothing: paying it would move the
+    // epoch for no reason, which is the fault that split two ends apart.
+    final held = _background.remove(conversationId);
+    if (held != null && !reusing) {
+      for (final tag in _tagOwner.entries
+          .where((e) => e.value == conversationId)
+          .map((e) => e.key)
+          .toList()) {
+        _tagOwner.remove(tag);
+      }
+      _useSession(held);
+      reusing = true;
+    }
 
     if (!reusing) {
       try {
@@ -2754,6 +3028,7 @@ class RotelyxService {
     _persistId = conversationId;
     _role = PairingRole.host;
     _listening.clear();
+    _tagOwner.clear();
 
     // Back to the meeting place, when this device is the one that answers
     // there. `_resubscribe` below covers the conversation's own tags and knew

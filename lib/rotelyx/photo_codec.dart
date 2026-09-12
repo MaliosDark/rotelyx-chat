@@ -619,6 +619,28 @@ bool isRotelyxPhoto(Uint8List bytes) {
   return true;
 }
 
+/// How big it is, without decoding it.
+///
+/// Null when the bytes are not one of ours.
+///
+/// # Why this matters more than it sounds
+///
+/// A transcript scrolls to the bottom when a message arrives, one frame
+/// later. A picture is not decoded by then, so the row reserved a guessed
+/// shape, and when the real one arrived the height changed underneath the
+/// scroll that had already happened: the newest message ended up above the
+/// fold, which on a picture is most of it.
+///
+/// The size is in the header, four bytes in. Reading it costs nothing and the
+/// row is the right height from the first frame, so nothing moves.
+({int width, int height})? photoSize(Uint8List bytes) {
+  if (!isRotelyxPhoto(bytes)) return null;
+  final width = bytes[4] | (bytes[5] << 8);
+  final height = bytes[6] | (bytes[7] << 8);
+  if (width <= 0 || height <= 0) return null;
+  return (width: width, height: height);
+}
+
 /// Decode one, or null when the bytes are not a picture of ours.
 DecodedPhoto? decodePhoto(Uint8List bytes) {
   if (!isRotelyxPhoto(bytes)) return null;

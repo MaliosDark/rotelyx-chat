@@ -349,6 +349,19 @@ abstract interface class RotelyxEngine {
   /// format.
   String receiptFor(String envelopeB64);
 
+  /// Which tag an envelope was deposited under.
+  ///
+  /// One socket carries every conversation somebody has, which is what makes
+  /// a message arrive while they are looking at a different one. The delivery
+  /// frame says only "here is an envelope", so this is how a client knows
+  /// where it belongs.
+  ///
+  /// Nothing is decrypted. The tag is the first thirty two bytes and is not
+  /// encrypted, because the mailbox files by it and could not carry anything
+  /// otherwise. Read through the engine rather than in Dart so that the
+  /// layout is known in one place.
+  String tagOf(String envelopeB64);
+
   String sealUnder(String tagHex, String payloadB64);
   String openUnder(String envelopeB64, String tagHex);
 

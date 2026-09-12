@@ -33,6 +33,8 @@ extension type _Ns._(JSObject _) implements JSObject {
 
   external String rendezvousTag(String phrase);
   external String receiptFor(String envelopeB64);
+
+  external String tagOf(String envelopeB64);
   external String sealUnder(String tagHex, String payloadB64);
   external String openUnder(String envelopeB64, String tagHex);
 
@@ -403,6 +405,9 @@ class _WebEngine implements RotelyxEngine {
   String rendezvousTag(String phrase) => _require().rendezvousTag(phrase);
   @override
   String receiptFor(String envelopeB64) => _require().receiptFor(envelopeB64);
+
+  @override
+  String tagOf(String envelopeB64) => _require().tagOf(envelopeB64);
   @override
   String sealUnder(String tagHex, String payloadB64) =>
       _require().sealUnder(tagHex, payloadB64);

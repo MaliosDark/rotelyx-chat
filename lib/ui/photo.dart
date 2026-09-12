@@ -17,6 +17,7 @@ import 'package:flutter/material.dart';
 
 import '../platform/save_photo.dart';
 import '../rotelyx/attachment.dart';
+import '../rotelyx/gif_codec.dart';
 import '../rotelyx/photo_codec.dart';
 import 'theme.dart';
 
@@ -111,19 +112,37 @@ class _RotelyxPhotoState extends State<RotelyxPhoto> {
   @override
   Widget build(BuildContext context) {
     if (_failed) {
-      // Not ours. An older build sent a PNG and it should still be shown.
-      return Image.memory(
+      // Not ours: an animation, or a PNG from an older build. Still drawn,
+      // and still in the right shape while it decodes where the format says
+      // what that is.
+      final image = Image.memory(
         widget.bytes,
         fit: widget.fit,
         errorBuilder: (context, _, __) =>
             widget.onFailed?.call(context) ?? const SizedBox.shrink(),
       );
+
+      final size = gifSize(widget.bytes);
+      if (size == null) return image;
+      return AspectRatio(
+        aspectRatio: size.width / size.height,
+        child: image,
+      );
     }
 
     final image = _image;
     if (image == null) {
+      // The right shape before there is anything to draw.
+      //
+      // A transcript scrolls to the bottom one frame after a message arrives,
+      // and a picture is not decoded by then. A guessed shape meant the row
+      // changed height underneath the scroll that had already happened, and
+      // the picture ended up above the fold, which on a picture is most of
+      // it. The size is in the header of both formats and reading it costs
+      // nothing, so the row is right from the first frame and nothing moves.
+      final size = photoSize(widget.bytes) ?? gifSize(widget.bytes);
       return AspectRatio(
-        aspectRatio: 4 / 3,
+        aspectRatio: size == null ? 4 / 3 : size.width / size.height,
         child: Container(color: Colors.black.withValues(alpha: 0.18)),
       );
     }

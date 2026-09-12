@@ -615,6 +615,10 @@ class _NativeEngine implements RotelyxEngine {
       _string(_call({'op': 'mailbox.receiptFor', 'envelope': envelopeB64}));
 
   @override
+  String tagOf(String envelopeB64) =>
+      _string(_call({'op': 'mailbox.tagOf', 'envelope': envelopeB64}));
+
+  @override
   String sealUnder(String tagHex, String payloadB64) =>
       _string(_call({'op': 'rendezvous.seal', 'tag': tagHex, 'payload': payloadB64}));
 

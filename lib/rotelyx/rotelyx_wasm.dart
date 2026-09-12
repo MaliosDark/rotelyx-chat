@@ -97,6 +97,10 @@ class RotelyxWasm {
   /// Not a secret channel and not authentication: whoever arrives first
   /// answers. Only the safety number detects that.
   static String receiptFor(String envelopeB64) => engine.receiptFor(envelopeB64);
+
+  /// Which tag an envelope arrived under, so one socket can serve every
+  /// conversation. See `RotelyxEngine.tagOf`.
+  static String tagOf(String envelopeB64) => engine.tagOf(envelopeB64);
   static String rendezvousTag(String phrase) => engine.rendezvousTag(phrase);
 
   static String sealUnder(String tagHex, String payloadB64) =>

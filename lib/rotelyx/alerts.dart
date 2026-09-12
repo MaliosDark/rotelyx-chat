@@ -41,6 +41,10 @@ class Alerts {
   final Watch _watch = PlatformWatch();
   StreamSubscription<RotelyxMessage>? _messages;
 
+  /// What arrived in a conversation that is not the one on screen.
+  StreamSubscription<({String conversationId, StoredMessage message})>?
+      _elsewhere;
+
   /// The conversation on screen, or null when none is.
   ///
   /// Set by the conversation screen as it opens and cleared as it closes.
@@ -69,6 +73,15 @@ class Alerts {
   void start() {
     _messages ??= rotelyx.messages.listen(_arrived);
 
+    // And what arrives in a conversation that is not the one on screen.
+    //
+    // One socket carries all of them now, so a message can land in any. That
+    // stream carries its own conversation rather than leaving it to be
+    // guessed from whichever is live, which is the whole reason it is a
+    // second one.
+    _elsewhere ??= rotelyx.arrivedElsewhere.listen(
+        (row) => _arrivedIn(row.conversationId, row.message.text));
+
     // The watch asks this application for what it shows, so somebody has to be
     // listening before a wrist is raised. It holds no key and reaches no
     // server: see `lib/platform/watch_native.dart`.
@@ -91,6 +104,8 @@ class Alerts {
   Future<void> stop() async {
     await _messages?.cancel();
     _messages = null;
+    await _elsewhere?.cancel();
+    _elsewhere = null;
   }
 
   /// Ask for permission, once there is a reason to.
@@ -175,6 +190,17 @@ class Alerts {
     final id = rotelyx.conversationId;
     if (id == null) return;
 
+    await _arrivedIn(id, message.text);
+  }
+
+  /// The same, for a message that named its own conversation.
+  ///
+  /// One socket carries every conversation, so a message can land in any of
+  /// them. The stream this comes from says which, rather than leaving it to
+  /// be read off whichever happens to be live.
+  Future<void> _arrivedIn(String id, String text) async {
+    if (Signal.isControl(text)) return;
+
     final conversation = store.load(id);
     if (conversation == null) return;
 
@@ -201,7 +227,7 @@ class Alerts {
     await _notifier.show(Notice(
       conversationId: id,
       sender: conversation.displayTitle,
-      body: preview(message.text),
+      body: preview(text),
       picture: conversation.picture,
       showContent: showContentOnLockScreen,
       // Muted still appears in the shade, silently. Removing it entirely would
