@@ -2147,7 +2147,15 @@ class RotelyxService {
     _mailbox = null;
     _listening.clear();
     _listenOrder.clear();
-    _forgetBackground();
+    // The background sockets stay. They used to be closed here and reopened
+    // a moment later by `_listenEverywhereElse`, which made every switch
+    // between two conversations nine new connections at once. The mailbox
+    // admits twenty in a burst per address and sixty a minute; two switches
+    // and the rotation below emptied that, and the next socket to ask was
+    // refused, which is a conversation stuck on "reconnecting" for as long
+    // as the backoff lasts. `_listenEverywhereElse` reconciles the set after
+    // the switch: the newly live conversation's socket is dropped, the rest
+    // are kept as they are.
 
     // A fresh connection is a fresh question. Whether a mailbox can wake a
     // device is a property of how the operator started it, and one that is
@@ -3091,9 +3099,9 @@ class RotelyxService {
     _listRetry = null;
     if (!_watchingTheList) return;
     _watchingTheList = false;
-    // The sockets go, the sessions are sealed on the way out. The conversation
-    // being opened builds its own, which is what `resume` does.
-    _forgetBackground();
+    // The sockets stay: the conversation being opened takes over the one for
+    // itself and `_listenEverywhereElse` keeps the rest, which is what makes
+    // opening a group one new connection rather than nine.
   }
 
   /// One line to the device log, for reading back over adb.
@@ -3342,7 +3350,12 @@ class RotelyxService {
   /// round trip. Two sockets turning every ten seconds is twelve new
   /// connections a minute, a fifth of what the mailbox allows an address,
   /// which leaves room for everything else that reconnects.
-  static const _visitLength = Duration(seconds: 10);
+  /// Ten seconds when this was written, and that was fine for sockets that
+  /// never connected. Two fresh connections every ten seconds is a fifth of
+  /// the mailbox's sustained allowance spent on nothing; a visit now lasts
+  /// long enough to collect and to matter, and a conversation that turns out
+  /// to be talking becomes recent and holds a socket from then on.
+  static const _visitLength = Duration(seconds: 45);
 
   /// The conversations currently being visited, and when each visit began.
   final Map<String, DateTime> _visiting = {};
@@ -3744,31 +3757,47 @@ class RotelyxService {
     }
     if (text.trim().isEmpty) return false;
 
+    final message =
+        RotelyxMessage(text: text, mine: true, at: DateTime.now(),
+            delivery: Delivery.sending);
+
+    // On the screen first, sealed second.
+    //
+    // Sealing a message for a group of fourteen is fourteen envelopes of
+    // post-quantum wrapping, done on this thread, and it took long enough
+    // that the bubble appeared a beat after the button was pressed and the
+    // composer still held the text. That reads as broken, so people press
+    // again, and every press sent the same message once more: the trace
+    // showed six copies two hundred milliseconds apart. The message is shown
+    // as sending the moment it is asked for, the frame paints, and the
+    // sealing runs after it. A refusal comes back onto the same bubble.
+    _emit(message);
+    Future<void>(() => _seal(session, message));
+    return true;
+  }
+
+  /// The half of [send] that costs something, after the screen has moved on.
+  void _seal(WasmSession session, RotelyxMessage message) {
     // Before the first word this device says, and never for merely opening.
     rekeyIfOwed();
     _trace('send: epoch ${session.epoch} members ${session.memberCount} '
         'mailbox=${_mailbox?.isOpen} holding=${session.isHoldingACommit()}');
 
-    final message =
-        RotelyxMessage(text: text, mine: true, at: DateTime.now(),
-            delivery: Delivery.sending);
-
     try {
-      final ciphertext = session.send(text);
+      final ciphertext = session.send(message.text);
       final envelopes = session.sealForGroup(ciphertext);
       _pending[message] = envelopes.length;
       for (final envelope in envelopes) {
         _mailbox?.deposit(envelope);
       }
+      _persist();
     } on Object catch (e) {
       lastError = 'could not send: $e';
       _trace('send: failed: $e');
       message.delivery = Delivery.refused;
-      return false;
+      _stateChanges.add(state);
+      _notices.add('That message did not go: $e');
     }
-
-    _emit(message);
-    return true;
   }
 
   void _depositRendezvous(Map<String, Object?> payload) {
@@ -4112,6 +4141,10 @@ class RotelyxService {
 
   Future<void> dispose() async {
     _rotation?.cancel();
+    _listRetry?.cancel();
+    _wantsListWatch = false;
+    _watchingTheList = false;
+    _forgetBackground();
     for (final listener in _mailboxListeners) {
       await listener.cancel();
     }

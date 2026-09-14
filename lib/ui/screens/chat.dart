@@ -1095,11 +1095,17 @@ class _ChatScreenState extends State<ChatScreen> {
         ? body
         : Ephemeral.wrap(seconds: seconds, body: body).encode();
 
-    if (rotelyx.send(wrapped)) {
-      _input.clear();
-      setState(() => _replyingTo = null);
-      // No clock is started here. Our copy waits for them to read it, which is
-      // what makes both countdowns run from the same moment.
+    // Cleared before the send rather than after it. The send used to block
+    // this thread while it sealed the message for every member, and the text
+    // sat in the composer the whole time: a second press sent it again, and
+    // a third, and he saw six copies of one line.
+    _input.clear();
+    setState(() => _replyingTo = null);
+    // No clock is started here. Our copy waits for them to read it, which is
+    // what makes both countdowns run from the same moment.
+    if (!rotelyx.send(wrapped)) {
+      // Nothing was shown, so the words go back where they were.
+      _input.text = text;
     }
   }
 
