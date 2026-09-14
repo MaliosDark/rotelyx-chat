@@ -2164,7 +2164,8 @@ class RotelyxService {
     // would stay hidden on a mailbox that had since gained the key.
     mailboxCanWake = true;
 
-    final mailbox = MailboxClient(mailboxUrl);
+    final mailbox = MailboxClient(mailboxUrl,
+        frontUrl: _config.frontUrl, frontKey: _config.frontKey);
     final previous = _mailbox;
     if (previous != null) _ownership.release(previous);
     _mailbox = mailbox;
@@ -3283,7 +3284,8 @@ class RotelyxService {
       return false;
     }
 
-    final socket = MailboxClient(url);
+    final socket = MailboxClient(url,
+        frontUrl: _config.frontUrl, frontKey: _config.frontKey);
     final token = RotelyxStore.instance.capabilityToken;
     if (token != null) socket.holdToken(token);
     _backgroundSockets[id] = socket;

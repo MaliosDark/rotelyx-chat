@@ -26,7 +26,7 @@ import 'engine/api.dart';
 import 'engine/backend.dart' as backend;
 
 export 'engine/api.dart'
-    show RotelyxEngineError, RotelyxInvitation, RotelyxUnavailable;
+    show RotelyxEngineError, RotelyxInvitation, RotelyxUnavailable, FrontSession;
 
 /// A session, under the name the rest of the application already used.
 typedef WasmSession = RotelyxSession;

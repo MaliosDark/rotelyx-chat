@@ -48,6 +48,7 @@ import 'dart:convert';
 import 'push.dart';
 
 import '../platform/socket.dart';
+import 'front_connection.dart';
 
 /// A frame the mailbox pushed to us.
 class MailboxEnvelope {
@@ -66,9 +67,18 @@ class MailboxEnvelope {
 const int blindTokenMinimum = 240;
 
 class MailboxClient {
-  MailboxClient(this.url);
+  MailboxClient(this.url, {this.frontUrl, this.frontKey});
 
   final String url;
+
+  /// When set, this client opens no socket of its own: it runs as one sealed
+  /// session on the device's shared connection to the front at [frontUrl],
+  /// sealed to [frontKey]. Every other method behaves the same. See
+  /// `docs/FRONT.md` and `FrontConnection`.
+  final String? frontUrl;
+  final String? frontKey;
+  FrontChannel? _channel;
+  bool get _throughFront => frontUrl != null && frontKey != null;
 
   TextSocket? _socket;
   final _envelopes = StreamController<MailboxEnvelope>.broadcast();
@@ -108,7 +118,7 @@ class MailboxClient {
   Stream<int> get wakeInterval => _wakeInterval.stream;
   final _wakeInterval = StreamController<int>.broadcast();
 
-  bool get isOpen => _socket?.isOpen ?? false;
+  bool get isOpen => _throughFront ? (_channel != null) : (_socket?.isOpen ?? false);
 
   /// Open the socket.
   ///
@@ -129,6 +139,24 @@ class MailboxClient {
   /// subscribes on open and therefore never met it. The client that shipped
   /// could not open a mailbox at all.
   Future<void> connect() async {
+    if (_throughFront) {
+      final channel = await FrontConnection.shared(frontUrl!, frontKey!).open();
+      _channel = channel;
+      channel.inner.listen(
+        _onFrame,
+        onError: (Object why) {
+          if (!identical(_channel, channel)) return;
+          _channel = null;
+          if (!_closes.isClosed) _closes.add('$why');
+        },
+        onDone: () {
+          if (!identical(_channel, channel)) return;
+          _channel = null;
+          if (!_closes.isClosed) _closes.add('front session ended');
+        },
+      );
+      return;
+    }
     final TextSocket socket;
     try {
       socket = await connectSocket(url);
@@ -440,6 +468,15 @@ class MailboxClient {
   void revokeWake(String secret) => _send({'op': 'revokeWake', 'secret': secret});
 
   void _send(Map<String, Object?> frame) {
+    if (_throughFront) {
+      final channel = _channel;
+      if (channel == null) {
+        _errors.add('tried to send while the front session was closed');
+        return;
+      }
+      channel.sendInner(jsonEncode(frame));
+      return;
+    }
     final socket = _socket;
     if (socket == null || !socket.isOpen) {
       _errors.add('tried to send while the mailbox connection was closed');
@@ -449,6 +486,8 @@ class MailboxClient {
   }
 
   Future<void> close() async {
+    _channel?.close();
+    _channel = null;
     await _socket?.close();
     _socket = null;
     await _envelopes.close();

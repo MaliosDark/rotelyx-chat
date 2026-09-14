@@ -97,7 +97,7 @@ void main() {
       // now calls this function from elsewhere, and a call site is not where
       // a socket is made.
       final listens = RegExp(
-        r'Future<void> _listenEverywhereElse\(\) async[\s\S]{0,8000}?MailboxClient\(url\)',
+        r'Future<void> _listenEverywhereElse\(\) async[\s\S]{0,8000}?MailboxClient\(url',
       );
       expect(listens.hasMatch(service), isTrue,
           reason: 'listening on other conversations no longer opens a '

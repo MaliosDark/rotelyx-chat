@@ -40,6 +40,8 @@ class RotelyxConfig {
     required this.lookback,
     this.notifierKey,
     this.room,
+    this.frontUrl,
+    this.frontKey,
   });
 
   /// Ideoa Labs production. The mailbox is store-and-forward for peers that are
@@ -86,6 +88,17 @@ class RotelyxConfig {
   /// the relay URL does. So it is configured beside the relay URL, and read
   /// from `/room` by whoever sets it.
   final String? room;
+
+  /// A front to reach the mailbox through, or null to connect straight to it.
+  ///
+  /// When set, the whole device runs its conversations as sealed sessions
+  /// inside one connection to this URL, so the mailbox sees sessions with no
+  /// address and no way to group them. `frontKey` is the mailbox's public
+  /// front key, base64, which the front serves at `/front-key`. Both null is
+  /// the behaviour every build has had: one connection per conversation
+  /// straight to the mailbox. See `docs/FRONT.md`.
+  final String? frontUrl;
+  final String? frontKey;
 
   /// The notifier's public key, base64, or null where there is none.
   ///
