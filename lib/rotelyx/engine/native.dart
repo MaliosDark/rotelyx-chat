@@ -638,6 +638,19 @@ class _NativeEngine implements RotelyxEngine {
       _call({'op': 'rendezvous.open', 'envelope': envelopeB64, 'tag': tagHex}));
 
   @override
+  FrontSession openFront(String frontKeyB64, String sessionIdB64) {
+    final reply = _call({
+      'op': 'front.open',
+      'key': frontKeyB64,
+      'id': sessionIdB64,
+    }) as Map<String, dynamic>;
+    return _NativeFrontSession(
+      (reply['handle'] as num).toInt(),
+      reply['hello'] as String,
+    );
+  }
+
+  @override
   String sealWakeTicket(
           String notifierKeyB64, String kind, String token, int hour) =>
       _string(_call({
@@ -659,3 +672,22 @@ class _NativeEngine implements RotelyxEngine {
 
 /// The engine for this platform.
 RotelyxEngine createEngine() => const _NativeEngine();
+
+
+class _NativeFrontSession implements FrontSession {
+  _NativeFrontSession(this._handle, this.hello);
+  final int _handle;
+  @override
+  final String hello;
+
+  @override
+  String seal(String payloadB64) => _string(
+      _call({'op': 'front.seal', 'handle': _handle, 'payload': payloadB64}));
+
+  @override
+  String unseal(String envelopeB64) => _string(
+      _call({'op': 'front.unseal', 'handle': _handle, 'envelope': envelopeB64}));
+
+  @override
+  void free() => _call({'op': 'front.free', 'handle': _handle});
+}

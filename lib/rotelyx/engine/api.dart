@@ -392,6 +392,14 @@ abstract interface class RotelyxEngine {
   String sealUnder(String tagHex, String payloadB64);
   String openUnder(String envelopeB64, String tagHex);
 
+  /// Open a front session, sealed to the mailbox's front key.
+  ///
+  /// A phone that reaches the mailbox through a front runs one of these per
+  /// conversation, all multiplexed inside one connection. `frontKeyB64` is the
+  /// mailbox's public front key, from its `/front-key`; `sessionIdB64` is the
+  /// eight bytes the phone names this session by. See `docs/FRONT.md`.
+  FrontSession openFront(String frontKeyB64, String sessionIdB64);
+
   /// Seal this device's push token to the notifier.
   ///
   /// One per tag, and never the same string twice: what makes the mailbox
@@ -433,4 +441,24 @@ class RotelyxEngineError implements Exception {
   final String message;
   @override
   String toString() => message;
+}
+
+
+/// One sealed session a phone runs with the mailbox through a front.
+///
+/// Stateful: [seal] advances a counter, so this is a handle to state the
+/// engine holds, freed with [free] the way a session is disposed. The [hello]
+/// is the opening frame to send once, before anything else.
+abstract interface class FrontSession {
+  /// The opening frame, base64, sent once to start the session.
+  String get hello;
+
+  /// Seal one frame for the mailbox. `payloadB64` is the request bytes.
+  String seal(String payloadB64);
+
+  /// Open one reply from the mailbox, returning its bytes as base64.
+  String unseal(String envelopeB64);
+
+  /// Let the session go. A frame after this is refused.
+  void free();
 }

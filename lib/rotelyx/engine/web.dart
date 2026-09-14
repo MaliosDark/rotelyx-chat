@@ -342,6 +342,12 @@ class _WebSession implements RotelyxSession {
 }
 
 class _WebEngine implements RotelyxEngine {
+  @override
+  FrontSession openFront(String frontKeyB64, String sessionIdB64) =>
+      throw UnsupportedError(
+          'the web build does not run through a front yet; it connects to the '
+          'mailbox directly');
+
   const _WebEngine();
 
   @override
