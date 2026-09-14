@@ -3234,6 +3234,20 @@ class RotelyxService {
         _trace('elsewhere: $id will not unseal: $e');
         return false;
       }
+      // A session reopened from storage receives but refuses to send until
+      // it is either trusted or rekeyed. It is trusted here when the blob was
+      // written after the last thing that moved it, which is the same rule
+      // `resume` applies; and when this session is later handed to the
+      // screen as the live one, sending works. It did not: the screen reused
+      // the held session as it was, untrusted, and the engine answered every
+      // send with "reopened from storage and has not rekeyed".
+      if (store.sessionSealedClean(id)) {
+        try {
+          session.trustRestoredState();
+        } on Object catch (e) {
+          _trace('elsewhere: $id not trusted: $e');
+        }
+      }
       _background[id] = session;
     }
 
@@ -3724,11 +3738,16 @@ class RotelyxService {
   /// message to exactly one member, because collection removes.
   bool send(String text) {
     final session = _session;
-    if (session == null || state != RotelyxState.joined) return false;
+    if (session == null || state != RotelyxState.joined) {
+      _trace('send: refused, session=${session != null} state=$state');
+      return false;
+    }
     if (text.trim().isEmpty) return false;
 
     // Before the first word this device says, and never for merely opening.
     rekeyIfOwed();
+    _trace('send: epoch ${session.epoch} members ${session.memberCount} '
+        'mailbox=${_mailbox?.isOpen} holding=${session.isHoldingACommit()}');
 
     final message =
         RotelyxMessage(text: text, mine: true, at: DateTime.now(),
@@ -3743,6 +3762,7 @@ class RotelyxService {
       }
     } on Object catch (e) {
       lastError = 'could not send: $e';
+      _trace('send: failed: $e');
       message.delivery = Delivery.refused;
       return false;
     }
@@ -3913,6 +3933,14 @@ class RotelyxService {
       _dropBackgroundSocket(conversationId);
       _useSession(held);
       reusing = true;
+      // Taken over as it is, which is right for the ratchet and wrong for
+      // the one thing a background session never did: send. One that could
+      // not be trusted when it was unsealed owes the group a fresh key before
+      // its first word, exactly as a session unsealed here would.
+      if (held.needsRekeyAfterRestore()) {
+        _rekeyOwed = true;
+        _trace('resume: held session owes a rekey');
+      }
     }
 
     if (!reusing) {

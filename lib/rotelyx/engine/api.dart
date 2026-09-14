@@ -278,6 +278,13 @@ abstract interface class RotelyxSession {
   /// conversations where there was one. Only a caller that seals after
   /// everything that moves the state may say this.
   void trustRestoredState();
+
+  /// Whether this reopened session still refuses to send.
+  ///
+  /// True after an unseal until [trustRestoredState] or [rekeyAfterRestore]
+  /// has run, or a commit from somebody else has settled the debt. Asked by
+  /// a caller taking over a session it did not unseal itself.
+  bool needsRekeyAfterRestore();
   List<String> beginGroupPq(List<String> hybridPublicKeys);
   void openGroupPq(String wrappedB64);
 
