@@ -171,6 +171,9 @@ import UserNotifications
         switch call.method {
         case "show": Notifications.show(call, result)
         case "clear": Notifications.clear(call, result)
+        case "chirp":
+          Notifications.chirp()
+          result(nil)
         case "permitted":
           // What iOS currently allows, which is not what was asked for: a
           // person can grant at the prompt and revoke in Settings afterwards,
@@ -307,10 +310,29 @@ import UserNotifications
     didReceive response: UNNotificationResponse,
     withCompletionHandler completionHandler: @escaping () -> Void
   ) {
+    let conversation = response.notification.request.content
+      .userInfo["conversation"] as? String ?? ""
+
+    // A plain tap opens the conversation the notification was about, which
+    // is where the message is, or the request to let somebody in. It goes
+    // as a link, the road an invitation takes, so a cold launch from the
+    // tap and a tap while running both end in the same place.
+    if response.actionIdentifier == UNNotificationDefaultActionIdentifier {
+      if !conversation.isEmpty {
+        let link = "rotelyx://open/" + (conversation.addingPercentEncoding(
+          withAllowedCharacters: .urlPathAllowed) ?? conversation)
+        if let links = links {
+          links.invokeMethod("link", arguments: link)
+        } else {
+          launchedBy = link
+        }
+      }
+      completionHandler()
+      return
+    }
+
     guard response.actionIdentifier == Notifications.replyAction,
           let typed = response as? UNTextInputNotificationResponse,
-          let conversation = response.notification.request.content
-            .userInfo["conversation"] as? String,
           !conversation.isEmpty,
           let controller = window?.rootViewController as? FlutterViewController
     else {
@@ -337,6 +359,16 @@ import UserNotifications
     withCompletionHandler completionHandler:
       @escaping (UNNotificationPresentationOptions) -> Void
   ) {
+    // Except a wake that found nothing. The extension cannot drop those
+    // without an entitlement Apple grants by hand, so it files them under a
+    // quiet thread; with the application in front there is no reason to
+    // show a blank banner over it, and this is the one place that can
+    // decline. That blank "Rotelyx" banner every few minutes with the
+    // application open was this.
+    if notification.request.content.threadIdentifier == AppDelegate.quietThread {
+      completionHandler([])
+      return
+    }
     completionHandler([.banner, .sound])
   }
 

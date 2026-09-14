@@ -9,10 +9,12 @@ library;
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../platform/incoming_link.dart';
 import '../rotelyx/invite_link.dart';
 
 import '../rotelyx/alerts.dart';
+import '../rotelyx/rotelyx_service.dart';
 import '../rotelyx/call_state.dart';
 import '../rotelyx/calls.dart';
 import '../rotelyx/lock.dart';
@@ -53,6 +55,10 @@ class _RotelyxAppState extends State<RotelyxApp> with WidgetsBindingObserver {
   bool _dark = true;
   Key _homeKey = UniqueKey();
 
+  /// The list fills this in with a way to close whatever it has open, so the
+  /// back gesture closes a conversation instead of the application.
+  final HomeBack _homeBack = HomeBack();
+
   RotelyxTheme get _theme => _dark ? RotelyxTheme.dark : RotelyxTheme.light;
 
   StreamSubscription<CallState>? _callChanges;
@@ -76,6 +82,11 @@ class _RotelyxAppState extends State<RotelyxApp> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     alerts.inForeground = state == AppLifecycleState.resumed;
+
+    // Back in front is the moment the network is most likely back too, and
+    // the moment a socket that died in a pocket is noticed. Try at once
+    // rather than waiting out whatever back-off the reconnect is on.
+    if (state == AppLifecycleState.resumed) rotelyx.wake();
 
     // Anything that is not on screen counts as leaving, and the grace period
     // below is what tells a file picker apart from a pocket.
@@ -134,8 +145,32 @@ class _RotelyxAppState extends State<RotelyxApp> with WidgetsBindingObserver {
   ///
   /// Nothing happens while the application is locked, for the reason below: a
   /// PIN that can be walked past by sending somebody a link is not a PIN.
+  /// A conversation a notification asked for, and how many times.
+  ///
+  /// The count is what lets the same conversation be asked for twice: a
+  /// second notification for it after the first was closed has to open it
+  /// again, and a value that did not change would not.
+  String? _requestedId;
+  int _requests = 0;
+
   void _openLink(String link) {
     if (!mounted) return;
+
+    // A tapped notification. Where the message is, or the request to let
+    // somebody in, which is a notification too. The home screen opens it;
+    // behind a lock it opens once the lock does.
+    const open = 'rotelyx://open/';
+    if (link.trim().toLowerCase().startsWith(open)) {
+      final id = Uri.decodeComponent(link.trim().substring(open.length));
+      if (id.isEmpty) return;
+      setState(() {
+        _requestedId = id;
+        _requests += 1;
+        _arriving = null;
+        if (!_locked) _surface = _Surface.home;
+      });
+      return;
+    }
 
     if (link.trim().toLowerCase() == 'rotelyx://meet') {
       setState(() {
@@ -323,10 +358,23 @@ class _RotelyxAppState extends State<RotelyxApp> with WidgetsBindingObserver {
       );
     }
 
+    // Whether something is sitting over the list. The back gesture belongs to
+    // whatever is on top, so the list is told rather than left to guess.
+    final covered = _surface != _Surface.home;
+
     final home = HomeScreen(
       key: _homeKey,
+      covered: covered,
+      back: _homeBack,
+      open: _requestedId == null ? null : OpenRequest(_requestedId!, _requests),
       onPair: () => setState(() => _surface = _Surface.pair),
       onSettings: () => setState(() => _surface = _Surface.settings),
+      // Deleting everything is offered from the list as well as from Settings,
+      // and both leave the application with nothing behind it.
+      onWiped: () => setState(() {
+        _homeKey = UniqueKey();
+        _surface = _Surface.unlock;
+      }),
     );
 
     // Pairing and settings slide in over the list rather than replacing it
@@ -358,10 +406,31 @@ class _RotelyxAppState extends State<RotelyxApp> with WidgetsBindingObserver {
       _ => null,
     };
 
-    return SlideOver(
-      under: home,
-      over: over,
-      onBack: () => setState(() => _surface = _Surface.home),
+    // Back closes what is open instead of leaving the application.
+    //
+    // The screens here are swapped widgets rather than pushed routes, which
+    // reads well and meant the system back gesture found nothing to pop and
+    // closed the application instead: from inside a conversation, one back and
+    // Rotelyx was gone. Every other messenger goes back to the list.
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        if (covered) {
+          setState(() => _surface = _Surface.home);
+          return;
+        }
+        // Nothing of this application's own is over the list, so the list
+        // itself decides: a conversation closes, and on the bare list the
+        // gesture is handed back to the system.
+        if (_homeBack.call()) return;
+        SystemNavigator.pop();
+      },
+      child: SlideOver(
+        under: home,
+        over: over,
+        onBack: () => setState(() => _surface = _Surface.home),
+      ),
     );
   }
 }

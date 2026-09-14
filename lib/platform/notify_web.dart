@@ -49,6 +49,13 @@ class PlatformNotifier implements Notifier {
     _showing[notice.conversationId] = web.Notification(notice.sender, options);
   }
 
+  /// A tab makes no sound of its own here. Playing audio needs a prior
+  /// gesture on the page and an `<audio>` element to hold, and a browser tab
+  /// with the conversation open is the one case where the message is already
+  /// visible.
+  @override
+  Future<void> chirp() async {}
+
   @override
   Future<void> clear(String conversationId) async {
     _showing.remove(conversationId)?.close();

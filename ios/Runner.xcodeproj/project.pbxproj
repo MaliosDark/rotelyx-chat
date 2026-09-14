@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		00071A990F2915CBFF556687 /* message.wav in Resources */ = {isa = PBXBuildFile; fileRef = 5F3E37B9296B4C15AF581DE2 /* message.wav */; };
+		C1A7E5D04B1C40A9B0C5F002 /* chirp.wav in Resources */ = {isa = PBXBuildFile; fileRef = C1A7E5D04B1C40A9B0C5F001 /* chirp.wav */; };
 		020112AB344DA23E17B3CF0E /* RotelyxComplication.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DACF0305DB6837A83ADA2E1 /* RotelyxComplication.swift */; };
 		1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */ = {isa = PBXBuildFile; fileRef = 1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */; };
 		1740FB7275572FD514BE28D6 /* Transcript.swift in Sources */ = {isa = PBXBuildFile; fileRef = E508695B0DE88B78A4F1F016 /* Transcript.swift */; };
@@ -26,6 +27,7 @@
 		6221BAC4A4B0301BE748A2EB /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 43586CC55033BAD74DE488F1 /* Foundation.framework */; };
 		6386BB498AE17AF5C4D21887 /* RotelyxWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 0EF1F33AD6CB3A8090713BE2 /* RotelyxWatch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		64BD7236C8F34491350D3F53 /* message.wav in Resources */ = {isa = PBXBuildFile; fileRef = F0C2D411AB9E1F1A0A86C50C /* message.wav */; };
+		C1A7E5D04B1C40A9B0C5F004 /* chirp.wav in Resources */ = {isa = PBXBuildFile; fileRef = C1A7E5D04B1C40A9B0C5F003 /* chirp.wav */; };
 		72E5AF77B1DA339DF65F1B74 /* BurnAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B0CC4EE6F9855822208E9B1 /* BurnAttributes.swift */; };
 		74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74858FAE1ED2DC5600515810 /* AppDelegate.swift */; };
 		78A318202AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage in Frameworks */ = {isa = PBXBuildFile; productRef = 78A3181F2AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage */; };
@@ -169,6 +171,7 @@
 		5B0CC4EE6F9855822208E9B1 /* BurnAttributes.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BurnAttributes.swift; sourceTree = "<group>"; };
 		5BA3A8533E8E4FF08EBE8C9D /* Pods-Runner.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.release.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.release.xcconfig"; sourceTree = "<group>"; };
 		5F3E37B9296B4C15AF581DE2 /* message.wav */ = {isa = PBXFileReference; includeInIndex = 1; name = message.wav; path = ../../assets/sound/message.wav; sourceTree = "<group>"; };
+		C1A7E5D04B1C40A9B0C5F001 /* chirp.wav */ = {isa = PBXFileReference; includeInIndex = 1; name = chirp.wav; path = ../../assets/sound/chirp.wav; sourceTree = "<group>"; };
 		62942105A39BB4B4B62B1A8F /* Shared.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Shared.swift; sourceTree = "<group>"; };
 		629E8267766669EC8D547282 /* Assets.xcassets */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		638E3ABC18C196EB66C286E0 /* Glance.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Glance.swift; sourceTree = "<group>"; };
@@ -217,6 +220,7 @@
 		E5A1B2C3D4E5F60000000092 /* LastWake.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LastWake.swift; sourceTree = "<group>"; };
 		EDB2A7BE97D35CAECB0701E5 /* Widgets.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Widgets.swift; sourceTree = "<group>"; };
 		F0C2D411AB9E1F1A0A86C50C /* message.wav */ = {isa = PBXFileReference; includeInIndex = 1; name = message.wav; path = ../../assets/sound/message.wav; sourceTree = "<group>"; };
+		C1A7E5D04B1C40A9B0C5F003 /* chirp.wav */ = {isa = PBXFileReference; includeInIndex = 1; name = chirp.wav; path = ../../assets/sound/chirp.wav; sourceTree = "<group>"; };
 		F6CE433D5F05C82E8205F0B9 /* RotelyxComplication.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = RotelyxComplication.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		FB15C9E6DAB683B83DFFCBDE /* Phone.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Phone.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -386,6 +390,7 @@
 				E5A1B2C3D4E5F6000000000F /* Runner.entitlements */,
 				E5A1B2C3D4E5F60000000014 /* PrivacyInfo.xcprivacy */,
 				5F3E37B9296B4C15AF581DE2 /* message.wav */,
+				C1A7E5D04B1C40A9B0C5F001 /* chirp.wav */,
 				EDB2A7BE97D35CAECB0701E5 /* Widgets.swift */,
 				0572B1ABE92B549B83CD652A /* BurnActivity.swift */,
 			);
@@ -420,6 +425,7 @@
 				629E8267766669EC8D547282 /* Assets.xcassets */,
 				0901852B2DF5BBE54DEB824C /* Sound.swift */,
 				F0C2D411AB9E1F1A0A86C50C /* message.wav */,
+				C1A7E5D04B1C40A9B0C5F003 /* chirp.wav */,
 				638E3ABC18C196EB66C286E0 /* Glance.swift */,
 				3E74F359202168F7ABDD843B /* Burning.swift */,
 			);
@@ -646,6 +652,7 @@
 				97C146FE1CF9000F007C117D /* Assets.xcassets in Resources */,
 				97C146FC1CF9000F007C117D /* Main.storyboard in Resources */,
 				00071A990F2915CBFF556687 /* message.wav in Resources */,
+				C1A7E5D04B1C40A9B0C5F002 /* chirp.wav in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -655,6 +662,7 @@
 			files = (
 				23FA75CC89D84E5E4E8BAD53 /* Assets.xcassets in Resources */,
 				64BD7236C8F34491350D3F53 /* message.wav in Resources */,
+				C1A7E5D04B1C40A9B0C5F004 /* chirp.wav in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

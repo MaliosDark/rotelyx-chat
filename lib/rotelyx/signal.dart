@@ -42,6 +42,13 @@ enum SignalKind {
   /// The sender's display picture, small enough to travel inline.
   profile,
 
+  /// The group's own name and picture, set by any member for everybody.
+  group,
+
+  /// Somebody asks for what they missed since a moment. One member answers
+  /// with `history`.
+  catchUp,
+
   /// Named self destructing messages have been read, so the sender's own
   /// copies may start expiring.
   burnRead,
@@ -51,6 +58,14 @@ enum SignalKind {
 
   /// A message was withdrawn by whoever sent it.
   retract,
+
+  /// A button on a card was pressed. See `lib/rotelyx/card.dart`.
+  ///
+  /// It carries the bot's own word for what the button means and nothing
+  /// about the person who pressed it beyond the leaf the message came from,
+  /// which every message carries anyway. Nothing on this device acts on it:
+  /// it is addressed to whoever sent the card.
+  tap,
 
   /// A message was changed by whoever sent it.
   edited,
@@ -236,6 +251,66 @@ class Signal {
   /// same way a photograph does and is kept locally.
   factory Signal.profile(Uint8List png) =>
       Signal(kind: SignalKind.profile, fields: [base64Encode(png)]);
+
+  // --- group -----------------------------------------------------------------
+
+  /// What the group is called and what it looks like, from whoever set it.
+  ///
+  /// Both travel base64, the name because somebody will put the field
+  /// separator in a group name to see what happens, the picture because it
+  /// is bytes. An empty picture field leaves the picture as it was; an empty
+  /// name field leaves the name.
+  factory Signal.group({required String name, Uint8List? picture}) => Signal(
+        kind: SignalKind.group,
+        fields: [
+          base64Encode(utf8.encode(name)),
+          picture == null ? '' : base64Encode(picture),
+        ],
+      );
+
+  /// A button was pressed. [command] is the bot's own word for it.
+  factory Signal.tap(String command) =>
+      Signal(kind: SignalKind.tap, fields: [base64Encode(utf8.encode(command))]);
+
+  String get tapped {
+    if (kind != SignalKind.tap || fields.isEmpty) return '';
+    try {
+      return utf8.decode(base64Decode(fields.first));
+    } on Object {
+      return '';
+    }
+  }
+
+  /// Ask the others for what arrived after [since]: a device that was off,
+  /// or off the network, or simply behind. One member answers.
+  factory Signal.catchUp(DateTime since) => Signal(
+        kind: SignalKind.catchUp,
+        fields: [since.millisecondsSinceEpoch.toString()],
+      );
+
+  DateTime? get catchUpSince {
+    if (kind != SignalKind.catchUp || fields.isEmpty) return null;
+    final at = int.tryParse(fields.first);
+    return at == null ? null : DateTime.fromMillisecondsSinceEpoch(at);
+  }
+
+  String get groupName {
+    if (fields.isEmpty || fields[0].isEmpty) return '';
+    try {
+      return utf8.decode(base64Decode(fields[0]));
+    } on Object {
+      return '';
+    }
+  }
+
+  Uint8List? get groupPicture {
+    if (fields.length < 2 || fields[1].isEmpty) return null;
+    try {
+      return base64Decode(fields[1]);
+    } on Object {
+      return null;
+    }
+  }
 
   /// A copy of what was said before, handed over on purpose.
   ///

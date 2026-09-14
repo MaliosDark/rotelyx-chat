@@ -3,6 +3,8 @@
 /// wearing a costume.
 library;
 
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import 'theme.dart';
@@ -264,12 +266,17 @@ class RxAvatar extends StatelessWidget {
     Color(0xFFF59E0B), Color(0xFFEC4899), Color(0xFF8B5CF6),
   ];
 
-  @override
-  Widget build(BuildContext context) {
+  /// The colour a name is drawn in, everywhere it is drawn.
+  static Color colourFor(String name) {
     final seed = name.isEmpty
         ? 0
         : name.codeUnits.fold<int>(0, (a, b) => a + b) % _palette.length;
-    final colour = _palette[seed];
+    return _palette[seed];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colour = colourFor(name);
     final initial = name.isEmpty ? '?' : name.characters.first.toUpperCase();
 
     return Container(
@@ -556,4 +563,59 @@ Future<bool> explainPermission(
   );
 
   return agreed ?? false;
+}
+
+/// A hairline that waves.
+///
+/// Used between conversations in the list and, in a conversation, to mark
+/// where somebody stopped reading. A straight rule at this weight reads as a
+/// table; a wave separates without ruling, which is what both of those are.
+///
+/// One pixel, an amplitude of about one, and whatever colour the caller passes
+/// -- the theme's line between rows, the accent where it means "you are here".
+class WavyRule extends StatelessWidget {
+  const WavyRule({super.key, required this.colour, this.height = 5});
+
+  final Color colour;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+        height: height,
+        width: double.infinity,
+        child: CustomPaint(painter: _Wave(colour)),
+      );
+}
+
+class _Wave extends CustomPainter {
+  const _Wave(this.colour);
+
+  final Color colour;
+
+  /// One wave every thirteen pixels, a pixel and a bit tall. Longer reads as a
+  /// wobble in a straight line, which looks like a mistake; shorter reads as a
+  /// texture, which looks like a pattern nobody asked for.
+  static const double _wavelength = 13;
+  static const double _amplitude = 1.2;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final middle = size.height / 2;
+    final path = Path()..moveTo(0, middle);
+    for (var x = 0.0; x <= size.width; x += 1) {
+      path.lineTo(
+          x, middle + _amplitude * math.sin(x / _wavelength * 2 * math.pi));
+    }
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = colour
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1
+        ..isAntiAlias = true,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_Wave old) => old.colour != colour;
 }

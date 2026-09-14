@@ -63,9 +63,49 @@ String? attachmentSummary(String body) {
   // sticker whatever it likes, and neither tells somebody glancing at a list
   // anything they wanted to know. A file keeps its name because the name is
   // the only thing that distinguishes one.
+  // What was said with it, when something was. A line in a list that reads
+  // "Picture" tells somebody less than the sentence that came with the
+  // picture, which is what they would have read if they had opened it.
+  if (file.caption.isNotEmpty) return file.caption;
+
   if (file.mime == 'image/gif') return 'GIF';
   if (file.isImage) return 'Picture';
   return file.name.isEmpty ? 'File' : file.name;
+}
+
+/// What an attachment is, from as much of one as there is.
+///
+/// A reply carries the first hundred and twenty characters of the message it
+/// answers, so an attachment reaches a quote cut in half: the marker, the name,
+/// usually the type, and none of the bytes. [attachmentSummary] refuses that,
+/// correctly, because there is no attachment there -- and the quote then showed
+/// a line of base64 where it should have said "Picture".
+///
+/// This reads the header and stops. It is for a label and never for content:
+/// nothing here decodes bytes or hands back a file.
+String? attachmentGlimpse(String body) {
+  final whole = attachmentSummary(body);
+  if (whole != null) return whole;
+  if (!body.startsWith(_marker)) return null;
+
+  final parts = body.substring(_marker.length).split('');
+  String field(int i) {
+    if (i >= parts.length) return '';
+    try {
+      return Uri.decodeComponent(parts[i]);
+    } on Object {
+      // The cut can land inside a percent escape.
+      return parts[i];
+    }
+  }
+
+  final mime = field(1);
+  if (mime == 'image/gif') return 'GIF';
+  if (mime.startsWith('image/')) return 'Picture';
+  if (mime.startsWith('video/')) return 'Video';
+  if (mime.startsWith('audio/')) return 'Audio';
+  final name = field(0);
+  return name.isEmpty ? 'File' : name;
 }
 
 /// A byte count somebody can read.
@@ -86,11 +126,29 @@ class Attachment {
     required this.name,
     required this.mime,
     required this.bytes,
+    this.caption = '',
   });
 
   final String name;
   final String mime;
   final Uint8List bytes;
+
+  /// What was said along with it, in the same message.
+  ///
+  /// # Why it travels inside the attachment
+  ///
+  /// Sending a picture and then sending a line about it is two messages, two
+  /// envelopes, two notifications and two bubbles, and on the other phone the
+  /// line can arrive before the picture. Every messenger people already use
+  /// sends one thing.
+  ///
+  /// It is a fourth field after the bytes rather than a new message type,
+  /// which is what makes it safe to add: a build that has never heard of it
+  /// splits on the separator, takes the first three fields and ignores the
+  /// rest, so a captioned picture still shows as a picture on an older phone
+  /// instead of failing to open. The bytes are base64 and cannot contain the
+  /// separator, so the field after them is unambiguous.
+  final String caption;
 
   bool get isImage => mime.startsWith('image/');
 
@@ -101,7 +159,8 @@ class Attachment {
   String encode() => '$_marker'
       '${Uri.encodeComponent(name)}'
       '${Uri.encodeComponent(mime)}'
-      '${base64Encode(bytes)}';
+      '${base64Encode(bytes)}'
+      '${caption.isEmpty ? '' : '${Uri.encodeComponent(caption)}'}';
 
   /// Null when [body] is ordinary text, which is the common case and must not
   /// cost an exception.
@@ -150,6 +209,9 @@ class Attachment {
         name: Uri.decodeComponent(parts[0]),
         mime: Uri.decodeComponent(parts[1]),
         bytes: base64Decode(parts[2]),
+        // Absent in everything sent before captions existed, and in anything
+        // sent by a build that does not have them.
+        caption: parts.length > 3 ? Uri.decodeComponent(parts[3]) : '',
       );
     } on Object {
       return null;

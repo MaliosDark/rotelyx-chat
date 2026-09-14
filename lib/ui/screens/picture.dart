@@ -35,7 +35,6 @@ import '../../rotelyx/gif_codec.dart';
 import '../../rotelyx/photo_codec.dart';
 import '../../rotelyx/rotelyx_service.dart';
 import '../../rotelyx/rotelyx_store.dart';
-import '../../rotelyx/signal.dart';
 import '../theme.dart';
 import '../widgets.dart';
 
@@ -131,8 +130,9 @@ class _PicturePickerState extends State<PicturePicker> {
       // Sent as well as stored. A picture only this device knows about is a
       // picture the other side never sees, and the whole point of it is that
       // they do. Only the conversation that is live hears it here; the rest
-      // are told as they are opened, by `RotelyxService`.
-      rotelyx.signal(Signal.profile(shrunk));
+      // are told as they are opened, by `RotelyxService`, which also shrinks
+      // it to what an envelope carries.
+      await rotelyx.tellMyPicture();
 
       widget.onChanged?.call();
       if (mounted) setState(() => _working = false);

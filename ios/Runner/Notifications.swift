@@ -1,3 +1,4 @@
+import AudioToolbox
 import Flutter
 import UIKit
 import UserNotifications
@@ -76,6 +77,40 @@ enum Notifications {
         else { return .default }
         return UNNotificationSound(named: UNNotificationSoundName("message.wav"))
     }()
+
+    /// A short tone for a message that arrived in the conversation on screen.
+    ///
+    /// Not a notification: iOS would draw a banner over the very conversation
+    /// the message is already in, and leave it in Notification Centre for
+    /// something that has been read. The sound alone is what is wanted, and
+    /// `AudioServicesPlaySystemSound` plays a bundled file without touching
+    /// this application's audio session, which matters because a call may be
+    /// running and a session category changed underneath it cuts the call.
+    ///
+    /// The Ring/Silent switch is Apple's to honour and it does: a system sound
+    /// on a silenced phone is silent, and there is nothing here to ask about
+    /// it. The volume is the phone's.
+    static func chirp() {
+        if soundId == 0 {
+            // `chirp` when it is in the bundle, and the notification tone when
+            // it is not: an older Runner target has only `message.wav`, and a
+            // sound that is missing should be the wrong sound rather than
+            // silence.
+            let name = Bundle.main.url(forResource: "chirp", withExtension: "wav") != nil
+                ? "chirp" : "message"
+            guard let url = Bundle.main.url(forResource: name, withExtension: "wav")
+            else { return }
+            var id: SystemSoundID = 0
+            guard AudioServicesCreateSystemSoundID(url as CFURL, &id) == kAudioServicesNoError
+            else { return }
+            soundId = id
+        }
+        AudioServicesPlaySystemSound(soundId)
+    }
+
+    /// Registered once. Creating one per message leaks a sound object per
+    /// message, and a lively group is exactly when that adds up.
+    private static var soundId: SystemSoundID = 0
 
     /// Whether the person allowed them, without asking again.
     static func permitted(_ result: @escaping FlutterResult) {

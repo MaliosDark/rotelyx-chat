@@ -99,9 +99,11 @@ flutter:
     # feature. Declared as assets they arrive in the application bundle, where
     # `CallAudio.swift` finds them through `FlutterDartProject.lookupKey`.
     #
-    # `message.wav` stays out. It is the notification sound, which on iOS is
-    # played by the system from the notification itself and never by this
-    # application.
+    # `message.wav` and `chirp.wav` stay out. The first is the notification
+    # sound, which on iOS is played by the system from the notification itself
+    # and never by this application; the second is the tone for a message
+    # arriving in the conversation already on screen, which Android plays from
+    # its raw resources and iOS from the bundle.
     - assets/sound/connected.wav
     - assets/sound/failed.wav
     - assets/sound/ringback.wav

@@ -18,6 +18,7 @@ that the shipped file is what it claims to be.
 # What is being made, and why it sounds like this
 
     assets/sound/message.wav      an arriving message
+    assets/sound/chirp.wav        one arriving while you are reading it
     assets/sound/connected.wav    a call that got through
     assets/sound/failed.wav       a call that did not
     assets/sound/ringback.wav     what the caller hears while it rings
@@ -168,6 +169,27 @@ def main():
         (0.20, tone(A5 / 2, 0.55, 4.5)),
     ])
 
+    # Arriving while the conversation is already open.
+    #
+    # A different sound from `message` on purpose, and quieter. `message` is
+    # trying to reach somebody across a room with the phone face down; this is
+    # for somebody holding it, with the words already on the screen. Announcing
+    # that as loudly as an interruption is what makes people turn a messenger's
+    # sounds off, and he asked for exactly this after hearing the notification
+    # tone twice for the same message.
+    #
+    # What makes it a different sound rather than a quiet copy:
+    #
+    #   * One pitch, not two. An interval is a statement; a single note is a
+    #     tap on the shoulder.
+    #   * Higher and shorter -- A6, gone in a fifth of a second -- so it sits
+    #     above the conversation instead of in front of it.
+    #   * Two thirds the peak, and a faster decay, so what is heard is the
+    #     attack and almost none of the tail.
+    chirp = [s * 0.66 for s in sequence([
+        (0.00, tone(A5 * 2, 0.18, 26.0)),
+    ])]
+
     # Not through: the same interval, taken the other way, and detuned. A
     # falling fourth on its own is merely an ending, which is what a call the
     # other person declined also is. The beat is what separates "it stopped"
@@ -214,6 +236,7 @@ def main():
 
     for name, samples in [
         ("message", incoming),
+        ("chirp", chirp),
         ("connected", connected),
         ("failed", failed),
         ("ringback", ringback),
@@ -231,7 +254,7 @@ def main():
     # All three, for the same reason. The call tones are not a notification
     # channel's sound, but they are played by `CallAudio.kt` through the audio
     # route the call is already using, and that reads a resource too.
-    for name in ("message", "connected", "failed", "ringback", "ringtone"):
+    for name in ("message", "chirp", "connected", "failed", "ringback", "ringtone"):
         with open(os.path.join(sounds, f"{name}.wav"), "rb") as src:
             data = src.read()
         with open(os.path.join(raw, f"rotelyx_{name}.wav"), "wb") as dst:

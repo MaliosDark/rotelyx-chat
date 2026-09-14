@@ -64,6 +64,18 @@ class PlatformNotifier implements Notifier {
   bool get _asks => Platform.isAndroid || Platform.isIOS;
 
   @override
+  Future<void> chirp() async {
+    if (!_asks) return;
+    try {
+      await _channel.invokeMethod<void>('chirp');
+    } on PlatformException {
+      // A sound is not worth an error going anywhere.
+    } on MissingPluginException {
+      // A build from before the platform side answered this.
+    }
+  }
+
+  @override
   Future<bool> permitted() async {
     if (!_asks) return false;
     try {

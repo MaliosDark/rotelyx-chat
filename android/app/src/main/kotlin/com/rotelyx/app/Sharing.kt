@@ -55,6 +55,43 @@ class Sharing(private val context: Context) {
                 result.success(true)
             }
 
+            "open" -> {
+                // Hand a link to whatever the person uses for that kind of
+                // file: a video player, a music player, a browser.
+                //
+                // The application deliberately does not play video or audio
+                // from the network itself. Playing it would mean a decoder
+                // inside the messenger and a connection made from inside the
+                // messenger, and there is a player on the phone already.
+                val url = call.argument<String>("url")
+                if (url.isNullOrEmpty()) {
+                    result.error("empty", "there was no link", null)
+                    return
+                }
+                val uri = try {
+                    android.net.Uri.parse(url)
+                } catch (e: Exception) {
+                    result.error("bad", "that is not a link", null)
+                    return
+                }
+                // Only the two schemes a link in a message can reasonably be.
+                // Anything else is a way to point the phone at an activity it
+                // was never meant to be pointed at from a stranger's message.
+                if (uri.scheme != "http" && uri.scheme != "https") {
+                    result.error("scheme", "only http and https", null)
+                    return
+                }
+                val view = Intent(Intent.ACTION_VIEW, uri).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                try {
+                    context.startActivity(view)
+                    result.success(true)
+                } catch (e: Exception) {
+                    result.success(false)
+                }
+            }
+
             else -> result.notImplemented()
         }
     }

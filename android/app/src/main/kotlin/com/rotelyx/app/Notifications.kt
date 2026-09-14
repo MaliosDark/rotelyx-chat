@@ -8,6 +8,8 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.BitmapFactory
 import android.media.AudioAttributes
+import android.media.AudioManager
+import android.media.MediaPlayer
 import android.net.Uri
 import android.os.Build
 import android.os.VibrationEffect
@@ -51,6 +53,11 @@ class Notifications(private val context: Context) {
 
         /** Arriving messages. Sound, vibration, and a heads-up banner. */
         private const val MESSAGES = "rotelyx.messages"
+
+        /** How loud the in-conversation tone is, against the phone's own
+         *  notification volume. Quiet on purpose: the message is on screen
+         *  already and this only says it landed. */
+        private const val IN_CHAT_VOLUME = 0.30f
 
         /** The connection notice that a foreground service must show. Silent
          *  and at the lowest importance the system will still display, because
@@ -135,6 +142,7 @@ class Notifications(private val context: Context) {
      */
     fun show(
         id: Int,
+        conversationId: String,
         title: String,
         body: String,
         picture: ByteArray?,
@@ -154,10 +162,19 @@ class Notifications(private val context: Context) {
         val style = NotificationCompat.MessagingStyle(person)
             .addMessage(body, System.currentTimeMillis(), person)
 
+        // Tapping it opens that conversation, not merely the application.
+        //
+        // The intent carries a `rotelyx://open/<conversation>` link, which is
+        // the same road an invitation link takes: `Links` hands it to Dart
+        // whether the application is running or is being started by this
+        // tap, and Dart opens the conversation, where the message is, or the
+        // request to let somebody in, which is a notification too.
         val open = PendingIntent.getActivity(
             context,
             id,
             Intent(context, MainActivity::class.java)
+                .setAction(Intent.ACTION_VIEW)
+                .setData(Uri.parse("rotelyx://open/" + Uri.encode(conversationId)))
                 .setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_NEW_TASK),
             // IMMUTABLE, and required from Android 12. A mutable pending intent
             // is one another application can fill in and fire.
@@ -218,6 +235,64 @@ class Notifications(private val context: Context) {
      */
     fun permitted(): Boolean = manager.areNotificationsEnabled()
 
+    /**
+     * A short tone for a message that arrived in the conversation on screen.
+     *
+     * Not a notification. Nothing is posted, so nothing appears and nothing has
+     * to be taken down: it is the sound alone, played on the notification
+     * stream so that the phone's own settings govern it.
+     *
+     * The ringer is obeyed rather than consulted and then ignored. Silent stays
+     * silent; on vibrate it is one short tap instead of a tone, which is what a
+     * phone set to vibrate is being asked for.
+     *
+     * One player, reused and released between plays. A new `MediaPlayer` per
+     * message leaks an audio track per message, and a group being lively is
+     * exactly when that shows up.
+     */
+    fun chirp() {
+        val audio = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        when (audio.ringerMode) {
+            AudioManager.RINGER_MODE_SILENT -> return
+            AudioManager.RINGER_MODE_VIBRATE -> {
+                vibrate()
+                return
+            }
+        }
+
+        try {
+            player?.release()
+            // Its own tone, not the notification's. The notification is
+            // trying to reach somebody across a room; this is for somebody
+            // holding the phone with the message already on the screen, and
+            // hearing the same sound for both is what made it feel like the
+            // message arrived twice.
+            player = MediaPlayer.create(context, R.raw.rotelyx_chirp)?.apply {
+                setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build()
+                )
+                // Under the notification volume rather than at it. The message
+                // being read is already on screen; this is a nudge, and a nudge
+                // at full volume is the thing people turn off.
+                setVolume(IN_CHAT_VOLUME, IN_CHAT_VOLUME)
+                setOnCompletionListener {
+                    it.release()
+                    if (player === it) player = null
+                }
+                start()
+            }
+        } catch (e: Exception) {
+            // A sound that will not play is not a failure worth reporting to
+            // anybody: the message itself is already on the screen.
+            player = null
+        }
+    }
+
+    private var player: MediaPlayer? = null
+
     private fun vibrate() {
         val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val service = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE)
@@ -249,6 +324,7 @@ class Notifications(private val context: Context) {
             "show" -> {
                 show(
                     id = call.argument<Int>("id") ?: 0,
+                    conversationId = call.argument<String>("conversationId") ?: "",
                     title = call.argument<String>("title") ?: "",
                     body = call.argument<String>("body") ?: "",
                     picture = call.argument<ByteArray>("picture"),
@@ -259,6 +335,10 @@ class Notifications(private val context: Context) {
             }
             "clear" -> {
                 clear(call.argument<Int>("id") ?: 0)
+                result.success(null)
+            }
+            "chirp" -> {
+                chirp()
                 result.success(null)
             }
             else -> result.notImplemented()

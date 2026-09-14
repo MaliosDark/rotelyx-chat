@@ -27,6 +27,7 @@ import '../platform/notify.dart';
 import '../platform/watch.dart';
 import '../platform/widgets.dart';
 import 'attachment.dart';
+import 'card.dart';
 import 'ephemeral.dart';
 import 'quoted.dart';
 import 'rotelyx_service.dart';
@@ -170,6 +171,28 @@ class Alerts {
     await read(conversationId);
   }
 
+  /// Whether this conversation has been noisy enough for one moment.
+  ///
+  /// A phone that has been away collects its backlog in one go, and every
+  /// message in it used to be a sound and a vibration. Two seconds is long
+  /// enough that a real exchange still sounds like one and a flood sounds like
+  /// one arrival.
+  bool _worthASound(String id) {
+    final now = DateTime.now();
+    final last = _lastSound[id];
+    if (last != null && now.difference(last) < const Duration(seconds: 2)) {
+      return false;
+    }
+    _lastSound[id] = now;
+    return true;
+  }
+
+  final Map<String, DateTime> _lastSound = {};
+
+  /// The tone, on its own, so the switch in Settings can be heard rather than
+  /// imagined.
+  Future<void> chirp() => _notifier.chirp();
+
   /// A conversation has been read here, so whatever was showing for it goes.
   Future<void> read(String conversationId) {
     // The count has moved. A badge that only ever goes up is a badge people
@@ -220,9 +243,23 @@ class Alerts {
     // written rather than written and hidden.
     refreshWidgets();
 
-    // Being looked at. The message is already on screen, and the phone
-    // buzzing about it is noise.
-    if (inForeground && openConversation == id) return;
+    // Being looked at. The message is already on screen, so there is no
+    // notification: a banner over the conversation it belongs to, and a line
+    // in the shade for something already read, is noise.
+    //
+    // A sound is a different thing from a notification, and this is the case
+    // it is for. The phone is on the desk with the application open, nobody is
+    // looking at it, and a message arriving in complete silence is missed for
+    // ten minutes. So: one short tone, no banner, nothing in the shade,
+    // nothing to dismiss. Muted conversations stay muted, the switch in
+    // Settings turns it off, and the platform keeps its hands off a phone
+    // whose ringer is down.
+    if (inForeground && openConversation == id) {
+      if (!conversation.muted && store.soundInChat && _worthASound(id)) {
+        await _notifier.chirp();
+      }
+      return;
+    }
 
     await _notifier.show(Notice(
       conversationId: id,
@@ -232,7 +269,12 @@ class Alerts {
       showContent: showContentOnLockScreen,
       // Muted still appears in the shade, silently. Removing it entirely would
       // make a muted conversation one nobody discovers has moved.
-      silent: conversation.muted,
+      //
+      // And so is one arriving on the heels of another: the notification for a
+      // conversation replaces the one before it, so a burst is one line in the
+      // shade either way, and making the phone buzz once per message in a
+      // backlog is how an application teaches somebody to silence it.
+      silent: conversation.muted || !_worthASound(id),
     ));
   }
 
@@ -257,7 +299,8 @@ class Alerts {
   static String preview(String text) {
     final burns = Ephemeral.isEphemeral(text);
     final body = Quoted.plain(Ephemeral.plain(text));
-    final said = attachmentSummary(body) ??
+    final said = BotCard.summary(body) ??
+        attachmentSummary(body) ??
         (body.trim().isEmpty ? 'Attachment' : body);
     return burns ? '🔥 $said' : said;
   }

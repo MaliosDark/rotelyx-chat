@@ -22,8 +22,11 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../platform/file_pick.dart';
 import '../../rotelyx/export.dart';
+import '../../rotelyx/rotelyx_service.dart';
 import '../../rotelyx/rotelyx_store.dart';
+import 'picture.dart' show shrinkToAvatar;
 import '../theme.dart';
 import '../widgets.dart';
 import 'pin_set.dart';
@@ -66,6 +69,9 @@ class ContactSheet extends StatefulWidget {
 class _ContactSheetState extends State<ContactSheet> {
   StoredConversation? _conversation;
   late final TextEditingController _name;
+  late final TextEditingController _groupName;
+  bool _groupBusy = false;
+  String? _groupProblem;
 
   @override
   void initState() {
@@ -73,12 +79,79 @@ class _ContactSheetState extends State<ContactSheet> {
     final c = store.load(widget.conversationId);
     _conversation = c;
     _name = TextEditingController(text: c?.nickname ?? '');
+    _groupName = TextEditingController(text: c?.groupName ?? '');
   }
 
   @override
   void dispose() {
     _name.dispose();
+    _groupName.dispose();
     super.dispose();
+  }
+
+  /// Whether this is a group, which is when a name and a picture of its own
+  /// make sense. Read from the live session when this conversation is the
+  /// live one, and from what the group has already been given otherwise.
+  bool get _isGroup {
+    final c = _conversation;
+    if (c == null) return false;
+    if (c.groupName.isNotEmpty || c.groupPicture != null) return true;
+    return rotelyx.conversationId == c.id && rotelyx.memberCount > 2;
+  }
+
+  /// Name the group for everybody. Sent when the field is left, not on every
+  /// keystroke: a name is one signal, not thirty.
+  Future<void> _nameTheGroup() async {
+    final name = _groupName.text.trim();
+    final c = _conversation;
+    if (c == null || name.isEmpty || name == c.groupName) return;
+    if (rotelyx.conversationId != c.id) {
+      setState(() => _groupProblem = 'Open the conversation first, so the others can be told.');
+      return;
+    }
+    final sent = await rotelyx.setGroupIdentity(name: name);
+    if (!mounted) return;
+    setState(() {
+      _conversation = store.load(c.id);
+      _groupProblem = sent ? null : 'Could not tell the others yet. Try again when connected.';
+    });
+    widget.onChanged?.call();
+  }
+
+  Future<void> _pictureTheGroup() async {
+    final c = _conversation;
+    if (c == null) return;
+    if (rotelyx.conversationId != c.id) {
+      setState(() => _groupProblem = 'Open the conversation first, so the others can be told.');
+      return;
+    }
+    setState(() {
+      _groupBusy = true;
+      _groupProblem = null;
+    });
+    try {
+      final picked = await pickFile(maxBytes: 24 * 1024 * 1024, images: true);
+      if (picked == null) return;
+      final shrunk = await shrinkToAvatar(picked.bytes);
+      if (shrunk == null) {
+        setState(() => _groupProblem = 'That file is not an image this device can read.');
+        return;
+      }
+      final sent = await rotelyx.setGroupIdentity(
+          name: _groupName.text.trim(), picturePng: shrunk);
+      if (!mounted) return;
+      setState(() {
+        _conversation = store.load(c.id);
+        if (!sent) _groupProblem = 'Could not tell the others yet. Try again when connected.';
+      });
+      widget.onChanged?.call();
+    } on NoFilePicker catch (e) {
+      if (mounted) setState(() => _groupProblem = e.message);
+    } on Object {
+      if (mounted) setState(() => _groupProblem = 'That image could not be read.');
+    } finally {
+      if (mounted) setState(() => _groupBusy = false);
+    }
   }
 
   /// Save, tell whoever is showing this conversation, and stay open.
@@ -165,10 +238,10 @@ class _ContactSheetState extends State<ContactSheet> {
                   SizedBox(
                     width: 64,
                     height: 64,
-                    child: c.picture == null
+                    child: c.face == null
                         ? RxAvatar(c.displayTitle, size: 64)
                         : ClipOval(
-                            child: Image.memory(c.picture!,
+                            child: Image.memory(c.face!,
                                 width: 64, height: 64, fit: BoxFit.cover)),
                   ),
                   const SizedBox(width: 14),
@@ -193,6 +266,56 @@ class _ContactSheetState extends State<ContactSheet> {
               ),
 
               const SizedBox(height: Metrics.gap),
+
+              // A group gets a name and a face of its own, for everybody in
+              // it. It used to be listed as "somebody and 9 others", which
+              // is a description, not a name, and every group looked like
+              // every other group.
+              if (_isGroup) ...[
+                const _Section('This group'),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _groupName,
+                        style: Type.body.copyWith(color: t.text),
+                        textInputAction: TextInputAction.done,
+                        decoration: InputDecoration(
+                          hintText: 'A name for the group',
+                          hintStyle: Type.body.copyWith(color: t.faint),
+                          filled: true,
+                          fillColor: t.raised,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(Metrics.radius),
+                            borderSide: BorderSide.none,
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 12),
+                        ),
+                        onSubmitted: (_) => _nameTheGroup(),
+                        onEditingComplete: _nameTheGroup,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    IconButton(
+                      tooltip: 'Choose a picture for the group',
+                      onPressed: _groupBusy ? null : _pictureTheGroup,
+                      icon: _groupBusy
+                          ? const SizedBox(
+                              width: 18, height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2))
+                          : Icon(Icons.add_photo_alternate_outlined,
+                              color: t.muted),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                RxNote(_groupProblem ??
+                    'Everybody in the group sees the name and the picture. '
+                    'Anybody in it can change them, and everybody sees who did.'),
+                const SizedBox(height: Metrics.gap),
+              ],
+
               const _Section('What you call them'),
               TextField(
                 controller: _name,

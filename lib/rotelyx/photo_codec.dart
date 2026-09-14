@@ -662,3 +662,34 @@ DecodedPhoto? decodePhoto(Uint8List bytes) {
 
   return DecodedPhoto(width, height, _join(planes));
 }
+
+// ---------------------------------------------------------------------------
+// A picture of a person, small enough to travel
+// ---------------------------------------------------------------------------
+
+/// The most a profile picture may weigh on the wire.
+///
+/// The free tier's envelope is 64 KiB, and the picture travels inside a signal
+/// as base64, which is a third bigger again, under MLS framing and padding.
+/// Forty leaves room for all of that. A 256 pixel PNG of a photograph is
+/// eighty to a hundred and fifty, which is why a face chosen in settings used
+/// to arrive nowhere: the mailbox refused the envelope and the signal path,
+/// which has nothing to show a refusal on, said nothing.
+const int profileWireBytes = 40 * 1024;
+
+/// A profile picture as it travels: this application's own format, at a
+/// quality that fits [profileWireBytes], or null when even the lowest does
+/// not (which a 256 pixel picture never reaches).
+///
+/// [rgba] is the picture as pixels; both ends of a conversation are this
+/// application, so the wire format does not have to be one anybody else reads,
+/// and the receiver turns it back into a PNG before storing it, because the
+/// PNG is what every avatar on every screen and every notification is drawn
+/// from.
+Uint8List? encodeProfileForTheWire(Uint8List rgba, int width, int height) {
+  for (final quality in const [82, 74, 66, 58, 50, 42, 34, 26]) {
+    final encoded = encodePhoto(rgba, width, height, quality: quality);
+    if (encoded.length <= profileWireBytes) return encoded;
+  }
+  return null;
+}

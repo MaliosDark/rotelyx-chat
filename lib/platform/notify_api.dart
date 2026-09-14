@@ -84,6 +84,19 @@ abstract class Notifier {
   /// Show one.
   Future<void> show(Notice notice);
 
+  /// A short sound, for a message that arrived in the conversation already on
+  /// screen.
+  ///
+  /// Not a notification: nothing appears, nothing stays in the shade, and
+  /// there is nothing to take down. It exists because the phone on the desk
+  /// beside somebody, with the application open, used to receive a message in
+  /// complete silence, and every messenger they have ever used makes a sound
+  /// there.
+  ///
+  /// The platform is expected to respect the ringer: a phone on silent stays
+  /// silent, and a phone set to vibrate vibrates once instead.
+  Future<void> chirp();
+
   /// Take down whatever is showing for a conversation, because it has been
   /// read on this device.
   Future<void> clear(String conversationId);
