@@ -153,6 +153,19 @@ abstract interface class RotelyxSession {
   String hybridPublicKey();
 
   String safetyNumber();
+
+  /// What names this conversation for as long as it exists, as hex.
+  ///
+  /// The MLS group id. It does not move when the epoch moves, when somebody
+  /// joins, or when somebody is removed, which is what makes it the one thing
+  /// a device can compare to know that a group it has just been welcomed into
+  /// is the group it already has a history of. A label collides, a meeting
+  /// code is spent, and the row in the list is named by the clock.
+  ///
+  /// It is not a secret and it is not a safety number: it says which
+  /// conversation, never who is in it, and proves nothing about either.
+  String groupId();
+
   List<String> roster();
 
   /// Everyone here, each with the key that identifies them.

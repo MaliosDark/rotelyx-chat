@@ -10,7 +10,9 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import '../../rotelyx/invite_link.dart';
+import '../../platform/incoming_link.dart';
 import '../../platform/share.dart';
 import 'package:flutter/services.dart';
 
@@ -18,15 +20,19 @@ import '../../platform/file_pick.dart';
 
 import '../../rotelyx/alerts.dart';
 import '../../rotelyx/attachment.dart';
+import '../../rotelyx/card.dart';
 import '../../platform/pasted.dart';
 import '../../rotelyx/gif_codec.dart';
 import '../../rotelyx/photo_codec.dart';
 
 import '../../rotelyx/ephemeral.dart';
+import '../../rotelyx/media_link.dart';
 import '../../rotelyx/quoted.dart';
 import '../../rotelyx/rotelyx_service.dart';
 import '../../rotelyx/rotelyx_store.dart';
+import '../../rotelyx/signal.dart';
 import '../burn.dart';
+import '../link_card.dart';
 import '../gestures.dart';
 import '../../rotelyx/calls.dart';
 import 'contact.dart';
@@ -67,6 +73,10 @@ class _ChatScreenState extends State<ChatScreen> {
   StoredConversation? _conversation;
   bool _showSafety = false;
 
+  /// Something the conversation said about itself, for a few seconds.
+  String? _notice;
+  Timer? _noticeTimer;
+
   /// The message the composer is answering, if any.
   StoredMessage? _replyingTo;
 
@@ -94,6 +104,269 @@ class _ChatScreenState extends State<ChatScreen> {
   /// wall of moving text that has to finish before it can be read.
   final _openedAt = DateTime.now();
 
+  /// Who speaks from which side of the group.
+  final _sides = _Sides();
+
+  /// Messages this screen has drawn at least once, and the few that were given
+  /// an entrance when they first appeared. Both are decided once: see the
+  /// comment at the builder for the hole that changing one's mind leaves.
+  final Set<int> _drawn = {};
+  final Set<int> _entering = {};
+
+  /// The moment this conversation was last looked at, as it stood when this
+  /// screen opened. Null when it has never been opened.
+  DateTime? _readUpTo;
+
+  /// Whether the screen has already been taken to the unread mark.
+  bool _wentToUnread = false;
+
+  /// Take the conversation to where reading stopped, once, on opening.
+  ///
+  /// A conversation opens at its newest message, which is right when there is
+  /// nothing waiting. When there is, the newest message is the end of a pile
+  /// nobody has read, and starting at the end of a pile means scrolling back
+  /// through it to find the top. So: if something arrived since the last look,
+  /// open at the first of it, with the mark directly above.
+  void _openWhereReadingStopped(StoredConversation c) {
+    if (_wentToUnread) return;
+    final mark = _unreadMark(c);
+    if (mark == null) {
+      _wentToUnread = true;
+      return;
+    }
+    // Nothing to go to until the message is in the transcript this screen
+    // holds, which for a backlog is a moment after opening.
+    final at = c.messages
+        .where((m) => m.at.millisecondsSinceEpoch == mark)
+        .map((m) => m.at)
+        .firstOrNull;
+    if (at == null) return;
+
+    _wentToUnread = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      // Instantly: see `_reveal`. Opening is not a journey, and the more
+      // unread there is the worse an animated one gets.
+      if (mounted) _reveal(at, instant: true);
+    });
+  }
+
+  /// The first message that arrived after that, which is where the mark goes.
+  ///
+  /// Worked out once, from the transcript as it was on opening, so the mark
+  /// stays put while the rest of the backlog lands underneath it.
+  int? _firstUnread;
+  bool _foundUnread = false;
+
+  int? _unreadMark(StoredConversation c) {
+    if (_foundUnread) return _firstUnread;
+    final since = _readUpTo;
+    if (since == null) {
+      _foundUnread = true;
+      return null;
+    }
+    for (final m in c.messages) {
+      if (m.mine) continue;
+      if (m.at.isAfter(since)) {
+        _firstUnread = m.at.millisecondsSinceEpoch;
+        break;
+      }
+    }
+    _foundUnread = true;
+    return _firstUnread;
+  }
+
+  /// Whether the newest message is off the bottom of the screen.
+  ///
+  /// The list is reversed, so offset zero is the bottom and reading older
+  /// messages means a growing offset. A screen and a half of it is far enough
+  /// that the way back is worth offering and near enough that it is not
+  /// offered for a nudge.
+  bool _away = false;
+
+  void _watchTheScroll() {
+    if (!_scroll.hasClients) return;
+    final away = _scroll.offset > 600;
+    final atTheEnd = _scroll.offset <= 80;
+    if (away != _away || (atTheEnd && _below > 0)) {
+      if (!mounted) return;
+      setState(() {
+        _away = away;
+        if (atTheEnd) _below = 0;
+      });
+    }
+  }
+
+  /// How many messages have arrived while the newest one was off the screen.
+  ///
+  /// The button says so rather than the list moving: being taken somewhere
+  /// while reading is the thing people complain about, and a number on a
+  /// button is the same information without the interruption.
+  int _below = 0;
+
+  /// One key, on the one bubble a jump is going to.
+  ///
+  /// # Why exactly one
+  ///
+  /// Scrolling to a message needs a `GlobalKey` on it, and the first version
+  /// put one on every bubble. A global key is a promise that a widget is
+  /// unique in the whole tree, and moving one makes Flutter take the element
+  /// out and put it back: every message that arrives shifts every row in a
+  /// reversed list by one, so every visible bubble was detached and rebuilt on
+  /// every arrival, pictures and all. That is the flicker -- the second one,
+  /// the one inside a conversation, which he reported after the list stopped
+  /// doing it.
+  ///
+  /// So the ordinary bubble is keyed by its own message, which is local and
+  /// cheap and lets Flutter reuse the element where it is, and the global key
+  /// is attached to a single row only while a jump is looking for it.
+  final GlobalKey _target = GlobalKey();
+  DateTime? _targetAt;
+
+  /// The message being pointed at after a jump, so it can be seen to be the
+  /// one. Cleared a moment later.
+  DateTime? _flash;
+  Timer? _flashOff;
+
+  /// Go to the message a reply is answering.
+  ///
+  /// There is no message id on the wire, on purpose: an id is a handle the
+  /// mailbox could correlate envelopes with. A reply carries a copy of the
+  /// opening of what it answers instead, so finding the original is a search
+  /// backwards through this device's own transcript for the message that copy
+  /// was taken from.
+  ///
+  /// It can fail honestly: the message being answered may have arrived before
+  /// this device was in the conversation, or have been deleted here, or have
+  /// burned. Saying so is better than scrolling somewhere arbitrary.
+  void _goToQuoted(List<StoredMessage> messages, int from, Quoted quoted) {
+    final want = quoted.excerpt.trim();
+    if (want.isEmpty) return;
+
+    /// Whether one of these is the opening of the other.
+    ///
+    /// A quote is a copy of the first hundred and twenty characters with an
+    /// ellipsis on the end, so the two are never equal and the last character
+    /// compared is never the same one. Comparing the whole overlap therefore
+    /// failed on every quote of a long message, which is what "that message is
+    /// not on this device" turned out to mean.
+    String opening(String text) {
+      var out = text.trim();
+      while (out.isNotEmpty &&
+          (out.endsWith('…') || out.endsWith('.') || out.endsWith(' '))) {
+        out = out.substring(0, out.length - 1);
+      }
+      // Whitespace inside it is normalised too: a quote carries the text with
+      // its newlines turned into spaces by whoever built it.
+      return out.replaceAll(RegExp(r'\s+'), ' ').toLowerCase();
+    }
+
+    bool sameOpening(String a, String b) {
+      final one = opening(a);
+      final two = opening(b);
+      if (one.isEmpty || two.isEmpty) return false;
+      final n = one.length < two.length ? one.length : two.length;
+      // Long enough not to match two different messages that begin the same
+      // way, short enough to survive the trimming above.
+      if (n < 12) return one == two;
+      return one.substring(0, n) == two.substring(0, n);
+    }
+
+    for (var i = from - 1; i >= 0; i--) {
+      final plain = Ephemeral.plain(Quoted.plain(messages[i].text));
+      final glimpse = attachmentGlimpse(plain);
+      if (sameOpening(plain, want) || (glimpse != null && glimpse == want)) {
+        _reveal(messages[i].at);
+        return;
+      }
+    }
+
+    _say('That message is not on this device any more.');
+  }
+
+  /// Scroll to one message and mark it, building the way there if it is far up.
+  ///
+  /// `ListView.builder` only holds what is near the screen, so the anchor for
+  /// something a hundred messages back does not exist to scroll to yet. The
+  /// list is walked towards it a screen at a time until it does, which is what
+  /// every messenger that has this feature does underneath.
+  ///
+  /// # Why there are two speeds
+  ///
+  /// Tapping a quote is a journey somebody asked for: it should be animated,
+  /// because seeing the conversation move is what says where you went and
+  /// makes the way back obvious.
+  ///
+  /// Opening a conversation at the first unread message is not a journey. With
+  /// ninety unread, the animated walk took seconds of watching the backlog
+  /// scroll past before it settled -- "tuve que esperar a que el scroll llegue
+  /// arriba" -- and that gets worse the more there is to read, which is
+  /// exactly backwards. `instant` jumps instead: the same walk, no animation
+  /// and no waiting between steps, so it lands in a few frames however far
+  /// back the mark is.
+  Future<void> _reveal(DateTime at, {bool instant = false}) async {
+    setState(() {
+      _flash = at;
+    });
+    _flashOff?.cancel();
+    _flashOff = Timer(const Duration(seconds: 2), () {
+      if (mounted) setState(() => _flash = null);
+    });
+
+    if (_targetAt != at) setState(() => _targetAt = at);
+    for (var step = 0; step < 60; step++) {
+      final context = _target.currentContext;
+      if (context != null) {
+        await Scrollable.ensureVisible(
+          context,
+          alignment: 0.35,
+          duration: instant ? Duration.zero : const Duration(milliseconds: 260),
+          curve: Curves.easeOut,
+        );
+        return;
+      }
+      if (!_scroll.hasClients) return;
+
+      // Backwards in time is upwards on the screen and, in a reversed list,
+      // forwards in the scroll offset.
+      final position = _scroll.position;
+      // A whole screen at a time when jumping, rather than the four fifths an
+      // animation uses to keep its overlap readable: nobody is reading this
+      // one, and fewer steps is less to build.
+      final next = position.pixels +
+          position.viewportDimension * (instant ? 1.0 : 0.8);
+      if (next >= position.maxScrollExtent) {
+        if (instant) {
+          _scroll.jumpTo(position.maxScrollExtent);
+        } else {
+          await _scroll.animateTo(position.maxScrollExtent,
+              duration: const Duration(milliseconds: 200), curve: Curves.easeOut);
+          await Future<void>.delayed(const Duration(milliseconds: 60));
+        }
+        await SchedulerBinding.instance.endOfFrame;
+        if (!mounted) return;
+        final top = _target.currentContext;
+        if (top != null) {
+          await Scrollable.ensureVisible(top,
+              alignment: 0.35,
+              duration:
+                  instant ? Duration.zero : const Duration(milliseconds: 200));
+        }
+        return;
+      }
+      if (instant) {
+        _scroll.jumpTo(next);
+        // One frame, which is what it takes for the list to build the part
+        // that just came into view, and nothing more.
+        await SchedulerBinding.instance.endOfFrame;
+      } else {
+        await _scroll.animateTo(next,
+            duration: const Duration(milliseconds: 90), curve: Curves.linear);
+        await Future<void>.delayed(const Duration(milliseconds: 16));
+      }
+      if (!mounted) return;
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -101,6 +374,17 @@ class _ChatScreenState extends State<ChatScreen> {
         !store.isOpened(widget.conversationId);
 
     _conversation = store.load(widget.conversationId);
+
+    // Where reading stopped, read before `_markRead` moves it.
+    //
+    // Opening at the newest message is right -- that is where a conversation
+    // is -- but it leaves somebody who has forty unread messages with no idea
+    // which ones they are. So the moment they last looked is kept, the first
+    // message after it is marked, and the mark stays where it was put for as
+    // long as the screen is open: a line that moves while you read is a line
+    // that tells you nothing.
+    _readUpTo = _conversation?.lastOpened;
+    _scroll.addListener(_watchTheScroll);
     // While this is on screen, a message in this conversation is not news.
     alerts.openConversation = widget.conversationId;
     alerts.read(widget.conversationId);
@@ -116,21 +400,58 @@ class _ChatScreenState extends State<ChatScreen> {
     // merely repainting.
     rotelyx.stateChanges.listen((_) {
       if (!mounted) return;
-      setState(() => _conversation = store.load(widget.conversationId));
+      _reloadSoon();
     });
 
     // Things that were refused while the conversation still works. A spent
     // allowance is the one this was built for: the deposit did not happen and
     // nothing else on this screen would ever say so, because a message that is
     // not stored looks the same from here as one that is.
+    // Shown under the header rather than as a bar over the compose box: a
+    // notice about the conversation belongs where the conversation's own
+    // state is (who is here, whether it is connected), and a bar at the
+    // bottom covered the field somebody was typing into.
     rotelyx.notices.listen((message) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(message),
-        duration: const Duration(seconds: 8),
-      ));
+      _noticeTimer?.cancel();
+      setState(() => _notice = message);
+      _noticeTimer = Timer(const Duration(seconds: 8), () {
+        if (mounted) setState(() => _notice = null);
+      });
     });
     _resumeIfNeeded();
+  }
+
+  /// Reload the conversation, at most once every fifth of a second.
+  ///
+  /// The session reports a change for every message, every receipt, every
+  /// commit and every member who arrives, and in a group of thirteen people
+  /// that is several a second. Each one used to reopen the vault, decrypt the
+  /// whole transcript and rebuild every object in it, which is the work that
+  /// made the screen stutter and blink while a burst came in.
+  ///
+  /// Coalescing them loses nothing: what is wanted is the state after the
+  /// burst, not one frame per event in it.
+  void _reloadSoon() {
+    if (_reloadPending) return;
+    _reloadPending = true;
+    Timer(const Duration(milliseconds: 200), () {
+      _reloadPending = false;
+      if (!mounted) return;
+      setState(() => _conversation = store.load(widget.conversationId));
+    });
+  }
+
+  bool _reloadPending = false;
+
+  /// One line under the header, for something this screen has to say itself.
+  void _say(String message) {
+    if (!mounted) return;
+    _noticeTimer?.cancel();
+    setState(() => _notice = message);
+    _noticeTimer = Timer(const Duration(seconds: 5), () {
+      if (mounted) setState(() => _notice = null);
+    });
   }
 
   @override
@@ -139,6 +460,9 @@ class _ChatScreenState extends State<ChatScreen> {
       alerts.openConversation = null;
     }
     _tick?.cancel();
+    _flashOff?.cancel();
+    _scroll.removeListener(_watchTheScroll);
+    _noticeTimer?.cancel();
     _input.dispose();
     _scroll.dispose();
     _focus.dispose();
@@ -191,7 +515,9 @@ class _ChatScreenState extends State<ChatScreen> {
   /// before it was opened.
   void _onIncoming(RotelyxMessage _) {
     if (!mounted) return;
-    setState(() => _conversation = store.load(widget.conversationId));
+    // Coalesced, like every other reason to reload: a burst of arrivals is one
+    // update of the screen, not one per message. See `_reloadSoon`.
+    _reloadSoon();
     // After the reload, not before. The service is what writes a message down,
     // so at the moment `send` returns this screen still holds the conversation
     // as it was, and starting clocks on that copy started none: the message
@@ -201,13 +527,26 @@ class _ChatScreenState extends State<ChatScreen> {
     // appears on a conversation the user is looking at.
     _markRead();
     widget.onChanged?.call();
-    _toBottom();
+    if (_scroll.hasClients && _scroll.offset > 80) {
+      // Not at the end: say that something arrived instead of going to it.
+      setState(() => _below++);
+    } else {
+      _toBottom(always: false);
+    }
   }
 
-  void _toBottom() {
+  void _toBottom({bool always = true}) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_scroll.hasClients) return;
-      _scroll.animateTo(_scroll.position.maxScrollExtent,
+      // Reading anywhere but the very bottom is not interrupted.
+      //
+      // The list is reversed, so the bottom is offset zero. This used to allow
+      // a screen of slack, which meant a message arriving while somebody was a
+      // paragraph up still yanked them down. Now anything but the bottom is
+      // treated as deliberate, and what arrives is announced on the button
+      // instead of being scrolled to.
+      if (!always && _scroll.offset > 80) return;
+      _scroll.animateTo(0,
           duration: const Duration(milliseconds: 180), curve: Curves.easeOut);
     });
   }
@@ -356,8 +695,7 @@ class _ChatScreenState extends State<ChatScreen> {
       final fitted = await fitAnimation(bytes, maxBytes: budget);
       if (fitted != null) {
         if (!mounted || !_live) return;
-        _sendAttachment(
-            Attachment(name: name, mime: 'image/gif', bytes: fitted));
+        _hold(Attachment(name: name, mime: 'image/gif', bytes: fitted));
         return;
       }
       // A single frame animation, or one that will not come down far enough.
@@ -394,7 +732,21 @@ class _ChatScreenState extends State<ChatScreen> {
     // lands in whichever conversation is live, which for a file is worse than
     // for a sentence.
     if (!_live) return;
-    _sendAttachment(Attachment(name: name, mime: mime, bytes: bytes));
+    _hold(Attachment(name: name, mime: mime, bytes: bytes));
+  }
+
+  /// A picture chosen but not sent yet, waiting for whatever is said with it.
+  ///
+  /// Picking a picture used to send it on the spot, so saying something about
+  /// it was a second message: two bubbles, two notifications, and an order
+  /// the other phone does not guarantee. Now it waits in the composer, the way
+  /// every messenger people already use does it, and the line typed next
+  /// travels inside the same message.
+  Attachment? _waiting;
+
+  void _hold(Attachment file) {
+    setState(() => _waiting = file);
+    _focus.requestFocus();
   }
 
   /// Send a file, through the same timer a sentence goes through.
@@ -648,14 +1000,24 @@ class _ChatScreenState extends State<ChatScreen> {
     if (_input.text.trim() == pending) _send();
   }
 
-  void _send() {
+  Future<void> _send() async {
     final text = _input.text.trim();
-    if (text.isEmpty) return;
+    // A picture on its own is a message; a picture with a line is one message
+    // too. Only an empty composer with nothing waiting is nothing to send.
+    if (text.isEmpty && _waiting == null) return;
 
     if (!_live) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('This conversation is not connected.')));
-      return;
+      // Not connected is a thing to fix, not a thing to announce. The session
+      // is sealed on this device, so it can be rebuilt here and now, and the
+      // socket can be reopened; a snackbar saying "not connected" left the
+      // person with a message typed and nothing to do about it.
+      rotelyx.wake();
+      await _resumeIfNeeded();
+      if (!mounted) return;
+      if (!_live) {
+        rotelyx.notice('Not connected yet. Trying again.');
+        return;
+      }
     }
 
     // Two states hold a message back, and they hold it back differently.
@@ -676,8 +1038,34 @@ class _ChatScreenState extends State<ChatScreen> {
       _numberChanged();
       return;
     }
-    if (state == Verification.never && rotelyx.safetyNumber != null) {
+    // Asked once, and only where it is the check that matters: a
+    // conversation of two, at first contact, where the phrase could have been
+    // answered by somebody else. In a group every member was let in by two
+    // members who were already there, and asking somebody to read thirty
+    // digits to eight people reads as absurd because it is. The number stays
+    // in the panel for anybody who wants it.
+    if (state == Verification.never &&
+        rotelyx.safetyNumber != null &&
+        rotelyx.memberCount <= 2) {
       _askToCompare(text);
+      return;
+    }
+
+    // The picture waiting in the composer, with whatever was typed as its
+    // caption, in one message.
+    final waiting = _waiting;
+    if (waiting != null) {
+      _sendAttachment(Attachment(
+        name: waiting.name,
+        mime: waiting.mime,
+        bytes: waiting.bytes,
+        caption: text,
+      ));
+      _input.clear();
+      setState(() {
+        _waiting = null;
+        _replyingTo = null;
+      });
       return;
     }
 
@@ -692,7 +1080,12 @@ class _ChatScreenState extends State<ChatScreen> {
                 : (answering.author.isEmpty
                     ? _conversation?.title ?? ''
                     : answering.author),
-            excerpt: Quoted.plain(answering.text),
+            // What it is, when what it is is not words: "Picture", or the
+            // line that came with the picture. The alternative is the first
+            // hundred characters of base64 in the quote, on their phone and on
+            // ours, which is what it used to be.
+            excerpt: attachmentGlimpse(Quoted.plain(answering.text)) ??
+                Quoted.plain(answering.text),
             reply: text,
           ).encode();
 
@@ -1323,6 +1716,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
     setState(() {
       c.messages.removeWhere((m) => m.at == message.at && m.mine == message.mine);
+      c.forget(message.at);
       _burning.remove(message.at);
     });
     store.save(c);
@@ -1409,7 +1803,20 @@ class _ChatScreenState extends State<ChatScreen> {
         child: Column(
           children: [
             _Header(
+              key: const ValueKey('header'),
               live: _live,
+              behind: rotelyx.isBehind(widget.conversationId),
+              // The way back in, when this copy has fallen behind and kept the
+              // invitation it came through. Going through it again is a
+              // welcome into the same group, and the pairing screen lands it
+              // in this row. Null for a host, which was never a guest.
+              onRejoin: c.joinedVia == null
+                  ? null
+                  : () {
+                      final via = c.joinedVia!;
+                      widget.onBack?.call();
+                      openLinkAgain(via);
+                    },
               onCall: calls.isPossible ? _placeCall : null,
               onOpenContact: () => ContactSheet.open(
                 context,
@@ -1420,10 +1827,18 @@ class _ChatScreenState extends State<ChatScreen> {
                   widget.onChanged?.call();
                 },
               ),
-              title: c.title,
+              title: c.displayTitle,
+              face: c.face,
               onBack: widget.onBack,
               onToggleSafety: () => setState(() => _showSafety = !_showSafety),
               onAddMember: _addMember,
+              onCatchUp: () {
+                if (rotelyx.askToCatchUp()) {
+                  rotelyx.notice('Asked the others for what this device missed.');
+                } else {
+                  rotelyx.notice('Not connected. Try again in a moment.');
+                }
+              },
               expanded: _showSafety,
               verification: store.verificationOf(
                   widget.conversationId, rotelyx.safetyNumber),
@@ -1431,6 +1846,7 @@ class _ChatScreenState extends State<ChatScreen> {
               resumable: store.sessionBlob(widget.conversationId) != null,
             ),
             AnimatedSize(
+              key: const ValueKey('safety'),
               duration: Motion.sheet,
               curve: Motion.sheetCurve,
               alignment: Alignment.topCenter,
@@ -1442,6 +1858,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 !_live &&
                 store.sessionBlob(widget.conversationId) == null)
               const Padding(
+                key: ValueKey('unreachable'),
                 padding: EdgeInsets.fromLTRB(
                     Metrics.pad, Metrics.pad, Metrics.pad, 0),
                 child: RxNote(
@@ -1464,6 +1881,7 @@ class _ChatScreenState extends State<ChatScreen> {
             // is there to walk into the moment somebody opens the door.
             if (rotelyx.callIsLiveIn(widget.conversationId))
               Padding(
+                key: const ValueKey('call'),
                 padding: const EdgeInsets.fromLTRB(
                     Metrics.pad, 0, Metrics.pad, Metrics.pad),
                 child: Material(
@@ -1500,8 +1918,19 @@ class _ChatScreenState extends State<ChatScreen> {
             // a decision with a deadline: the person is waiting at a meeting
             // place, and a request scrolled past is a person who never gets
             // in. Once it is done it becomes a line like any other arrival.
+            if (_notice != null)
+              _Notice(
+                key: const ValueKey('notice'),
+                text: _notice!,
+                onDismiss: () {
+                  _noticeTimer?.cancel();
+                  setState(() => _notice = null);
+                },
+              ),
+
             if (rotelyx.pendingAddition != null)
               _AdmissionRequest(
+                key: const ValueKey('admission'),
                 waiting: rotelyx.pendingAddition!,
                 onLetIn: () {
                   if (rotelyx.confirmPendingAddition()) setState(() {});
@@ -1512,8 +1941,37 @@ class _ChatScreenState extends State<ChatScreen> {
                 },
               ),
 
+            // Keyed, and every sibling above it keyed too.
+            //
+            // # Why this one key matters more than the rest
+            //
+            // A `Column` matches its children to the previous build by
+            // position. The banners above this one come and go -- a notice, a
+            // request to admit somebody, the note about a conversation that
+            // cannot be rejoined, which appears and disappears as the live
+            // conversation moves between rooms -- and every one of those
+            // insertions shifted this list down a slot. Flutter then found a
+            // different widget where the list used to be, threw the whole
+            // transcript away and built it again: every bubble a new element,
+            // every entry animation played from nothing, every picture decoded
+            // afresh.
+            //
+            // That is the flash of the whole conversation vanishing and coming
+            // back, and it is the fault he reported five times. Keys let the
+            // column recognise its children wherever they end up, so a banner
+            // appearing costs a banner and nothing else.
+            // Taken here rather than in `initState`: the messages that were
+            // waiting arrive after the screen is up, so where to open is only
+            // knowable once they are in the transcript.
+            Builder(builder: (_) {
+              _openWhereReadingStopped(c);
+              return const SizedBox.shrink();
+            }),
             Expanded(
-              child: GestureDetector(
+              key: const ValueKey('transcript'),
+              child: Stack(
+                children: [
+                  GestureDetector(
                 behavior: HitTestBehavior.translucent,
                 onTap: () => FocusScope.of(context).unfocus(),
                 child: c.messages.isEmpty
@@ -1534,28 +1992,119 @@ class _ChatScreenState extends State<ChatScreen> {
                       // this is on the list rather than on each row.
                       keyboardDismissBehavior:
                           ScrollViewKeyboardDismissBehavior.onDrag,
+                      // Built from the newest message upwards, so offset zero
+                      // is the bottom of the conversation and that is where
+                      // it opens, every time, before anything above it has
+                      // been laid out. It used to be built top down and
+                      // opened wherever the first frame's estimate of the
+                      // height put it, which for a long conversation with
+                      // pictures in it was somewhere in the middle.
+                      reverse: true,
                       itemCount: c.messages.length,
-                      itemBuilder: (_, i) {
+
+                      // Where a bubble went, so the list can move it instead of
+                      // building it again.
+                      //
+                      // # The whole reason this callback exists here
+                      //
+                      // The list is built newest first, so the message that
+                      // just arrived is row zero and every older message moves
+                      // down one. A lazy list matches its children to rows by
+                      // position, so after one arrival every row holds a
+                      // different message from the one before: Flutter throws
+                      // away every element on the screen and builds the
+                      // transcript again, pictures decoded from scratch and
+                      // all. That is the flash of the whole conversation
+                      // disappearing and coming back that he reported four
+                      // times, and neither the keys nor the throttling fixed
+                      // it, because the problem is not what is rebuilt but
+                      // that the rows are found by position at all.
+                      //
+                      // With this, the list asks "the bubble for that message
+                      // -- which row is it now?", finds it one row further
+                      // down, and moves the element it already has.
+                      findChildIndexCallback: (key) {
+                        if (key is! ValueKey<DateTime>) return null;
+                        final at = key.value.millisecondsSinceEpoch;
+                        for (var i = c.messages.length - 1; i >= 0; i--) {
+                          if (c.messages[i].at.millisecondsSinceEpoch == at) {
+                            return c.messages.length - 1 - i;
+                          }
+                        }
+                        return null;
+                      },
+                      itemBuilder: (_, ri) {
+                        final i = c.messages.length - 1 - ri;
                         final message = c.messages[i];
+
+                        // A control message that was written down before this
+                        // build knew what it was.
+                        //
+                        // Nothing writes these any more: an unknown one is
+                        // dropped where it arrives. But the ones already in
+                        // somebody's conversation are still there, and one of
+                        // them is a group picture, which is forty thousand
+                        // characters of base64 sitting in the transcript. They
+                        // are not shown rather than deleted, because deleting
+                        // somebody's transcript to tidy up is not this
+                        // screen's to do.
+                        if (Signal.isControl(message.text)) {
+                          return SizedBox.shrink(key: ValueKey(message.at));
+                        }
 
                         // A call is not something somebody said, so it is not
                         // drawn as something somebody said. No bubble, no side,
                         // no reply and no reaction: those all belong to a
                         // message with an author, and this has an event.
                         if (message.call != null) {
-                          return _CallLine(message: message);
+                          return _CallLine(
+                              key: ValueKey(message.at), message: message);
                         }
 
                         final bubble = _Bubble(
+                          key: message.at == _targetAt
+                              ? _target
+                              : ValueKey(message.at),
                           message: message,
+                          // Marked for a moment after a jump landed on it.
+                          found: _flash != null && _flash == message.at,
+                          // Tapping the quote goes to what is being answered,
+                          // whatever it is: a sentence, a picture, a link.
+                          onOpenQuoted: (quoted) =>
+                              _goToQuoted(c.messages, i, quoted),
                           showAuthor: _startsRun(c.messages, i),
-                          // Theirs, which arrives from them. There is no
-                          // per-author picture in a group yet, so everybody in
-                          // one wears the conversation's face until there is.
-                          face: c.picture,
-                          faceName: message.author.isNotEmpty
+                          // The author's own face when it has arrived; in a
+                          // conversation of two, theirs; in a group with no
+                          // face for this author, their initial in their
+                          // colour rather than somebody else's picture.
+                          // Ours for our own, theirs for theirs: the same
+                          // picture Settings shows, so a group has every
+                          // member's face in it including the reader's.
+                          face: message.mine
+                              ? store.myPicture
+                              : (c.faceOf(message.author) ??
+                                  (_isGroup(c) ? null : c.picture)),
+                          faceName: message.mine
+                              ? rotelyx.displayName
+                              : (message.author.isNotEmpty
+                                  ? message.author
+                                  : c.displayTitle),
+                          // In a group, whose bubble this is. Their name on
+                          // the first of a run and their colour on every one
+                          // of them: eight people in the same grey bubble
+                          // read as one person talking to themselves.
+                          authorTint: _isGroup(c) &&
+                                  message.author.isNotEmpty &&
+                                  message.author != c.title
                               ? message.author
-                              : c.displayTitle,
+                              : null,
+                          // And which side they speak from. Taken from the
+                          // order the group spoke in rather than from a hash
+                          // of the names: a hash puts everybody on the same
+                          // side often enough that it looked broken, which is
+                          // what it was.
+                          authorRight: _isGroup(c) && _sides.rightFor(c, i),
+                          inGroup: _isGroup(c),
                           onReply: () => _replyTo(message),
                           // Applied inside `_Bubble`, around the bubble alone.
                           // Wrapping this row put the fire across the whole
@@ -1566,23 +2115,154 @@ class _ChatScreenState extends State<ChatScreen> {
                           onReact: () => _messageActions(message),
                         );
 
-                        // Keyed on the message so that scrolling, which builds
-                        // and destroys these elements freely, does not read as
-                        // a fresh arrival.
-                        if (!message.at.isAfter(_openedAt)) return bubble;
-                        return RxEnter(
-                            key: ValueKey(message.at), child: bubble);
+                        // Decided once per message, never per build.
+                        //
+                        // # The hole this caused
+                        //
+                        // The rule below was evaluated on every rebuild, and
+                        // two of its terms change with time: whether the
+                        // conversation has settled, and which message is the
+                        // newest. So the last bubble was drawn plainly for a
+                        // second and a half and then, on the next rebuild,
+                        // wrapped in an entrance -- which makes it a different
+                        // widget, so Flutter builds a new element, and an
+                        // entrance starts at nothing. The newest message
+                        // vanished and faded back in, leaving a bubble-shaped
+                        // hole above the composer while older messages loaded.
+                        // He described it exactly: "a gap where the last
+                        // message should be".
+                        //
+                        // Now the decision is made the first time a message is
+                        // drawn and written down, so its shape never changes
+                        // underneath it.
+                        //
+                        // Only the newest message animates in, and only once
+                        // the conversation has settled.
+                        //
+                        // # Why the two conditions
+                        //
+                        // Opening a conversation collects whatever arrived
+                        // while it was closed: thirty messages in a couple of
+                        // seconds, every one of them newer than the moment the
+                        // screen opened, so every one was wrapped in an
+                        // entrance that starts at nothing. Thirty bubbles
+                        // fading in at once, several times as the backlog
+                        // lands, is the whole conversation blinking -- which is
+                        // exactly what he described: it happens *on entering* a
+                        // room that has messages waiting.
+                        //
+                        // A settling period covers the backlog, and animating
+                        // only the last bubble covers a burst: what a person
+                        // should see is the newest line arriving, not the
+                        // transcript reassembling itself.
+                        final stamp = message.at.millisecondsSinceEpoch;
+                        if (!_drawn.contains(stamp)) {
+                          _drawn.add(stamp);
+                          final newest = i == c.messages.length - 1;
+                          final settled = DateTime.now()
+                                  .difference(_openedAt)
+                                  .inMilliseconds >
+                              1500;
+                          if (newest && settled && message.at.isAfter(_openedAt)) {
+                            _entering.add(stamp);
+                          }
+                        }
+
+                        final shown = _entering.contains(stamp)
+                            ? RxEnter(key: ValueKey(message.at), child: bubble)
+                            : bubble;
+
+                        // "You stopped here." Above the first message that
+                        // arrived after the last time this conversation was
+                        // open, and nowhere else.
+                        if (stamp != _unreadMark(c)) return shown;
+                        return Column(
+                          key: ValueKey('unread-$stamp'),
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(0, 6, 0, 10),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                      child: WavyRule(
+                                          colour: Tone.accent
+                                              .withValues(alpha: 0.55))),
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 8),
+                                    child: Text('unread',
+                                        style: Type.small.copyWith(
+                                            fontSize: 11,
+                                            letterSpacing: 0.6,
+                                            color: Tone.accent)),
+                                  ),
+                                  Expanded(
+                                      child: WavyRule(
+                                          colour: Tone.accent
+                                              .withValues(alpha: 0.55))),
+                                ],
+                              ),
+                            ),
+                            shown,
+                          ],
+                        );
                       },
                     ),
               ),
+
+                  // The way back down, while there is a way down to go.
+                  //
+                  // Reading something from an hour ago in a group that is
+                  // still talking leaves the newest message somewhere below
+                  // the screen, and the only way back was to drag. It appears
+                  // when the bottom is more than a screen away and goes when
+                  // it is not, so it is never in front of anything while the
+                  // conversation is being read at the bottom, which is where
+                  // it is read most of the time.
+                  Positioned(
+                    right: 14,
+                    bottom: 14,
+                    child: IgnorePointer(
+                      ignoring: !_away,
+                      child: AnimatedOpacity(
+                        opacity: _away ? 1 : 0,
+                        duration: const Duration(milliseconds: 160),
+                        child: AnimatedSlide(
+                          offset: _away ? Offset.zero : const Offset(0, 0.3),
+                          duration: const Duration(milliseconds: 160),
+                          curve: Curves.easeOut,
+                          child: _ToTheEnd(
+                            waiting: _below,
+                            onTap: () {
+                              _toBottom();
+                              HapticFeedback.selectionClick();
+                              setState(() => _below = 0);
+                            },
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
+            // What is about to be sent, above the field it will be sent with.
+            if (_waiting != null)
+              _WaitingPicture(
+                key: const ValueKey('waiting'),
+                file: _waiting!,
+                onCancel: () => setState(() => _waiting = null),
+              ),
             if (_replyingTo != null)
               _ReplyingTo(
+                key: const ValueKey('replying'),
                 message: _replyingTo!,
                 fallbackAuthor: c.title,
                 onCancel: () => setState(() => _replyingTo = null),
               ),
             _Composer(
+              key: const ValueKey('composer'),
               controller: _input,
               focus: _focus,
               onSend: _send,
@@ -1602,25 +2282,61 @@ class _ChatScreenState extends State<ChatScreen> {
   /// True when this message starts a new run from one sender, so only the first
   /// of a burst carries a name and the column stays quiet.
   bool _startsRun(List<StoredMessage> all, int i) =>
-      i == 0 || all[i - 1].mine != all[i].mine;
+      i == 0 ||
+      all[i - 1].mine != all[i].mine ||
+      all[i - 1].author != all[i].author;
+
+  /// More than two in it, as far as this device can tell: from the live
+  /// session when this is the live conversation, otherwise from whether the
+  /// messages come from more than one author.
+  bool _isGroup(StoredConversation c) {
+    if (rotelyx.conversationId == c.id && rotelyx.memberCount > 0) {
+      return rotelyx.memberCount > 2;
+    }
+    if (c.groupName.isNotEmpty || c.groupPicture != null) return true;
+    final authors = <String>{};
+    for (final m in c.messages) {
+      if (!m.mine && m.author.isNotEmpty) authors.add(m.author);
+      if (authors.length > 1) return true;
+    }
+    return false;
+  }
 }
 
 class _Header extends StatelessWidget {
   const _Header({
+    super.key,
     required this.title,
+    required this.face,
     required this.onOpenContact,
     required this.onCall,
     required this.onBack,
     required this.onToggleSafety,
     required this.onAddMember,
+    required this.onCatchUp,
     required this.expanded,
     required this.verification,
     required this.resuming,
     required this.resumable,
     required this.live,
+    required this.behind,
+    this.onRejoin,
   });
 
   final String title;
+
+  /// Whether this device has fallen behind the group and cannot read it.
+  final bool behind;
+
+  /// Rejoin the group through the invitation this device joined by, offered
+  /// on the chip that says it has fallen behind. See `StoredConversation.joinedVia`.
+  final VoidCallback? onRejoin;
+
+  /// Their picture, when they have sent one. The list and every bubble
+  /// already drew it; the header drew their initial, so the one place that
+  /// names the conversation was the one place they did not look like
+  /// themselves.
+  final Uint8List? face;
 
   /// Their name, their picture, and what this device does about them.
   final VoidCallback onOpenContact;
@@ -1632,6 +2348,7 @@ class _Header extends StatelessWidget {
   final VoidCallback? onBack;
   final VoidCallback onToggleSafety;
   final VoidCallback onAddMember;
+  final VoidCallback onCatchUp;
   final bool expanded;
 
   /// What the shield reports. It used to report whether the panel below it was
@@ -1669,7 +2386,11 @@ class _Header extends StatelessWidget {
               onPressed: onBack,
               icon: Icon(Icons.arrow_back, size: 20, color: t.muted),
             ),
-          RxAvatar(title, size: 36),
+          face == null
+              ? RxAvatar(title, size: 36)
+              : ClipOval(
+                  child: Image.memory(face!,
+                      width: 36, height: 36, fit: BoxFit.cover)),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -1699,24 +2420,44 @@ class _Header extends StatelessWidget {
                     // as information, and it was the piece of machinery talking
                     // rather than the conversation. The other three say what is
                     // happening, so this one does too.
-                    RxChip(
-                        live
-                            ? 'connected'
-                            : resuming
-                                ? 'reconnecting'
-                                : resumable
-                                    ? 'offline'
-                                    : 'history only',
-                        tone: live
-                            ? Tone.good
-                            : resuming
-                                ? Tone.warn
-                                : t.faint,
-                        icon: live
-                            ? Icons.inbox_outlined
-                            : resumable
-                                ? Icons.cloud_off
-                                : Icons.history),
+                    // "Behind" outranks "connected", because it is the one
+                    // state that looks like nothing being wrong. A device that
+                    // cannot read a group any more is connected, at an epoch,
+                    // with a roster -- and every message it is handed is noise.
+                    // Saying `connected` there is the header lying.
+                    // Behind, and with a way back: the chip is the way back.
+                    // A red label that only names the problem leaves the
+                    // person to work out that the fix is the link they were
+                    // sent a week ago, and most will not.
+                    GestureDetector(
+                      onTap: behind ? onRejoin : null,
+                      child: RxChip(
+                          behind
+                              ? (onRejoin != null
+                                  ? 'behind this group, tap to rejoin'
+                                  : 'behind this group')
+                              : live
+                                  ? 'connected'
+                                  : resuming
+                                      ? 'reconnecting'
+                                      : resumable
+                                          ? 'offline'
+                                          : 'history only',
+                          tone: behind
+                              ? Tone.bad
+                              : live
+                                  ? Tone.good
+                                  : resuming
+                                      ? Tone.warn
+                                      : t.faint,
+                          icon: behind
+                              ? Icons.link_off
+                              : live
+                                  ? Icons.inbox_outlined
+                                  : resumable
+                                      ? Icons.cloud_off
+                                      : Icons.history),
+                    ),
                     // The epoch used to sit here and pushed the row onto a
                     // second line on a phone, which made the header taller than
                     // the name it exists to show. It is a protocol detail and
@@ -1726,6 +2467,13 @@ class _Header extends StatelessWidget {
                     if (live && rotelyx.memberCount > 2)
                       RxChip('${rotelyx.memberCount} here',
                           icon: Icons.group_outlined),
+                    // Which epoch this device is at. Every commit moves it,
+                    // and two devices showing different numbers are two
+                    // devices in different conversations, which is the one
+                    // thing worth knowing when messages seem to go missing.
+                    if (live && rotelyx.memberCount > 1)
+                      RxChip('epoch ${rotelyx.epoch}',
+                          icon: Icons.tag),
                   ],
                 ),
               ],
@@ -1763,8 +2511,22 @@ class _Header extends StatelessWidget {
               _HeaderAction.addMember => onAddMember(),
               _HeaderAction.contact => onOpenContact(),
               _HeaderAction.safety => onToggleSafety(),
+              _HeaderAction.catchUp => onCatchUp(),
             },
             itemBuilder: (_) => [
+              // For a device that was off, or behind: ask the others for
+              // what it missed. What they have is their copy; what this
+              // device has let go of stays gone.
+              if (live && rotelyx.memberCount > 1)
+                const PopupMenuItem(
+                  value: _HeaderAction.catchUp,
+                  child: ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(Icons.history, size: 19),
+                    title: Text('Catch up on what I missed'),
+                  ),
+                ),
               if (live && rotelyx.memberCount > 1)
                 const PopupMenuItem(
                   value: _HeaderAction.addMember,
@@ -1819,7 +2581,7 @@ class _Header extends StatelessWidget {
 }
 
 /// What the header's overflow menu can do.
-enum _HeaderAction { addMember, contact, safety }
+enum _HeaderAction { addMember, contact, safety, catchUp }
 
 class _SafetyPanel extends StatefulWidget {
   const _SafetyPanel({required this.conversationId});
@@ -1990,12 +2752,21 @@ class _SafetyPanelState extends State<_SafetyPanel> {
 
     return Container(
       width: double.infinity,
+      // Capped and scrolled inside. The panel grows with the conversation:
+      // one chip per member, and a group of fourteen makes it taller than the
+      // screen, so everything under the first rows of chips was unreachable
+      // and the transcript beneath it was squeezed to nothing. Not a fixed
+      // height, because on a small phone half the screen is already a lot.
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.sizeOf(context).height * 0.46,
+      ),
       padding: const EdgeInsets.all(Metrics.pad),
       decoration: BoxDecoration(
         color: t.surface,
         border: Border(bottom: BorderSide(color: t.line)),
       ),
-      child: Column(
+      child: SingleChildScrollView(
+        child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
@@ -2163,6 +2934,68 @@ class _SafetyPanelState extends State<_SafetyPanel> {
           ],
         ],
       ),
+      ),
+    );
+  }
+}
+
+/// The button that takes the conversation back to its newest message.
+///
+/// In the application's own purple, small, and with a shadow rather than a
+/// border: it floats over the transcript and has to be legible against a
+/// bubble, a picture or the ground without being the loudest thing on the
+/// screen.
+class _ToTheEnd extends StatelessWidget {
+  const _ToTheEnd({required this.onTap, this.waiting = 0});
+
+  final VoidCallback onTap;
+
+  /// How many arrived while the end was off the screen. Zero draws the plain
+  /// circle; anything else draws the count beside the arrow, because "there is
+  /// a way down" and "three people have said something" are different facts.
+  final int waiting;
+
+  @override
+  Widget build(BuildContext context) {
+    final shape = waiting > 0
+        ? RoundedRectangleBorder(borderRadius: BorderRadius.circular(19))
+        : const CircleBorder();
+
+    return Material(
+      color: Tone.accent,
+      shape: shape,
+      elevation: 3,
+      shadowColor: Colors.black.withValues(alpha: 0.5),
+      child: InkWell(
+        customBorder: shape,
+        onTap: onTap,
+        child: SizedBox(
+          height: 38,
+          child: waiting == 0
+              ? const SizedBox(
+                  width: 38,
+                  child: Icon(Icons.keyboard_arrow_down,
+                      color: Colors.white, size: 24),
+                )
+              : Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.keyboard_arrow_down,
+                          color: Colors.white, size: 20),
+                      const SizedBox(width: 5),
+                      Text(
+                          waiting == 1
+                              ? '1 new message'
+                              : '$waiting new messages',
+                          style: Type.label
+                              .copyWith(color: Colors.white, fontSize: 12.5)),
+                    ],
+                  ),
+                ),
+        ),
+      ),
     );
   }
 }
@@ -2218,10 +3051,78 @@ class _DecidesChip extends StatelessWidget {
   }
 }
 
+/// Which side of a group each message sits on.
+///
+/// Down the transcript the side flips every time the speaker changes: one
+/// person's run of messages is on the left, the next person's on the right,
+/// the next on the left again. A group then reads as a conversation between
+/// people instead of as a column, which is the whole complaint.
+///
+/// Two earlier attempts are worth knowing about, because both looked correct
+/// and neither was.
+///
+///   * A hash of the name. Stable, needs no state, and on a real group put six
+///     of seven people down the same side: a hash is not a balanced two-way
+///     split.
+///   * A side per person, alternating in the order they first spoke. Balanced
+///     over the whole group and still wrong on the screen: the people talking
+///     in any one minute were the first, third and fifth to have spoken, so
+///     every bubble in view was on the left again.
+///
+/// What a person actually sees is a sequence of turns, so it is the turn that
+/// decides. Somebody's side can differ between two parts of the conversation,
+/// which is why the name, the colour and the face are on the bubble: those say
+/// who is talking, and the side says that the talking is going back and forth.
+class _Sides {
+  /// Which side a message sits on, by the moment it was written.
+  ///
+  /// By the message and never by its position in the list. Keyed by position,
+  /// this was wrong every time the transcript changed shape: a message
+  /// arriving, one burning, one being withdrawn, a handover inserting older
+  /// messages. Every row after the change took the side that had belonged to
+  /// its neighbour, so the whole conversation flipped left and right at once.
+  /// That is the fast flicker he saw in groups and never in a conversation of
+  /// two -- because a conversation of two has no sides to flip.
+  final Map<int, bool> _right = {};
+
+  String? _of;
+  int _read = 0;
+
+  bool rightFor(StoredConversation c, int index) {
+    if (_of != c.id) {
+      _right.clear();
+      _read = 0;
+      _of = c.id;
+    }
+    if (_read != c.messages.length) {
+      _right.clear();
+      String? last;
+      var right = false;
+      for (final m in c.messages) {
+        // Ours is always on the right and is not a turn in this sense: a run
+        // of theirs either side of something we said is still one run.
+        if (m.mine || m.author.isEmpty) continue;
+        if (last != null && m.author != last) right = !right;
+        last = m.author;
+        _right[m.at.millisecondsSinceEpoch] = right;
+      }
+      _read = c.messages.length;
+    }
+    if (index < 0 || index >= c.messages.length) return false;
+    return _right[c.messages[index].at.millisecondsSinceEpoch] ?? false;
+  }
+}
+
 class _Bubble extends StatelessWidget {
   const _Bubble({
+    super.key,
     required this.message,
     required this.showAuthor,
+    this.authorTint,
+    this.authorRight = false,
+    this.inGroup = false,
+    this.found = false,
+    this.onOpenQuoted,
     this.onReply,
     this.burning = false,
     this.onGone,
@@ -2232,6 +3133,25 @@ class _Bubble extends StatelessWidget {
 
   final StoredMessage message;
   final bool showAuthor;
+
+  /// Whose bubble this is, in a group: their name, which colours the bubble
+  /// and is written above the first of each run. Null in a conversation of
+  /// two, and for our own, where there is nobody to tell apart.
+  final String? authorTint;
+
+  /// Whether this author's bubbles sit on the right.
+  final bool authorRight;
+
+  /// Whether this is a group, which is what decides if our own face is drawn
+  /// beside our own messages.
+  final bool inGroup;
+
+  /// Whether a jump has just landed here, so it can be seen to be the message
+  /// that was being pointed at.
+  final bool found;
+
+  /// Go to the message this one is answering.
+  final void Function(Quoted quoted)? onOpenQuoted;
   final VoidCallback? onReply;
 
   /// The face of whoever sent this, when they have chosen one.
@@ -2321,15 +3241,29 @@ class _Bubble extends StatelessWidget {
   /// left edge instead of stepping in and out as each bubble gains or loses a
   /// face beside it.
   ///
-  /// Only on what arrived. Somebody does not need to be shown their own face
-  /// beside every line they wrote, and the space on that side is the side the
-  /// bubble is already against.
-  Widget _face() {
+  /// In a group, everybody's, including ours.
+  ///
+  /// It used to be only on what arrived, on the reasoning that nobody needs to
+  /// be shown their own face. That reads fine in a conversation of two and
+  /// wrong in a group: eight people each have a face beside their bubbles and
+  /// the one person whose face is missing is the person reading. He asked what
+  /// had happened to his picture, which is the question a gap like that makes
+  /// somebody ask.
+  ///
+  /// A conversation of two keeps the old behaviour: there is one other person,
+  /// their face is in the header, and a column of two faces is decoration.
+  /// Which side this bubble sits on: ours on the right, and in a group the
+  /// side the transcript handed this author. Decided upstream, in `_Sides`,
+  /// because the answer depends on the whole conversation and not on one
+  /// bubble.
+  bool get _onRight => authorRight;
+
+  Widget _face({bool onRight = false}) {
     const size = 28.0;
     if (!showAuthor) return const SizedBox(width: size + 8);
 
     return Padding(
-      padding: const EdgeInsets.only(right: 8),
+      padding: EdgeInsets.only(right: onRight ? 0 : 8, left: onRight ? 8 : 0),
       child: SizedBox(
         width: size,
         height: size,
@@ -2343,11 +3277,15 @@ class _Bubble extends StatelessWidget {
   }
 
   Widget _row(BuildContext context, RotelyxTheme t, bool mine) {
+    final right = mine || _onRight;
+    // Ours is drawn in a group and nowhere else. See `_face`.
+    final withFace = !mine || inGroup;
     return Row(
-        mainAxisAlignment: mine ? MainAxisAlignment.end : MainAxisAlignment.start,
+        mainAxisAlignment:
+            right ? MainAxisAlignment.end : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (!mine) _face(),
+          if (withFace && !right) _face(),
           // The burn wraps the bubble and nothing else.
           //
           // It used to wrap the whole row, which is the full width of the
@@ -2363,6 +3301,7 @@ class _Bubble extends StatelessWidget {
                   )
                 : _shell(context, t, mine),
           ),
+          if (withFace && right) _face(onRight: true),
         ]);
   }
 
@@ -2420,28 +3359,65 @@ class _Bubble extends StatelessWidget {
   }
 
   Widget _shellBody(BuildContext context, RotelyxTheme t, bool mine) {
+    final right = mine || _onRight;
     return Row(
       mainAxisSize: MainAxisSize.min,
-      mainAxisAlignment: mine ? MainAxisAlignment.end : MainAxisAlignment.start,
+      mainAxisAlignment:
+          right ? MainAxisAlignment.end : MainAxisAlignment.start,
       children: [
           Flexible(
-            child: Container(
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 240),
               constraints: BoxConstraints(
                   maxWidth: MediaQuery.of(context).size.width * 0.62),
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+              foregroundDecoration: found
+                  // A jump landed here. Said with a wash of the accent over
+                  // the bubble for a moment rather than by moving anything:
+                  // the reader is already looking at where it landed, and a
+                  // bubble that grows or slides is asking them to look again.
+                  ? BoxDecoration(
+                      color: Tone.accent.withValues(alpha: 0.22),
+                      borderRadius: BorderRadius.circular(Metrics.bubble),
+                    )
+                  : null,
               decoration: BoxDecoration(
-                color: mine ? t.mine : t.theirs,
+                // Theirs, in a group, carries a little of the colour their
+                // name is written in, so a burst from one person reads as one
+                // person without every bubble having to be labelled. A
+                // conversation of two keeps the plain one: there is only one
+                // other person and colouring them says nothing.
+                color: mine
+                    ? t.mine
+                    : (authorTint == null
+                        ? t.theirs
+                        : Color.alphaBlend(
+                            RxAvatar.colourFor(authorTint!)
+                                .withValues(alpha: 0.20),
+                            t.theirs)),
                 borderRadius: BorderRadius.only(
                   topLeft: const Radius.circular(Metrics.bubble),
                   topRight: const Radius.circular(Metrics.bubble),
-                  bottomLeft: Radius.circular(mine ? Metrics.bubble : 5),
-                  bottomRight: Radius.circular(mine ? 5 : Metrics.bubble),
+                  bottomLeft: Radius.circular(right ? Metrics.bubble : 5),
+                  bottomRight: Radius.circular(right ? 5 : Metrics.bubble),
                 ),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _Body(message: message, mine: mine),
+                  if (authorTint != null && showAuthor && !mine)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 3),
+                      child: Text(
+                        authorTint!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Type.label.copyWith(
+                            color: RxAvatar.colourFor(authorTint!), fontSize: 12),
+                      ),
+                    ),
+                  _Body(
+                      message: message, mine: mine, onOpenQuoted: onOpenQuoted),
                   const SizedBox(height: 3),
                   Row(
                     mainAxisSize: MainAxisSize.min,
@@ -2529,8 +3505,51 @@ class _Bubble extends StatelessWidget {
 /// The name is what the person knocking called themselves, which is worth
 /// what an unverified name is worth, and the copy says so rather than
 /// presenting it as established.
+/// A line the conversation has to say, under the header, until it is read
+/// or a few seconds pass.
+class _Notice extends StatelessWidget {
+  const _Notice({super.key, required this.text, required this.onDismiss});
+
+  final String text;
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = RotelyxThemeScope.of(context);
+    return Padding(
+      padding:
+          const EdgeInsets.fromLTRB(Metrics.pad, 0, Metrics.pad, Metrics.gap),
+      child: Container(
+        decoration: BoxDecoration(
+          color: t.raised,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: t.line),
+        ),
+        padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
+        child: Row(
+          children: [
+            Icon(Icons.info_outline, size: 16, color: t.muted),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(text,
+                  style: Type.body.copyWith(color: t.text, fontSize: 13)),
+            ),
+            IconButton(
+              icon: Icon(Icons.close, size: 16, color: t.muted),
+              onPressed: onDismiss,
+              tooltip: 'Dismiss',
+              visualDensity: VisualDensity.compact,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _AdmissionRequest extends StatelessWidget {
   const _AdmissionRequest({
+    super.key,
     required this.waiting,
     required this.onLetIn,
     required this.onNotNow,
@@ -2605,7 +3624,7 @@ class _AdmissionRequest extends StatelessWidget {
 }
 
 class _CallLine extends StatelessWidget {
-  const _CallLine({required this.message});
+  const _CallLine({super.key, required this.message});
 
   final StoredMessage message;
 
@@ -2696,8 +3715,74 @@ class _Empty extends StatelessWidget {
 ///
 /// Named and quoted, because a reply with no visible target is a message the
 /// sender thinks is attached to something and the reader has to guess about.
+/// The picture chosen, sitting above the composer until it is sent.
+///
+/// It shows what will be sent and offers the one thing somebody wants here,
+/// which is to change their mind. The line typed underneath goes with it.
+class _WaitingPicture extends StatelessWidget {
+  const _WaitingPicture({super.key, required this.file, required this.onCancel});
+
+  final Attachment file;
+  final VoidCallback onCancel;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = RotelyxThemeScope.of(context);
+    return Container(
+      margin: const EdgeInsets.fromLTRB(Metrics.pad, 0, Metrics.pad, 6),
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: t.raised,
+        borderRadius: BorderRadius.circular(Metrics.radius),
+      ),
+      child: Row(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: SizedBox(
+              width: 44,
+              height: 44,
+              child: file.isImage
+                  ? RotelyxPhoto(
+                      bytes: file.bytes,
+                      onFailed: (_) =>
+                          Icon(Icons.image_outlined, size: 24, color: t.muted),
+                    )
+                  : Icon(Icons.insert_drive_file_outlined,
+                      size: 24, color: t.muted),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(file.isImage ? 'Picture' : file.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Type.label.copyWith(color: t.text)),
+                Text('Say something about it, or just send it',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Type.small.copyWith(color: t.faint)),
+              ],
+            ),
+          ),
+          IconButton(
+            onPressed: onCancel,
+            icon: Icon(Icons.close, size: 18, color: t.muted),
+            tooltip: 'Do not send it',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _ReplyingTo extends StatelessWidget {
   const _ReplyingTo({
+    super.key,
     required this.message,
     required this.fallbackAuthor,
     required this.onCancel,
@@ -2748,6 +3833,7 @@ class _ReplyingTo extends StatelessWidget {
 
 class _Composer extends StatefulWidget {
   const _Composer({
+    super.key,
     required this.controller,
     required this.focus,
     required this.onSend,
@@ -3187,10 +4273,17 @@ class _Countdown extends StatelessWidget {
 }
 
 class _Body extends StatelessWidget {
-  const _Body({required this.message, required this.mine});
+  const _Body({
+    required this.message,
+    required this.mine,
+    this.onOpenQuoted,
+  });
 
   final StoredMessage message;
   final bool mine;
+
+  /// Tapping the quote goes to the message being answered.
+  final void Function(Quoted quoted)? onOpenQuoted;
 
   @override
   Widget build(BuildContext context) {
@@ -3221,7 +4314,14 @@ class _Body extends StatelessWidget {
           // rather than a citation attached to it. A rule down the side is
           // chrome that says "this is quoted" in a bubble whose shape and tint
           // already say it.
-          Container(
+          GestureDetector(
+            // The whole quote, not a corner of it: a person pointing at
+            // "what is this answering" aims at the quote.
+            behavior: HitTestBehavior.opaque,
+            onTap: onOpenQuoted == null
+                ? null
+                : () => onOpenQuoted!.call(quoted),
+            child: Container(
             margin: const EdgeInsets.only(bottom: 7),
             padding: const EdgeInsets.fromLTRB(11, 7, 11, 8),
             decoration: BoxDecoration(
@@ -3245,29 +4345,73 @@ class _Body extends StatelessWidget {
                         letterSpacing: 0.1,
                         color: fg.withOpacity(0.9))),
                 const SizedBox(height: 1),
-                Text(quoted.excerpt,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: Type.small.copyWith(
-                        fontSize: 12.5,
-                        height: 1.3,
-                        color: fg.withOpacity(0.62))),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // A picture being answered says "Picture" rather than the
+                    // first hundred characters of its base64, which is what a
+                    // quote carries when what it quotes is not words.
+                    if (attachmentGlimpse(quoted.excerpt) != null) ...[
+                      Icon(Icons.image_outlined,
+                          size: 13, color: fg.withOpacity(0.62)),
+                      const SizedBox(width: 4),
+                    ],
+                    Flexible(
+                      child: Text(
+                          attachmentGlimpse(quoted.excerpt) ?? quoted.excerpt,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: Type.small.copyWith(
+                              fontSize: 12.5,
+                              height: 1.3,
+                              color: fg.withOpacity(0.62))),
+                    ),
+                  ],
+                ),
               ],
             ),
+          ),
           ),
           SelectableText(quoted.reply, style: Type.body.copyWith(color: fg)),
         ],
       );
     }
 
+    // A bot's card: a title, a line, and buttons under it.
+    final card = BotCard.decode(body);
+    if (card != null) return _CardBody(card: card, fg: fg);
+
     final file = Attachment.decode(body);
 
     if (file == null) {
-      return SelectableText(body, style: Type.body.copyWith(color: fg));
+      // A link to a picture, an animation, a track or a clip is drawn as the
+      // thing it points at rather than as a line of text somebody has to
+      // leave the application to follow. Nothing is fetched until it is
+      // tapped: see `lib/rotelyx/media_link.dart`.
+      final links = mediaLinksIn(body);
+      if (links.isEmpty) {
+        return SelectableText(body, style: Type.body.copyWith(color: fg));
+      }
+
+      final said = textWithout(body, links);
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (said.isNotEmpty) ...[
+            SelectableText(said, style: Type.body.copyWith(color: fg)),
+            const SizedBox(height: 6),
+          ],
+          for (final link in links) ...[
+            LinkCard(key: ValueKey(link.url), link: link, fg: fg),
+            if (link != links.last) const SizedBox(height: 6),
+          ],
+        ],
+      );
     }
 
     if (file.isImage) {
-      return GestureDetector(
+      final picture = GestureDetector(
         // Opened on a tap, because a picture inside a bubble is a thumbnail
         // whatever its resolution, and looking properly at one is the ordinary
         // thing to want. The viewer is where saving lives too.
@@ -3280,8 +4424,144 @@ class _Body extends StatelessWidget {
           ),
         ),
       );
+      if (file.caption.isEmpty) return picture;
+
+      // What was said with the picture, under it and inside the same bubble,
+      // because it was one message and it should look like one.
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          picture,
+          const SizedBox(height: 6),
+          SelectableText(file.caption, style: Type.body.copyWith(color: fg)),
+        ],
+      );
     }
-    return _FileRow(file: file, fg: fg);
+    if (file.caption.isEmpty) return _FileRow(file: file, fg: fg);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _FileRow(file: file, fg: fg),
+        const SizedBox(height: 6),
+        SelectableText(file.caption, style: Type.body.copyWith(color: fg)),
+      ],
+    );
+  }
+}
+
+/// A card from a bot, with its buttons.
+///
+/// Pressing one sends the bot the button's own word for it and shows that it
+/// was pressed. Nothing runs on this device: see `lib/rotelyx/card.dart`.
+class _CardBody extends StatefulWidget {
+  const _CardBody({required this.card, required this.fg});
+
+  final BotCard card;
+  final Color fg;
+
+  @override
+  State<_CardBody> createState() => _CardBodyState();
+}
+
+class _CardBodyState extends State<_CardBody> {
+  /// The button pressed on this device, so it can be seen to have been.
+  String? _pressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final card = widget.card;
+    final fg = widget.fg;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (card.title.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 3),
+            child: Text(card.title,
+                style: Type.label.copyWith(color: fg, fontSize: 14.5)),
+          ),
+        if (card.text.isNotEmpty)
+          SelectableText(card.text, style: Type.body.copyWith(color: fg)),
+        if (card.buttons.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (final button in card.buttons)
+                _CardKey(
+                  label: button.label,
+                  fg: fg,
+                  chosen: _pressed == button.command,
+                  onTap: _pressed != null
+                      ? null
+                      : () {
+                          // Sent as a control message, so it reaches the bot
+                          // and appears in nobody's conversation.
+                          if (!rotelyx.signal(Signal.tap(button.command))) {
+                            rotelyx.notice('That did not go through. '
+                                'Not connected yet.');
+                            return;
+                          }
+                          HapticFeedback.selectionClick();
+                          setState(() => _pressed = button.command);
+                        },
+                ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _CardKey extends StatelessWidget {
+  const _CardKey({
+    required this.label,
+    required this.fg,
+    required this.chosen,
+    required this.onTap,
+  });
+
+  final String label;
+  final Color fg;
+  final bool chosen;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: chosen
+          ? Tone.accent.withValues(alpha: 0.35)
+          : fg.withValues(alpha: 0.10),
+      borderRadius: BorderRadius.circular(9),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(9),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (chosen) ...[
+                Icon(Icons.check, size: 14, color: fg),
+                const SizedBox(width: 5),
+              ],
+              Text(label,
+                  style: Type.label.copyWith(
+                      color: onTap == null && !chosen
+                          ? fg.withValues(alpha: 0.5)
+                          : fg,
+                      fontSize: 13)),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 

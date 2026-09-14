@@ -119,6 +119,52 @@ void main() {
       expect(base64Decode(pk).length, 1216);
     });
 
+    test('both sides name the conversation the same, and keep naming it that',
+        () {
+      if (!available) return;
+
+      // What makes rejoining a group keep its history: the group id is the
+      // same on every device in the group and does not move when the group
+      // does. A device welcomed back in can therefore recognise the
+      // conversation it already has, instead of starting a second one beside
+      // it. See `RotelyxStore.idForGroup`.
+      final host = engine.newSession('Ana');
+      final guest = engine.newSession('Beto');
+      addTearDown(host.dispose);
+      addTearDown(guest.dispose);
+
+      host.found();
+      final founded = host.groupId();
+      expect(founded, isNotEmpty);
+      expect(RegExp(r'^[0-9a-f]+$').hasMatch(founded), isTrue,
+          reason: 'hex, so it can be compared and written down as it is');
+
+      final invitation = host.invite(guest.keyPackage());
+      guest.join(invitation.welcome, invitation.ratchetTree);
+      guest.openPq(host.encapsulateTo(guest.hybridPublicKey()));
+      guest.receive(host.commitPq());
+      host.settle();
+
+      expect(guest.groupId(), equals(founded),
+          reason: 'the two sides are in one conversation, so they must name '
+              'it the same or neither could recognise it again');
+
+      // An epoch moved, a member added, messages sent: none of it renames the
+      // conversation. A name that moved with the epoch would be useless for
+      // exactly the case this exists for, where a device is stuck at an old one.
+      final epoch = host.epoch;
+      guest.receive(host.send('something that moves the ratchet'));
+      expect(host.groupId(), equals(founded));
+      expect(guest.groupId(), equals(founded));
+      expect(host.epoch, greaterThanOrEqualTo(epoch));
+
+      // And two separate conversations are not one.
+      final other = engine.newSession('Carla');
+      addTearDown(other.dispose);
+      other.found();
+      expect(other.groupId(), isNot(equals(founded)));
+    });
+
     test('two members pair, agree a safety number, and exchange a message', () {
       if (!available) return;
 

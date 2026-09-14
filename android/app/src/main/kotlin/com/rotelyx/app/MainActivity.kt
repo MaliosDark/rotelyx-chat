@@ -53,6 +53,23 @@ class MainActivity : FlutterFragmentActivity() {
         notifications = Notifications(applicationContext)
         notifications.createChannels()
 
+        // A line from Dart to the device log, at error level.
+        //
+        // This phone drops everything below error (`log.tag=E`), so Dart's own
+        // `print` and standard error never reach `adb logcat`, and the list
+        // failing to refresh was diagnosed by guesswork twice. Nothing said
+        // through here is a message or a name: which conversation, by id,
+        // and whether a socket opened.
+        MethodChannel(engine.dartExecutor.binaryMessenger, "rotelyx/trace")
+            .setMethodCallHandler { call, result ->
+                if (call.method == "line") {
+                    android.util.Log.e("Rotelyx", call.arguments?.toString() ?: "")
+                    result.success(null)
+                } else {
+                    result.notImplemented()
+                }
+            }
+
         val scanner = QrCamera(applicationContext, engine.renderer)
         camera = scanner
         MethodChannel(engine.dartExecutor.binaryMessenger, QrCamera.CHANNEL)

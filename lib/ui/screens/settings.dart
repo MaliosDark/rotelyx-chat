@@ -320,6 +320,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             : 'Only who it is from',
                         style: Type.small.copyWith(color: t.faint)),
                   ),
+                  SwitchListTile(
+                    value: store.soundInChat,
+                    onChanged: (want) => setState(() {
+                      store.soundInChat = want;
+                      // Heard once, so the switch is a choice and not a guess
+                      // about what it sounds like.
+                      if (want) alerts.chirp();
+                    }),
+                    activeThumbColor: Tone.accent,
+                    contentPadding: EdgeInsets.zero,
+                    title: Text('Sound while the conversation is open',
+                        style: Type.body.copyWith(color: t.text)),
+                    subtitle: Text(
+                        'A short tone when a message lands in the conversation '
+                        "you are looking at. Silent if your phone is.",
+                        style: Type.small.copyWith(color: t.faint)),
+                  ),
                   if (alerts.canStayConnected)
                     SwitchListTile(
                       value: _connected,

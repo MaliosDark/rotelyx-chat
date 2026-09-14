@@ -62,6 +62,10 @@ extension type WasmSessionJs._(JSObject _) implements JSObject {
   /// nothing.
   external String safetyNumber();
 
+  /// The MLS group id, as hex: what names this conversation for as long as it
+  /// exists.
+  external String groupId();
+
   external JSArray roster();
   external String rosterDetail();
   external String removeMember(String signatureKeyB64);
@@ -176,6 +180,8 @@ class _WebSession implements RotelyxSession {
   String hybridPublicKey() => inner.hybridPublicKey();
   @override
   String safetyNumber() => inner.safetyNumber();
+  @override
+  String groupId() => inner.groupId();
   @override
   List<String> roster() => _strings(inner.roster());
 

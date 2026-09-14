@@ -278,7 +278,12 @@ class StoredConversation {
     required this.lastActivity,
     this.nickname = '',
     this.picture,
+    this.groupName = '',
+    this.groupPicture,
+    Map<String, Uint8List>? faces,
+    Set<int>? forgotten,
     this.pinned = false,
+    this.archived = false,
     this.muted = false,
     this.receipts = false,
     this.unread = false,
@@ -286,6 +291,8 @@ class StoredConversation {
     this.verifiedNumber,
     this.askedToVerify = false,
     this.seenRoster,
+    this.groupId,
+    this.joinedVia,
     this.meetingTag,
     this.meetingExpires,
     this.meetingMaxUses,
@@ -296,7 +303,28 @@ class StoredConversation {
     List<String>? reports,
   })  : burnAcks = burnAcks ?? [],
         blocked = blocked ?? [],
-        reports = reports ?? [];
+        reports = reports ?? [],
+        faces = faces ?? {},
+        forgotten = forgotten ?? {};
+
+  /// Messages this device let go of on purpose, by the moment they were
+  /// sent: withdrawn, burnt, reported. A catch-up from another member's copy
+  /// must not bring them back, which is the one thing a catch-up could get
+  /// wrong that nobody would forgive.
+  final Set<int> forgotten;
+
+  void forget(DateTime at) => forgotten.add(at.millisecondsSinceEpoch);
+
+  /// Each member's picture, by the label they joined under, as they sent it.
+  ///
+  /// A conversation of two kept one picture, theirs, and a group wore that
+  /// one picture on every bubble, so a group of eight looked like one person
+  /// talking to themselves. Now each member's face is kept under their name
+  /// and drawn beside what they said.
+  final Map<String, Uint8List> faces;
+
+  /// The face to draw beside a message from [author], if one arrived.
+  Uint8List? faceOf(String author) => faces[author];
 
   /// When the meeting phrase stops opening the door, or null for never.
   ///
@@ -372,8 +400,25 @@ class StoredConversation {
   /// to fetch it from. It lives here and nowhere else.
   Uint8List? picture;
 
+  /// What the group calls itself, and what it looks like. Set by any member,
+  /// carried to every member as a signal, kept here. Empty and null until
+  /// somebody sets them; a conversation of two has no use for either and
+  /// the screens do not offer them there.
+  String groupName;
+  Uint8List? groupPicture;
+
   /// Kept at the top of the list.
   bool pinned;
+
+  /// Out of the list, but not gone.
+  ///
+  /// The list is the whole of the application for most people, and a
+  /// conversation somebody is done with for now is not a conversation they
+  /// want destroyed: deleting is the only other answer and it cannot be
+  /// undone. Archived conversations still receive, still notify unless
+  /// muted, and come back on their own when something arrives, which is what
+  /// people expect from every messenger that has this.
+  bool archived;
 
   /// No sound, no vibration, no notification.
   bool muted;
@@ -526,10 +571,39 @@ class StoredConversation {
     return soonest;
   }
 
-  /// What to show: the note this device keeps, or the label they chose.
-  String get displayTitle => nickname.isNotEmpty ? nickname : title;
+  /// What to show: the note this device keeps, then the name the group gave
+  /// itself, then the label they chose.
+  String get displayTitle =>
+      nickname.isNotEmpty ? nickname : (groupName.isNotEmpty ? groupName : title);
+
+  /// The face for the list and the header: the group's, when it has one.
+  Uint8List? get face => groupPicture ?? picture;
 
   final String id;
+
+  /// The MLS group id, as hex, once this device has seen the live session.
+  ///
+  /// The row's own [id] is the clock reading at the moment it was created, so
+  /// two devices in one conversation name it differently and one device that
+  /// joins the same conversation twice names it twice. That is fine for a key
+  /// in storage and useless for the one question that matters after a device
+  /// falls out of a group: is this the conversation I already have.
+  ///
+  /// Null for a conversation written before this field existed, and filled in
+  /// the next time that conversation is opened.
+  String? groupId;
+
+  /// The invitation this device joined by, when it was the guest.
+  ///
+  /// Kept for one reason: a copy that has fallen behind its group cannot
+  /// catch up on its own, and the way back in is the same door it came
+  /// through. A standing invitation, which is what a group's host hands out,
+  /// lets it be welcomed again without asking anybody; and with [groupId]
+  /// written down, the welcome lands in this row rather than beside it.
+  ///
+  /// It is a code, not a secret: whoever holds it can knock, and knocking is
+  /// still answered by two members agreeing.
+  String? joinedVia;
 
   /// What the user calls this conversation. Their label, not a claimed identity.
   String title;
@@ -556,6 +630,7 @@ class RotelyxStore {
   /// The device's own vault key, base64url, when there is no passphrase.
   static const _kDeviceKey = 'rotelyx.devicekey';
   static const _kPreviews = 'rotelyx.previews';
+  static const _kChirp = 'rotelyx.chirp';
   static const _kFace = 'rotelyx.face';
 
   /// The picture this person chose for themselves.
@@ -613,6 +688,20 @@ class RotelyxStore {
   bool get showPreviews => _box.read(_kPreviews) as bool? ?? true;
 
   set showPreviews(bool value) => _box.write(_kPreviews, value);
+
+  /// Whether a message arriving in the conversation on screen makes a sound.
+  ///
+  /// Kept beside the one above and outside the vault for the same reason: the
+  /// decision is about this device, not about anybody's conversation, and it
+  /// has to be readable the moment a message lands.
+  ///
+  /// On by default. Somebody with the application open and the phone on the
+  /// desk hears that a message arrived, which is the behaviour of every
+  /// messenger people already use; the tone is short and quiet, and this
+  /// switch is here because "quiet" is still somebody else's judgement.
+  bool get soundInChat => _box.read(_kChirp) as bool? ?? true;
+
+  set soundInChat(bool value) => _box.write(_kChirp, value);
 
   /// What a watch face is allowed to show.
   ///
@@ -1081,6 +1170,10 @@ class RotelyxStore {
     _key?.dispose();
     _key = null;
     _ephemeral.clear();
+    // Nothing decrypted survives the vault being shut, and the list of what
+    // exists is read again when it is opened.
+    _open.clear();
+    _ids = null;
   }
 
   /// Stop writing anything down, without losing the conversations.
@@ -1129,6 +1222,8 @@ class RotelyxStore {
 
   /// Delete everything, for a user who wants the record gone.
   void wipe() {
+    _open.clear();
+    _ids = null;
     for (final id in conversationIds) {
       _box.remove(_kSession(id));
       _box.remove(_kLog(id));
@@ -1145,9 +1240,28 @@ class RotelyxStore {
   // Conversations
   // ---------------------------------------------------------------------------
 
-  List<String> get conversationIds => _key == null
-      ? _ephemeral.keys.toList()
-      : (_box.read(_kIndex) as List?)?.cast<String>() ?? const [];
+  List<String> get conversationIds {
+    if (_key == null) return _ephemeral.keys.toList();
+    return _ids ??= (_box.read(_kIndex) as List?)?.cast<String>().toList() ?? [];
+  }
+
+  /// Which conversations exist, held in memory rather than read back from the
+  /// store every time.
+  ///
+  /// # Why it is held
+  ///
+  /// This is read on every rebuild of the conversation list, and the list
+  /// rebuilds whenever a message arrives. The store underneath is a file that
+  /// is written asynchronously, and reading the index while it is being
+  /// written gives back whatever is there at that moment -- sometimes nothing.
+  /// The list then drew itself empty and filled in again a moment later, in a
+  /// burst of arrivals several times a second. "Everything disappears from the
+  /// app" is what that looks like from the outside, and it is the fault he
+  /// reported three times.
+  ///
+  /// The list in memory is the truth while the application runs; the file is
+  /// where it is kept for next time.
+  static List<String>? _ids;
 
   void _index(String id, {required bool add}) {
     final ids = conversationIds.toList();
@@ -1156,6 +1270,7 @@ class RotelyxStore {
     } else {
       ids.remove(id);
     }
+    _ids = ids;
     _box.write(_kIndex, ids);
   }
 
@@ -1174,12 +1289,20 @@ class RotelyxStore {
       'messages': c.messages.map((m) => m.toJson()).toList(),
       if (c.nickname.isNotEmpty) 'nick': c.nickname,
       if (c.picture != null) 'pic': base64Encode(c.picture!),
+      if (c.groupName.isNotEmpty) 'gname': c.groupName,
+      if (c.groupPicture != null) 'gpic': base64Encode(c.groupPicture!),
+      if (c.faces.isNotEmpty)
+        'faces': {for (final e in c.faces.entries) e.key: base64Encode(e.value)},
+      if (c.forgotten.isNotEmpty) 'forgot': c.forgotten.toList(),
       if (c.pinned) 'pin': true,
+      if (c.archived) 'arch': true,
       if (c.muted) 'mute': true,
       if (c.receipts) 'rcpt': true,
       if (c.verifiedNumber != null) 'vnum': c.verifiedNumber,
       if (c.askedToVerify) 'asked': true,
       if (c.seenRoster != null) 'seen': c.seenRoster,
+      if (c.groupId != null) 'gid': c.groupId,
+      if (c.joinedVia != null) 'via': c.joinedVia,
       if (c.meetingTag != null) 'meet': c.meetingTag,
       if (c.meetingExpires != null)
         'meetuntil': c.meetingExpires!.millisecondsSinceEpoch,
@@ -1214,6 +1337,8 @@ class RotelyxStore {
     }
 
     _box.write(_kLog(c.id), RotelyxWasm.sealBlob(key, inner));
+    // What is held is what was last saved.
+    _open[c.id] = c;
 
     final session = c.session;
     if (session != null) _box.write(_kSession(c.id), session);
@@ -1436,9 +1561,62 @@ class RotelyxStore {
   }
 
   /// Read one back. Null when absent, locked, or sealed under another key.
+  /// The same bytes for the same picture, every time it is loaded.
+  ///
+  /// # Why this exists
+  ///
+  /// A conversation is reloaded from the vault on every change the session
+  /// reports: a message, a receipt, a commit. Each load decoded every picture
+  /// in it afresh, which meant a new `Uint8List` for the same picture, and the
+  /// image widgets cache decoded images by the identity of their bytes. So
+  /// every avatar and every group picture on the screen missed its cache and
+  /// was decoded again on the UI thread, and a busy group -- where changes
+  /// arrive several times a second -- flickered and blinked while it caught up.
+  /// He reported it as "everything flashes or disappears when the messages or
+  /// the epochs load", and this is why.
+  ///
+  /// Keyed by the base64 the vault holds, which changes exactly when the
+  /// picture does. Bounded, because a device with two hundred conversations
+  /// should not hold two hundred pictures it is not looking at.
+  static final Map<String, Uint8List> _pictures = {};
+  static final List<String> _pictureOrder = [];
+  static const int _keepPictures = 80;
+
+  /// Conversations already opened, so opening one is not decrypting it.
+  ///
+  /// # Why this exists
+  ///
+  /// `load` opens the vault blob, decrypts it, parses the whole transcript and
+  /// rebuilds every message in it. The conversation list calls that for every
+  /// conversation on the device, and it did so on every arriving message: a
+  /// backlog of a few hundred messages landing at once -- which is exactly what
+  /// a phone that has been away collects -- meant thousands of full decrypts on
+  /// the interface thread, and Android put up "Rotelyx Chat isn't responding".
+  /// He watched that happen.
+  ///
+  /// Entries go in on a read and are replaced on a write, so what is held is
+  /// always what was last saved. Cleared when the vault is locked, when a
+  /// conversation is deleted, and when everything is.
+  static final Map<String, StoredConversation> _open = {};
+
+  static Uint8List _pictureBytes(String b64) {
+    final held = _pictures[b64];
+    if (held != null) return held;
+    final bytes = base64Decode(b64);
+    _pictures[b64] = bytes;
+    _pictureOrder.add(b64);
+    while (_pictureOrder.length > _keepPictures) {
+      _pictures.remove(_pictureOrder.removeAt(0));
+    }
+    return bytes;
+  }
+
   StoredConversation? load(String id) {
     final key = _key;
     if (key == null) return _ephemeral[id];
+
+    final held = _open[id];
+    if (held != null) return held;
 
     final blob = _box.read(_kLog(id)) as String?;
     if (blob == null) return null;
@@ -1460,7 +1638,7 @@ class RotelyxStore {
 
       final picture = json['pic'];
 
-      return StoredConversation(
+      return _open[id] = StoredConversation(
         id: id,
         title: json['title'] as String? ?? 'Conversation',
         session: _box.read(_kSession(id)) as String?,
@@ -1470,13 +1648,26 @@ class RotelyxStore {
         lastActivity:
             DateTime.fromMillisecondsSinceEpoch(json['at'] as int? ?? 0),
         nickname: json['nick'] as String? ?? '',
-        picture: picture is String ? base64Decode(picture) : null,
+        picture: picture is String ? _pictureBytes(picture) : null,
+        groupName: json['gname'] as String? ?? '',
+        groupPicture:
+            json['gpic'] is String ? _pictureBytes(json['gpic'] as String) : null,
+        faces: {
+          for (final e in ((json['faces'] as Map?) ?? const {}).entries)
+            if (e.value is String) e.key as String: _pictureBytes(e.value as String),
+        },
+        forgotten: {
+          for (final v in (json['forgot'] as List? ?? const [])) if (v is int) v,
+        },
         pinned: json['pin'] == true,
+        archived: json['arch'] == true,
         muted: json['mute'] == true,
         receipts: json['rcpt'] == true,
         verifiedNumber: json['vnum'] as String?,
         askedToVerify: json['asked'] == true,
         seenRoster: json['seen'] as String?,
+        groupId: json['gid'] as String?,
+        joinedVia: json['via'] as String?,
         meetingTag: json['meet'] as String?,
         meetingExpires: json['meetuntil'] is int
             ? DateTime.fromMillisecondsSinceEpoch(json['meetuntil'] as int)
@@ -1501,6 +1692,38 @@ class RotelyxStore {
     }
   }
 
+  /// The conversation this device already has for an MLS group, if any.
+  ///
+  /// This is what makes rejoining a group keep its history. A device that has
+  /// fallen too far behind to read anything can only get back in by being
+  /// welcomed again, and a welcome creates a live session with the same group
+  /// id and an empty row beside the old one. Asking here first means the
+  /// messages, the name, the picture and the mute setting stay where they are.
+  ///
+  /// Ignores archived rows as readily as any other: a group somebody archived
+  /// and then rejoined is the same group.
+  String? idForGroup(String groupId) {
+    if (groupId.isEmpty) return null;
+    for (final id in conversationIds) {
+      if (load(id)?.groupId == groupId) return id;
+    }
+    return null;
+  }
+
+  /// Write down which MLS group a conversation is, when it is not known yet.
+  ///
+  /// Called when a session is live, which is the only time it can be asked.
+  /// Does nothing when the row already says, so a group id can never be
+  /// quietly replaced by another: that would make one conversation answer for
+  /// two.
+  void rememberGroup(String id, String groupId) {
+    if (groupId.isEmpty) return;
+    final c = load(id);
+    if (c == null || c.groupId != null) return;
+    c.groupId = groupId;
+    save(c);
+  }
+
   /// Every conversation, newest first.
   List<StoredConversation> loadAll() {
     final out = <StoredConversation>[];
@@ -1519,6 +1742,7 @@ class RotelyxStore {
 
   void remove(String id) {
     _ephemeral.remove(id);
+    _open.remove(id);
     _box.remove(_kSession(id));
     _box.remove(_kLog(id));
     _index(id, add: false);

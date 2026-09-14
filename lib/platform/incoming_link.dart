@@ -20,6 +20,16 @@ final _links = StreamController<String>.broadcast();
 /// Links arriving while the application is up.
 Stream<String> get incomingLinks => _links.stream;
 
+/// Open an invitation from inside the application, as if it had been tapped.
+///
+/// For a conversation that has fallen behind its group and kept the link it
+/// joined by: going through it again is a welcome into the same group, and the
+/// pairing screen adopts the conversation that already exists rather than
+/// starting a second one. One path in for links, whoever hands them over.
+void openLinkAgain(String link) {
+  if (link.isNotEmpty) _links.add(link);
+}
+
 var _listening = false;
 
 /// The link this launch was started by, or null. Answers once: a second call

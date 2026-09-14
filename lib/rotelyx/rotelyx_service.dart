@@ -20,8 +20,12 @@ import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
+
+import 'photo_codec.dart' show isRotelyxPhoto;
+import 'profile_picture.dart';
 import 'dart:math';
 
+import '../platform/trace.dart';
 import '../platform/widgets.dart';
 import 'burn_clock.dart';
 import 'mailbox_client.dart';
@@ -66,12 +70,19 @@ class RotelyxMessage {
     required this.text,
     required this.mine,
     required this.at,
+    this.author = '',
     this.delivery = Delivery.inMailbox,
   });
 
   final String text;
   final bool mine;
   final DateTime at;
+
+  /// Who sent it, by the label MLS authenticated it under. Empty for our
+  /// own. It used to be written down as the conversation's title, which in
+  /// a group is "somebody and 10 others" and names nobody, so every bubble
+  /// in a group looked like it came from the same nobody.
+  final String author;
 
   /// Only meaningful for our own messages.
   Delivery delivery;
@@ -210,6 +221,32 @@ class RotelyxService {
   int _subscribedBucket = -1;
   final Set<String> _listening = {};
 
+  /// The same tags in the order they were subscribed to, so the oldest can be
+  /// given up first.
+  final List<String> _listenOrder = [];
+
+  /// How many tags this device will hold on one connection.
+  ///
+  /// The mailbox allows 256 and this stays well under it, with room for the
+  /// current set several times over.
+  ///
+  /// # Why anything is given up at all
+  ///
+  /// A tag is derived from where this device stands in the key schedule, so
+  /// every commit in a conversation produces a fresh set of them and the old
+  /// set is never asked for again. This never let go of one, so a phone in a
+  /// few lively groups accumulated a set per commit until the mailbox refused
+  /// to take any more, and from that moment it was listening on tags nothing
+  /// would ever be deposited under: it stopped receiving, it could not send,
+  /// and closing and reopening the application fixed it because that is a new
+  /// connection. He reported both halves of that as faults and this was the
+  /// cause.
+  ///
+  /// The ones given up are the oldest, and enough of the recent past is kept
+  /// that an envelope already in flight under a tag from the last epoch still
+  /// arrives.
+  static const _maxListening = 160;
+
   RotelyxState state = RotelyxState.idle;
   String? lastError;
 
@@ -244,6 +281,9 @@ class RotelyxService {
   Stream<String> get notices => _notices.stream;
   final _notices = StreamController<String>.broadcast();
 
+  /// Something a screen wants said in the conversation's own voice.
+  void notice(String text) => _notices.add(text);
+
   /// A fingerprint of the conversation, for confirming out of band that two
   /// devices are in the same group and not in two groups an attacker sat
   /// between. Null before the group exists.
@@ -252,6 +292,24 @@ class RotelyxService {
     if (session == null || state != RotelyxState.joined) return null;
     try {
       return session.safetyNumber();
+    } on Object {
+      return null;
+    }
+  }
+
+  /// Which conversation this is, for as long as it exists: the MLS group id,
+  /// as hex. Null before the group exists.
+  ///
+  /// Not a secret and not a fingerprint. It says which conversation and
+  /// nothing about who is in it, which is exactly what a device needs to know
+  /// that a group it has just been welcomed into is one it already has the
+  /// history of. See [RotelyxStore.idForGroup].
+  String? get groupId {
+    final session = _session;
+    if (session == null) return null;
+    try {
+      final id = session.groupId();
+      return id.isEmpty ? null : id;
     } on Object {
       return null;
     }
@@ -367,7 +425,7 @@ class RotelyxService {
       text: m.text,
       mine: m.mine,
       at: m.at,
-      author: m.mine ? '' : conversation.title,
+      author: m.mine ? '' : (m.author.isNotEmpty ? m.author : conversation.title),
       inMailbox: m.delivery == Delivery.inMailbox,
     ));
     conversation.lastActivity = m.at;
@@ -484,9 +542,21 @@ class RotelyxService {
       case SignalKind.reaction:
         _theyReacted(signal, from: from);
       case SignalKind.profile:
-        _theyChangedPicture(signal.picture);
+        _theyChangedPicture(signal.picture, from: from);
+      case SignalKind.group:
+        _theyNamedTheGroup(signal);
+      case SignalKind.catchUp:
+        _theyAskedToCatchUp(signal, from: from);
       case SignalKind.retract:
         _theyWithdrew(signal.retractedAt);
+
+      case SignalKind.tap:
+        // Somebody pressed a button on a card. It is addressed to whoever sent
+        // the card, which on a phone is never this device: a phone does not
+        // send cards, bots do. Nothing to do with it here, and nothing to show
+        // -- but it must be a case, or a control message would fall through
+        // into the conversation as a line of text.
+        break;
       case SignalKind.edited:
         _theyEdited(signal.editedAt, signal.editedText);
       case SignalKind.history:
@@ -611,10 +681,9 @@ class RotelyxService {
       at: DateTime.now(),
     );
 
-    final who = signal.pendingName.isEmpty ? 'somebody' : signal.pendingName;
-    final asker = from == null || from.isEmpty ? 'Someone in this conversation' : from;
-    _notices.add('$asker wants to let $who in. Nobody is in until you or '
-        'another member agrees.');
+    // No notice beside it. The request is a banner on the screen with the
+    // two answers on it, and a line above the banner saying the same thing
+    // was two copies of one sentence, the second with nothing to press.
     _stateChanges.add(state);
   }
 
@@ -631,7 +700,12 @@ class RotelyxService {
     if (live == null || meeting == null) return;
 
     final proposal = live.propose(keyPackage);
-    for (final envelope in live.sealCommitForGroup(proposal)) {
+    // Addressed at the current epoch, as a message is and a commit is not: a
+    // proposal moves nobody, so the others are exactly where this device is.
+    // One epoch back reaches them too while they still hold that key, and
+    // fails outright on a device that joined at this epoch and has never held
+    // another.
+    for (final envelope in live.sealForGroup(proposal)) {
       _mailbox?.deposit(envelope);
     }
     signal(Signal.pendingAddition(meetingTag: meeting, name: name));
@@ -684,7 +758,7 @@ class RotelyxService {
       pendingAddition = null;
       _persist();
       _resubscribe();
-      _notices.add('${waiting.name.isEmpty ? 'They' : waiting.name} are in.');
+      _notices.add(waiting.name.isEmpty ? 'They are in.' : '${waiting.name} is in.');
       _stateChanges.add(state);
       return true;
     } on Object catch (e) {
@@ -723,33 +797,42 @@ class RotelyxService {
       return;
     }
 
-    // The line before which anything is older than this device could have
-    // read. Empty means everything is, which is the case this exists for.
-    final earliest = conversation.messages.isEmpty
-        ? DateTime.now()
-        : conversation.messages
-            .map((m) => m.at)
-            .reduce((a, b) => a.isBefore(b) ? a : b);
-
+    // Anything not already here, and nothing this device let go of. It
+    // used to take only what came before the earliest message held, which
+    // was right for a newcomer being handed the past and wrong for a
+    // member catching up on a gap in the middle.
+    final held = {
+      for (final m in conversation.messages)
+        '${m.at.millisecondsSinceEpoch}|${m.author}|${m.text}',
+    };
+    final reported = {
+      for (final r in conversation.reports) int.tryParse(r.split('|').first) ?? -1,
+    };
     final handed = <StoredMessage>[];
     for (final row in rows) {
       if (row is! Map<String, dynamic>) continue;
       final m = StoredMessage.fromJson(row);
-      if (!m.at.isBefore(earliest)) continue;
+      final at = m.at.millisecondsSinceEpoch;
+      if (conversation.forgotten.contains(at) || reported.contains(at)) continue;
+      // Their copy of what I said is still mine.
+      final mine = m.author == _displayName;
+      final author = mine ? '' : (m.author.isNotEmpty ? m.author : (from ?? ''));
+      if (held.contains('$at|$author|${m.text}') ||
+          held.contains('$at||${m.text}')) {
+        continue;
+      }
       handed.add(StoredMessage(
         text: m.text,
-        // Never ours, whatever the copy said. These are somebody else's words
-        // arriving from somebody else's device, and a line that claimed this
-        // device wrote them would be the one lie this feature could tell.
-        mine: false,
+        mine: mine,
         at: m.at,
-        author: from ?? m.author,
+        author: author,
         call: m.call,
       ));
     }
     if (handed.isEmpty) return;
 
-    conversation.messages.insertAll(0, handed);
+    conversation.messages.addAll(handed);
+    conversation.messages.sort((a, b) => a.at.compareTo(b.at));
     store.save(conversation);
 
     _notices.add('${from ?? 'Somebody'} shared ${handed.length} earlier '
@@ -764,7 +847,38 @@ class RotelyxService {
   /// The whole group receives it, because that is how everything travels here
   /// and because they are entitled to know: somebody who spoke when four
   /// people were listening should be told when a fifth is given it.
-  int? handOverHistory({DateTime? before, int most = 200}) {
+  /// Ask the group for what this device missed.
+  ///
+  /// Since the last message it holds, or everything when it holds none.
+  /// Exactly one member answers, chosen by name so the others stay quiet;
+  /// see [_theyAskedToCatchUp]. What comes back is their copy, filtered here
+  /// against what this device already has and what it chose to forget.
+  bool askToCatchUp() {
+    final id = _persistId;
+    if (id == null || state != RotelyxState.joined) return false;
+    final conversation = store.load(id);
+    if (conversation == null) return false;
+    final since = conversation.messages.isEmpty
+        ? DateTime.fromMillisecondsSinceEpoch(0)
+        : conversation.messages
+            .map((m) => m.at)
+            .reduce((a, b) => a.isAfter(b) ? a : b);
+    return signal(Signal.catchUp(since));
+  }
+
+  /// One member answers a catch-up: the one whose name sorts first among
+  /// everybody but the asker. Every member can compute that from the roster
+  /// it holds, so no two of them answer and the asker is not buried under
+  /// eight copies of the same week.
+  void _theyAskedToCatchUp(Signal signal, {String? from}) {
+    final since = signal.catchUpSince;
+    if (since == null) return;
+    final others = roster.where((name) => name != from).toList()..sort();
+    if (others.isEmpty || others.first != _displayName) return;
+    handOverHistory(after: since);
+  }
+
+  int? handOverHistory({DateTime? before, DateTime? after, int most = 200}) {
     final id = _persistId;
     if (id == null || state != RotelyxState.joined) return null;
 
@@ -774,6 +888,9 @@ class RotelyxService {
     var rows = conversation.messages.where((m) => !m.burnt).toList();
     if (before != null) {
       rows = rows.where((m) => m.at.isBefore(before)).toList();
+    }
+    if (after != null) {
+      rows = rows.where((m) => m.at.isAfter(after)).toList();
     }
     if (rows.isEmpty) return null;
 
@@ -971,16 +1088,75 @@ class RotelyxService {
   /// Settings sends. It used to be discarded here along with the malformed
   /// case, so somebody who removed their picture went on wearing it on every
   /// other phone and had no way to learn that.
-  void _theyChangedPicture(Uint8List? picture) {
-    final id = _persistId;
+  Future<void> _theyChangedPicture(Uint8List? picture,
+      {String? from, String? into}) async {
+    final id = into ?? _persistId;
     if (id == null || picture == null) return;
+
+    // On the wire it is this application's own format, small enough for an
+    // envelope; on the device it is a PNG, which is what every avatar is
+    // drawn from and what a notification's icon has to be. A picture from an
+    // older build arrives as a PNG already and is kept as it is.
+    var stored = picture;
+    if (isRotelyxPhoto(picture)) {
+      final png = await pngOfRotelyxPhoto(picture);
+      if (png == null) return;
+      stored = png;
+    }
 
     final conversation = store.load(id);
     if (conversation == null) return;
 
-    conversation.picture = picture.isEmpty ? null : picture;
+    // Theirs, for a conversation of two, and under their name for the
+    // bubble beside what they say in any conversation.
+    conversation.picture = stored.isEmpty ? null : stored;
+    if (from != null && from.isNotEmpty) {
+      if (stored.isEmpty) {
+        conversation.faces.remove(from);
+      } else {
+        conversation.faces[from] = stored;
+      }
+    }
     store.save(conversation);
     _stateChanges.add(state);
+  }
+
+  /// Somebody gave the group a name, a picture, or both.
+  ///
+  /// [into] names the conversation when this arrived on a background socket
+  /// rather than in the one on screen. That is the ordinary case and not the
+  /// exception: somebody is in five groups, four of them are in the
+  /// background, and the name of a group is announced when it is announced.
+  Future<void> _theyNamedTheGroup(Signal signal, {String? into}) async {
+    final id = into ?? _persistId;
+    if (id == null) return;
+    final name = signal.groupName;
+    var picture = signal.groupPicture;
+    if (picture != null && isRotelyxPhoto(picture)) {
+      picture = await pngOfRotelyxPhoto(picture);
+    }
+    final conversation = store.load(id);
+    if (conversation == null) return;
+    if (name.isNotEmpty) conversation.groupName = name;
+    if (picture != null) conversation.groupPicture = picture;
+    store.save(conversation);
+    _stateChanges.add(state);
+  }
+
+  /// Give the group a name and, optionally, a picture: kept here and told to
+  /// everybody. The picture is a PNG as the screens draw it; it travels in
+  /// the application's own format, the way a person's does.
+  Future<bool> setGroupIdentity({required String name, Uint8List? picturePng}) async {
+    final id = _persistId;
+    if (id == null || state != RotelyxState.joined) return false;
+    final conversation = store.load(id);
+    if (conversation == null) return false;
+    if (name.isNotEmpty) conversation.groupName = name;
+    if (picturePng != null) conversation.groupPicture = picturePng;
+    store.save(conversation);
+    _stateChanges.add(state);
+    final wire = picturePng == null ? null : await profileForTheWire(picturePng);
+    return signal(Signal.group(name: name, picture: wire));
   }
 
   /// Apply a change to the stored messages, saving only if something moved.
@@ -1010,6 +1186,18 @@ class RotelyxService {
       messages.removeWhere((m) => !m.mine && m.at.isAtSameMomentAs(at));
       return messages.length != before;
     });
+    _forget(at);
+  }
+
+  /// Remember that a message was let go of, so a catch-up does not bring it
+  /// back. See `StoredConversation.forgotten`.
+  void _forget(DateTime at) {
+    final id = _persistId;
+    if (id == null) return;
+    final conversation = store.load(id);
+    if (conversation == null) return;
+    conversation.forget(at);
+    store.save(conversation);
   }
 
   /// Replace what one of their messages said.
@@ -1063,6 +1251,7 @@ class RotelyxService {
       messages.removeWhere((m) => m.mine && m.at.isAtSameMomentAs(message.at));
       return messages.length != before;
     });
+    _forget(message.at);
     return true;
   }
 
@@ -1310,6 +1499,19 @@ class RotelyxService {
     // off the transition rather than off each of the paths that reach it.
     if (next == RotelyxState.joined) {
       _flushBurnAcks();
+
+      // Which MLS group this row is, written down the first time it can be
+      // asked. Conversations created before the field existed get it here, on
+      // the next open, which is what lets a later rejoin find them.
+      final id = _persistId;
+      final group = groupId;
+      if (id != null && group != null) store.rememberGroup(id, group);
+
+      // A conversation that was behind and has just been welcomed back in is
+      // not behind any more. The mark is made by failures and comes straight
+      // back if this session still cannot read what arrives, so clearing it
+      // here says "as far as anyone knows" rather than "it is fixed".
+      if (id != null) _behind.remove(id);
 
       // And the wake registration, which the mailbox forgets when the socket
       // closes on its side. Re-sent rather than assumed to have survived: a
@@ -1806,7 +2008,9 @@ class RotelyxService {
   /// the other side already has. Once per conversation per run is enough to
   /// cover a contact paired before a picture was chosen, and a change tells
   /// everybody as it happens.
-  final Set<String> _toldMyPicture = {};
+  /// Which picture each conversation was last told about. See
+  /// [_sendMyPicture].
+  final Map<String, int> _toldMyPicture = {};
 
   /// Whether this device still owes the group a fresh key after unsealing.
   ///
@@ -1828,18 +2032,81 @@ class RotelyxService {
   /// and the next `resume` rebuilds it. What matters is that `joined` stops
   /// being claimed while nothing is delivered, because that claim is what made
   /// the screen skip the reopen.
+  /// Woken early by [wake], so a reconnect waiting out a long back-off tries
+  /// again the moment there is a reason to.
+  Completer<void>? _poke;
+
+  /// Try again now.
+  ///
+  /// Called when the application comes back to the front and when somebody
+  /// tries to send. A socket that died in a pocket is the ordinary case, and
+  /// the person holding the phone is the best signal there is that the
+  /// network is back.
+  void wake() {
+    // Coming back to the application with the list on screen: the socket that
+    // was collecting for every conversation was very likely closed while the
+    // phone slept, and nothing else would reopen it.
+    if (state != RotelyxState.joined) {
+      if (_wantsListWatch && !(_mailbox?.isOpen ?? false)) {
+        _watchingTheList = false;
+        unawaited(watchFromTheList());
+      }
+      return;
+    }
+    if (_reopening) {
+      final poke = _poke;
+      if (poke != null && !poke.isCompleted) poke.complete();
+      return;
+    }
+    if (_mailbox?.isOpen ?? false) return;
+    _mailboxClosed();
+  }
+
+  /// The socket closed under a live conversation. Get it back.
+  ///
+  /// Backing off rather than retrying on a fixed beat, because the mailbox
+  /// limits by address: `PER_ADDRESS_PER_MINUTE` is sixty with a burst of
+  /// twenty, and every attempt is a fresh socket. A reconnection that fires
+  /// every two seconds through an outage spends that allowance and then the
+  /// mailbox refuses the connection that would have worked, which looks from
+  /// the phone like the application breaking permanently.
+  ///
+  /// This used to try three times in half a minute and then move the
+  /// conversation to idle, which the screen reads as "not connected" and
+  /// keeps reading until the conversation is opened again. Half a minute is
+  /// shorter than a lift, a tunnel or a change from wifi to mobile data, so a
+  /// person came back to a conversation they had left open and could not
+  /// send, with nothing to do about it but leave and come back. Now it keeps
+  /// trying, a minute apart once the quick tries are spent, for as long as
+  /// the conversation is meant to be live, and [wake] cuts the wait short.
   Future<void> _mailboxClosed() async {
+    // The list is the one collecting: there is no conversation to reconnect
+    // for, and the socket still has to come back or the list stops hearing
+    // anything the moment a network changes.
+    if (state != RotelyxState.joined && _wantsListWatch) {
+      _watchingTheList = false;
+      _listRetry?.cancel();
+      _listRetry = Timer(const Duration(seconds: 2), () {
+        if (_wantsListWatch) unawaited(watchFromTheList());
+      });
+      return;
+    }
     if (_reopening || state != RotelyxState.joined) return;
     _reopening = true;
 
-    // Backing off rather than retrying on a fixed beat, because the mailbox
-    // limits by address: `PER_ADDRESS_PER_MINUTE` is sixty with a burst of
-    // twenty, and every attempt is a fresh socket. A reconnection that fires
-    // every two seconds through an outage spends that allowance and then the
-    // mailbox refuses the connection that would have worked, which looks from
-    // the phone like the application breaking permanently.
-    for (final wait in const [2, 6, 20]) {
-      await Future<void>.delayed(Duration(seconds: wait));
+    const quick = [2, 6, 20];
+    var attempt = 0;
+    while (state == RotelyxState.joined) {
+      final wait = attempt < quick.length ? quick[attempt] : 60;
+      attempt += 1;
+
+      final poke = Completer<void>();
+      _poke = poke;
+      await Future.any([
+        Future<void>.delayed(Duration(seconds: wait)),
+        poke.future,
+      ]);
+      _poke = null;
       if (state != RotelyxState.joined) break;
 
       try {
@@ -1854,15 +2121,13 @@ class RotelyxService {
           _subscribeLive([meeting]);
         }
         _reopening = false;
+        _stateChanges.add(state);
         return;
       } on Object {
-        // Keep trying, then stop. Falling out of this loop is not a failure of
-        // the conversation: the session is sealed on the device and the next
-        // time the screen is opened `resume` rebuilds it.
+        // Not yet. The next round is a little further off.
       }
     }
 
-    _moveTo(RotelyxState.idle);
     _reopening = false;
   }
 
@@ -1881,6 +2146,7 @@ class RotelyxService {
     await _mailbox?.close();
     _mailbox = null;
     _listening.clear();
+    _listenOrder.clear();
     _forgetBackground();
 
     // A fresh connection is a fresh question. Whether a mailbox can wake a
@@ -2208,6 +2474,19 @@ class RotelyxService {
         return;
       }
 
+      // Somebody proposed letting a newcomer in. Nothing has changed yet, and
+      // what the screen needs (who, and where they are waiting) arrives in
+      // the signal sent beside it, which is where the request is put in
+      // front of the person. Here it is only kept, so the confirmation can
+      // refer to it. It used to fall through to the message path as a
+      // message with no text, and appeared as an empty bubble.
+      if (plaintext != null && plaintext.isProposal) {
+        _persist();
+        _acknowledge(envelopeB64);
+        _stateChanges.add(state);
+        return;
+      }
+
       if (plaintext == null) {
         // A commit. The epoch moved, so our tags moved with it, listening on
         // the old set would go quiet with nothing saying why.
@@ -2249,6 +2528,28 @@ class RotelyxService {
         return;
       }
 
+      // Something opened, so whatever did not open before it was one of the
+      // ordinary kinds and is not worth counting any more -- and this device
+      // is plainly not behind this conversation.
+      _unreadable = 0;
+      final readable = _persistId;
+      if (readable != null && _behind.remove(readable)) {
+        _stateChanges.add(state);
+      }
+
+      // A control message this build does not understand.
+      //
+      // It is still a control message: it carries the marker, and whoever sent
+      // it is running something newer. Dropping it silently is the only
+      // reasonable thing to do with it, and it is what this failed to do. The
+      // group's name arrived from a bot as `rx-signal group ...` and an older
+      // phone wrote it into the conversation as a sentence, which is what he
+      // saw at the top of his list for a day.
+      if (Signal.isControl(plaintext.text) && Signal.decode(plaintext.text) == null) {
+        _acknowledge(envelopeB64);
+        return;
+      }
+
       final signal = Signal.decode(plaintext.text);
       if (signal != null) {
         // The author travels with it. A receipt says "I read up to here" and
@@ -2261,17 +2562,125 @@ class RotelyxService {
 
       // After `_emit`, which records and persists, so the mailbox is only told
       // to let go of something this device has written down.
-      _emit(RotelyxMessage(text: plaintext.text, mine: false, at: DateTime.now()));
+      _emit(RotelyxMessage(
+          text: plaintext.text,
+          mine: false,
+          at: DateTime.now(),
+          author: plaintext.from ?? ''));
       _acknowledge(envelopeB64);
     } on Object catch (e) {
       // A genuine failure to open one, which is a different thing from the
       // group refusing to apply what it opened. Both used to land here and say
       // the same sentence.
+      //
+      // # Why this no longer says anything the first time
+      //
+      // One envelope that will not open is ordinary: a copy of something
+      // already processed, one sealed an epoch ago by somebody who had not
+      // heard the last commit yet, one addressed to a leaf that has moved. The
+      // protocol deals with all three by ignoring them, and it used to
+      // announce every one as "a message failed to decrypt", which reads to
+      // anybody who is not holding the source as "this application is
+      // broken". He watched it appear and disappear on his own phone and said
+      // exactly that. An application people leave because it looked broken
+      // while working correctly is worse than one that says nothing.
+      //
+      // So the count is kept and the person is told only when it stops being
+      // ordinary: three in a row means something is genuinely out of step, and
+      // then the sentence says what will be done about it rather than naming
+      // the failure. And it asks for what is missing, which is the actual
+      // repair.
       lastError = 'a message failed to decrypt: $e';
-      _notices.add(lastError!);
-      _stateChanges.add(state);
+
+      // Let the mailbox have it back, but only when it can never be read.
+      //
+      // Two quite different things arrive here and telling them apart matters
+      // more than anything else in this method.
+      //
+      //   * A copy of something already processed -- "sequence 1 from that
+      //     sender was already spent at this epoch", "Generation is too old".
+      //     Redelivered after a reconnect, unreadable now and unreadable
+      //     forever. Left in the mailbox it comes back on every reconnect and
+      //     fails again, which is where the stream of "could not be read"
+      //     came from. That one is released.
+      //
+      //   * Anything else, and above all a commit that arrived before the one
+      //     it follows. That is temporary: it becomes readable the moment the
+      //     missing envelope is applied. Releasing it deletes the only copy
+      //     this device will ever be sent, and the conversation then stops at
+      //     that epoch for good.
+      //
+      // The second case is not hypothetical. Releasing everything is what I
+      // shipped this evening, and it cut his phone out of five rooms: the
+      // groups moved on, the phone sat at the epoch it had, and every message
+      // after it was noise. This is the line that did it.
+      final why = e.toString().toLowerCase();
+      final spent = why.contains('already spent') ||
+          why.contains('too old') ||
+          why.contains('generation');
+      if (spent) _acknowledge(envelopeB64);
+      _unreadable++;
+      if (_unreadable >= 3) {
+        final since = _askedToCatchUpAt;
+        final now = DateTime.now();
+        final quiet =
+            since == null || now.difference(since) > const Duration(minutes: 2);
+        if (quiet) {
+          _unreadable = 0;
+
+          // The first round says nothing at all. Asking the others to send
+          // again is the repair, it takes a second, and a person who is told
+          // about it learns only that something they cannot act on went wrong.
+          // A sentence appears only if asking did not help: twice inside five
+          // minutes means this device is genuinely out of step and somebody
+          // should know why their conversation looks thin.
+          final again = since != null &&
+              now.difference(since) < const Duration(minutes: 5);
+          _askedToCatchUpAt = now;
+          askToCatchUp();
+          if (again) {
+            // Asked once, asked twice, still nothing readable. This device is
+            // behind the group rather than merely out of order.
+            final id = _persistId;
+            if (id != null) _behind.add(id);
+            _notices.add('This device has fallen behind this group and cannot '
+                'read what is being said. Open the group\'s link again to '
+                'rejoin it.');
+            _stateChanges.add(state);
+          }
+        }
+      }
     }
   }
+
+  /// Envelopes in a row that would not open. Reset by the first that does.
+  int _unreadable = 0;
+
+  /// Conversations this device cannot read any more.
+  ///
+  /// # Why this has to be said out loud
+  ///
+  /// A device that has fallen behind a group looks exactly like a group that
+  /// has gone quiet: the header says connected, the epoch sits where it was,
+  /// and nothing arrives. There is no difference on the screen between "nobody
+  /// is talking" and "everybody is talking and none of it can be read here",
+  /// and that cost an evening: five rooms went silent on his phone and it
+  /// looked like the rooms had stopped.
+  ///
+  /// Falling behind is recoverable only by joining again, because MLS applies
+  /// commits in order and a missing one cannot be reconstructed: each copy is
+  /// sealed for one member and nobody keeps a spare. So the one thing this
+  /// device can usefully do is say so, plainly, and say what fixes it.
+  final Set<String> _behind = {};
+
+  /// Unreadable envelopes in a row, per background conversation.
+  final Map<String, int> _unreadableElsewhere = {};
+
+  bool isBehind(String conversationId) => _behind.contains(conversationId);
+
+  /// When this device last asked the others to send again on its own, so it
+  /// does not do it in a circle.
+  DateTime? _askedToCatchUpAt;
 
   /// Tell the mailbox an envelope arrived, so it can stop holding it.
   ///
@@ -2477,17 +2886,46 @@ class RotelyxService {
   /// side sees.
   String get displayName => _displayName;
 
-  /// Say what this person looks like, once per conversation per run.
+  /// Say what this person looks like, once per conversation per picture.
   ///
   /// Nothing is sent when no picture has been chosen, which is the ordinary
   /// case: both ends draw the same initials from the same name and there is
   /// nothing to carry.
-  void _sendMyPicture() {
+  ///
+  /// Per picture, not per run. It used to be once per conversation per run,
+  /// so a face chosen after a conversation had been opened was not sent to
+  /// it until the application was next started, and a face changed was not
+  /// sent at all.
+  Future<void> _sendMyPicture() async {
     final id = _persistId;
     final picture = store.myPicture;
     if (id == null || picture == null || picture.isEmpty) return;
-    if (!_toldMyPicture.add(id)) return;
-    signal(Signal.profile(picture));
+    final mark = _markOf(picture);
+    if (_toldMyPicture[id] == mark) return;
+    final wire = await profileForTheWire(picture);
+    if (wire == null) return;
+    // Recorded once it has gone, and for the conversation it went to: an
+    // await above is a moment in which the live conversation can change.
+    if (_persistId != id) return;
+    _toldMyPicture[id] = mark;
+    signal(Signal.profile(wire));
+  }
+
+  /// Cheap identity for a picture, so a changed one is noticed.
+  static int _markOf(Uint8List bytes) {
+    var h = bytes.length;
+    for (var i = 0; i < bytes.length; i += 97) {
+      h = (h * 31 + bytes[i]) & 0x3fffffff;
+    }
+    return h;
+  }
+
+  /// Send the picture chosen in settings to the conversation that is live,
+  /// whatever it was told before. The rest are told as they are opened.
+  Future<void> tellMyPicture() async {
+    final id = _persistId;
+    if (id != null) _toldMyPicture.remove(id);
+    await _sendMyPicture();
   }
 
   void _enterConversation() {
@@ -2562,11 +3000,119 @@ class RotelyxService {
       _subscribeLive(fresh);
       _leaveTicketsFor(fresh);
       _listening.addAll(fresh);
+      _listenOrder.addAll(fresh);
+    }
+
+    // And let go of the oldest, which are tags from epochs this device has
+    // left behind. Never the current set: what is given up is only ever taken
+    // from the front, and the current set was just added to the back.
+    if (_listenOrder.length > _maxListening) {
+      var over = _listenOrder.length - _maxListening;
+      final give = <String>[];
+      final keep = <String>[];
+      // Oldest first. A tag in the current set is kept however old it is, so
+      // what goes is only ever something this device has finished with.
+      for (final tag in _listenOrder) {
+        if (over > 0 && !now.contains(tag)) {
+          give.add(tag);
+          over--;
+        } else {
+          keep.add(tag);
+        }
+      }
+      if (give.isNotEmpty) {
+        _listening.removeAll(give);
+        _listenOrder
+          ..clear()
+          ..addAll(keep);
+        _mailbox?.unsubscribe(give);
+      }
     }
     _subscribedBucket = _bucket();
     unawaited(_listenEverywhereElse());
     unawaited(_publishTagsForTheExtension());
   }
+
+  /// Collect for every conversation while none of them is open.
+  ///
+  /// # The fault this closes
+  ///
+  /// Everything that collects used to hang off a conversation being open:
+  /// [_listenEverywhereElse] is called from [_resubscribe], which runs when
+  /// one is joined or resumed. Sitting on the list of conversations therefore
+  /// collected nothing at all -- no socket, no envelopes, no unread counts --
+  /// and the only way to find out that ninety messages were waiting was to
+  /// open the conversation and watch them arrive.
+  ///
+  /// That is not a refresh, it is a discovery, and it made the list lie: a row
+  /// said what it said the last time somebody opened it.
+  ///
+  /// So the list watches too. The same rounds the open conversation runs for
+  /// the others, with nothing on screen owning the mailbox, and the arrivals
+  /// go where they always did: written down, marked unread, announced on
+  /// [arrivedElsewhere].
+  Future<void> watchFromTheList() async {
+    // A live conversation already does this, and two owners of one mailbox
+    // would fight over the socket.
+    _trace('list: asked, state=$state watching=$_watchingTheList key=${store.key != null}');
+    if (state == RotelyxState.joined || _watchingTheList) return;
+    if (store.key == null) return;
+    _watchingTheList = true;
+
+    try {
+      if (!(_mailbox?.isOpen ?? false)) await _openMailbox();
+      _trace('list: mailbox open=${_mailbox?.isOpen}');
+      await _listenEverywhereElse();
+      _watchTagRotation();
+      _trace('list: watching ${_backgroundSockets.length} sockets');
+    } on Object catch (e) {
+      _trace('list: failed $e');
+      // A mailbox that cannot be reached from the list is not a failure to
+      // put on the screen: there is nothing on screen that was waiting for
+      // it. It is tried again, further apart each time, the way a live
+      // conversation's reconnection is.
+      _watchingTheList = false;
+      _listAttempt = _listAttempt >= 5 ? 5 : _listAttempt + 1;
+      _listRetry?.cancel();
+      _listRetry = Timer(Duration(seconds: 2 << _listAttempt), () {
+        if (_wantsListWatch) unawaited(watchFromTheList());
+      });
+      lastError = '$e';
+      return;
+    }
+    _listAttempt = 0;
+    _wantsListWatch = true;
+  }
+
+  /// Stop collecting from the list, because a conversation is taking over.
+  void stopWatchingFromTheList() {
+    _wantsListWatch = false;
+    _listRetry?.cancel();
+    _listRetry = null;
+    if (!_watchingTheList) return;
+    _watchingTheList = false;
+    // The sockets go, the sessions are sealed on the way out. The conversation
+    // being opened builds its own, which is what `resume` does.
+    _forgetBackground();
+  }
+
+  /// One line to the device log, for reading back over adb.
+  ///
+  /// The list collecting on its own was reported broken twice, and both times
+  /// the answer was guessed at from the code because the application says
+  /// nothing about what it is doing. It says so now. Nothing here is a
+  /// message or a name: which conversation, by id, and whether a socket
+  /// opened.
+  void _trace(String line) => trace(line);
+
+  /// Whether the list is the one collecting right now.
+  bool _watchingTheList = false;
+
+  /// Whether it should be, which survives a failed attempt so the retry knows
+  /// nobody has since opened a conversation.
+  bool _wantsListWatch = false;
+  int _listAttempt = 0;
+  Timer? _listRetry;
 
   /// Listen on every other conversation as well as the one on screen.
   ///
@@ -2617,9 +3163,29 @@ class RotelyxService {
         _dropBackgroundSocket(id);
       }
     }
+
+    // A held socket subscribed in one hour is deaf in the next.
+    //
+    // Tags are derived from the hour, and the socket for the conversation on
+    // screen is re-subscribed when the hour rolls. The held ones were not:
+    // this loop skipped every socket that already existed, so at the top of
+    // each hour the six most recent conversations -- the ones a person
+    // actually cares about -- stopped hearing anything, while the two that
+    // take turns kept working because a turn is a fresh socket. From the
+    // list it looked like nothing refreshed unless you opened the group,
+    // which is what he reported, twice.
+    final bucket = _bucket();
+    for (final id in held) {
+      final since = _backgroundBucket[id];
+      if (since != null && since != bucket) {
+        _trace('elsewhere: $id subscribed in hour $since, now $bucket; reopening');
+        _dropBackgroundSocket(id);
+      }
+    }
     for (final id in held) {
       if (_backgroundSockets.containsKey(id)) continue;
-      _openBackgroundSocket(id, key, url);
+      final opened = _openBackgroundSocket(id, key, url);
+      _trace('elsewhere: hold $id opened=$opened');
     }
 
     // The rest take turns. The visit that has run longest ends, and the
@@ -2658,33 +3224,75 @@ class RotelyxService {
     var session = _background[id];
     if (session == null) {
       final blob = store.sessionBlob(id);
-      if (blob == null) return false;
+      if (blob == null) {
+        _trace('elsewhere: $id has no sealed session');
+        return false;
+      }
       try {
         session = RotelyxWasm.unsealSession(blob, key);
-      } on Object {
+      } on Object catch (e) {
+        _trace('elsewhere: $id will not unseal: $e');
         return false;
       }
       _background[id] = session;
     }
 
+    // The whole lookback, not two hours of it.
+    //
+    // Two tags were chosen when every conversation was going to share one
+    // socket and 256 tags had to cover a hundred of them. They do not share:
+    // each has a connection of its own, and the cap is per connection, so
+    // forty tags here cost nothing that two did not. What two tags cost was
+    // everything older than an hour -- above all a commit deposited while the
+    // phone was away, which is the one envelope that moves this copy to the
+    // epoch the others are on. Never collected, the conversation sat one
+    // epoch behind and heard nothing, until it was opened and the live
+    // socket, which always used the full lookback, picked the commit up.
+    // Three of five groups on his phone were in exactly that state.
     final List<String> tags;
     try {
-      tags = session.myPollingTags(1);
-    } on Object {
+      tags = session.myPollingTags(_config.lookback);
+    } on Object catch (e) {
+      _trace('elsewhere: $id has no tags: $e');
       return false;
     }
-    if (tags.isEmpty) return false;
+    if (tags.isEmpty) {
+      _trace('elsewhere: $id has an empty tag set');
+      return false;
+    }
 
     final socket = MailboxClient(url);
     final token = RotelyxStore.instance.capabilityToken;
     if (token != null) socket.holdToken(token);
     _backgroundSockets[id] = socket;
+    _backgroundBucket[id] = _bucket();
     _backgroundListeners[id] = [
       socket.envelopes.listen((incoming) => _openInBackground(id, incoming.envelope)),
       socket.closes.listen((_) => _backgroundSocketClosed(id)),
-      socket.errors.listen((_) {}),
+      socket.errors.listen((problem) => _trace('elsewhere: $id socket: $problem')),
     ];
-    _subscribeFor(socket, id, tags);
+
+    // Connected, and *then* subscribed.
+    //
+    // This never connected. The socket was made, handed its tags, and left:
+    // `subscribe` before `connect` writes to a socket that does not exist,
+    // reports it on the error stream, which was listened to with `(_) {}`,
+    // and nothing anywhere called `connect`. So every conversation but the
+    // one on screen was deaf, in every build that ever shipped, and the whole
+    // held-and-visiting arrangement above was moving sockets that were never
+    // open. The symptom was exactly what it looked like: nothing refreshed
+    // unless you opened it, and opening it was what made a socket that
+    // actually connects.
+    //
+    // Read the trace on the device before believing this file again.
+    unawaited(socket.connect().then((_) {
+      if (!identical(_backgroundSockets[id], socket)) return;
+      _subscribeFor(socket, id, tags);
+      _trace('elsewhere: $id connected, ${tags.length} tags');
+    }).catchError((Object e) {
+      _trace('elsewhere: $id could not connect: $e');
+      if (identical(_backgroundSockets[id], socket)) _backgroundSocketClosed(id);
+    }));
     return true;
   }
 
@@ -2745,8 +3353,13 @@ class RotelyxService {
     _scheduleAnotherPass();
   }
 
+  /// Which hour each background socket subscribed in. See the loop in
+  /// [_listenEverywhereElse] that reopens the ones the hour has left behind.
+  final Map<String, int> _backgroundBucket = {};
+
   void _dropBackgroundSocket(String id) {
     final socket = _backgroundSockets.remove(id);
+    _backgroundBucket.remove(id);
     for (final sub in _backgroundListeners.remove(id) ?? const []) {
       unawaited(sub.cancel());
     }
@@ -2775,20 +3388,44 @@ class RotelyxService {
 
     final String payload;
     try {
-      payload = session.openMine(envelopeB64, 1);
+      payload = session.openMine(envelopeB64, _config.lookback);
     } on Object {
       // Not addressed to this conversation in this window. Left in the
       // mailbox, because an envelope this device cannot open is not this
       // device's to release.
+      _trace('elsewhere: $id envelope not for this window');
       return;
     }
 
+    final epochBefore = session.epoch;
     final plaintext;
     try {
       plaintext = session.receive(payload);
-    } on Object {
+    } on Object catch (e) {
+      // The same rule as the live path, for the same reason: an envelope
+      // whose secret is gone can never be read by anybody, and left in the
+      // mailbox it comes back on every reconnect for ever. Anything else --
+      // above all a commit that arrived before the one it follows -- is
+      // temporary and stays. See `never-release-an-unreadable-envelope`.
+      final why = e.toString().toLowerCase();
+      final spent = why.contains('already spent') ||
+          why.contains('too old') ||
+          why.contains('generation') ||
+          why.contains('deleted to preserve forward secrecy');
+      if (spent) _acknowledgeOn(id, envelopeB64);
+      _trace('elsewhere: $id cannot read (${spent ? 'released' : 'kept'}): $e');
+      // Three in a row is the same threshold the live path uses to say a
+      // copy has fallen behind. Said here as well, so the conversation opens
+      // with the red chip and its way back rather than with "connected".
+      final failures = (_unreadableElsewhere[id] ?? 0) + 1;
+      _unreadableElsewhere[id] = failures;
+      if (failures >= 3) _behind.add(id);
       return;
     }
+    _trace('elsewhere: $id received text=${plaintext?.text != null} '
+        'epoch $epochBefore->${session.epoch}');
+    _unreadableElsewhere.remove(id);
+    _behind.remove(id);
 
     // A commit, or something with nothing in it to write down. The ratchet
     // moved either way, so it is sealed before anything else: losing a commit
@@ -2796,6 +3433,16 @@ class RotelyxService {
     if (plaintext == null || plaintext.refused != null) {
       _sealBackground(id, session);
       _acknowledgeOn(id, envelopeB64);
+      // A new epoch is addressed under new tags. The socket subscribed under
+      // the old ones, so it is closed and the next pass opens one that
+      // listens where the others now deposit; without this a commit was
+      // applied and the conversation went quiet all the same.
+      if (session.epoch != epochBefore) {
+        _trace('elsewhere: $id moved epoch, reopening its socket');
+        _dropBackgroundSocket(id);
+        _visiting.remove(id);
+        _scheduleAnotherPass();
+      }
       return;
     }
 
@@ -2807,10 +3454,28 @@ class RotelyxService {
       return;
     }
 
-    // Signals are for the conversation they belong to and most of them are
-    // about what is on screen: a read receipt, a reaction, somebody typing a
-    // picture. Written down where they can be, and otherwise let go of.
-    if (Signal.decode(plaintext.text) != null) {
+    // Signals are for the conversation they belong to. Most are about what is
+    // on screen -- a read receipt, a reaction -- and there is nothing to do
+    // with those here.
+    //
+    // Two are not, and dropping them was a real fault rather than a
+    // simplification. A group's name and picture, and a person's face, are
+    // facts about a conversation whether or not anybody is looking at it, and
+    // they are announced when they are announced. He was in five groups, four
+    // of them necessarily in the background, and four of them sat in his list
+    // under the names of their members while the name went past on a socket
+    // that threw it away.
+    final signal = Signal.decode(plaintext.text);
+    if (signal != null) {
+      switch (signal.kind) {
+        case SignalKind.group:
+          _theyNamedTheGroup(signal, into: id);
+        case SignalKind.profile:
+          _theyChangedPicture(signal.picture,
+              from: plaintext.from, into: id);
+        default:
+          break;
+      }
       _sealBackground(id, session);
       _acknowledgeOn(id, envelopeB64);
       return;
@@ -3034,8 +3699,13 @@ class RotelyxService {
   void _watchTagRotation() {
     _rotation?.cancel();
     _rotation = Timer.periodic(const Duration(minutes: 1), (_) {
-      if (state != RotelyxState.joined) return;
-      if (_bucket() != _subscribedBucket) _resubscribe();
+      if (state == RotelyxState.joined) {
+        if (_bucket() != _subscribedBucket) _resubscribe();
+        return;
+      }
+      // The list collecting on its own has the same hour to keep up with,
+      // and nothing else that would notice it changed.
+      if (_wantsListWatch) unawaited(_listenEverywhereElse());
     });
   }
 
@@ -3152,6 +3822,7 @@ class RotelyxService {
     _persistId = conversationId;
     _role = PairingRole.host;
     _listening.clear();
+    _listenOrder.clear();
 
     // The row in the list, written on first open rather than at install, so a
     // device nobody has used yet does not show a conversation nobody started.
@@ -3272,6 +3943,7 @@ class RotelyxService {
     _persistId = conversationId;
     _role = PairingRole.host;
     _listening.clear();
+    _listenOrder.clear();
 
     // Back to the meeting place, when this device is the one that answers
     // there. `_resubscribe` below covers the conversation's own tags and knew

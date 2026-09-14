@@ -328,6 +328,9 @@ class _NativeSession implements RotelyxSession {
   String safetyNumber() => _string(_op('session.safetyNumber'));
 
   @override
+  String groupId() => _string(_op('session.groupId'));
+
+  @override
   List<String> roster() => _strings(_op('session.roster'));
 
   @override

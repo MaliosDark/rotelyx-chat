@@ -93,8 +93,11 @@ void main() {
       // The shape that keeps the promise: inside the function that listens on
       // every other conversation, a new client is constructed. If somebody
       // rewrites it to reuse the live socket, this is the line that goes.
+      // Anchored on the definition rather than the first mention: the list
+      // now calls this function from elsewhere, and a call site is not where
+      // a socket is made.
       final listens = RegExp(
-        r'_listenEverywhereElse\(\)[\s\S]{0,3000}?MailboxClient\(url\)',
+        r'Future<void> _listenEverywhereElse\(\) async[\s\S]{0,8000}?MailboxClient\(url\)',
       );
       expect(listens.hasMatch(service), isTrue,
           reason: 'listening on other conversations no longer opens a '

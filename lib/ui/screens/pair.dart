@@ -211,6 +211,36 @@ class _PairScreenState extends State<PairScreen> {
   void _persist() {
     if (_persisted != null) return;
 
+    // A group this device already has: the same conversation, joined again.
+    //
+    // A device that has fallen too far behind to read anything cannot catch
+    // up on its own -- MLS applies commits in order, each envelope is sealed
+    // for one member, and nobody can resend the one that was missed. The way
+    // back in is to be welcomed again, and a welcome makes a live session with
+    // the same group id. Without this it also made a second row: the history,
+    // the name, the picture and the mute setting sat in the first one, and the
+    // conversation appeared twice with everything in the wrong half.
+    //
+    // The row is adopted instead. `persistTo` seals the new session over the
+    // old one, which is right: the old session is the one that could not read.
+    // What this device knocked with, kept so that it can knock again. Only
+    // a guest has one; a host is the one being knocked at.
+    final via = _code.text.trim().isEmpty ? null : _code.text.trim();
+
+    final group = rotelyx.groupId;
+    final already = group == null ? null : store.idForGroup(group);
+    if (already != null) {
+      _persisted = already;
+      final row = store.load(already);
+      if (row != null && via != null && row.joinedVia != via) {
+        row.joinedVia = via;
+        store.save(row);
+      }
+      rotelyx.persistTo(already);
+      widget.onDone(already);
+      return;
+    }
+
     final id = DateTime.now().microsecondsSinceEpoch.toString();
     _persisted = id;
 
@@ -222,6 +252,8 @@ class _PairScreenState extends State<PairScreen> {
 
     store.save(StoredConversation(
       id: id,
+      groupId: group,
+      joinedVia: via,
       title: title,
       session: null,
       messages: [],
