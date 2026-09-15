@@ -49,6 +49,7 @@ import 'push.dart';
 
 import '../platform/socket.dart';
 import 'front_connection.dart';
+import 'rotelyx_wasm.dart' show engine;
 
 /// A frame the mailbox pushed to us.
 class MailboxEnvelope {
@@ -67,9 +68,21 @@ class MailboxEnvelope {
 const int blindTokenMinimum = 240;
 
 class MailboxClient {
-  MailboxClient(this.url, {this.frontUrl, this.frontKey});
+  MailboxClient(this.url, {this.frontUrl, this.frontKey, this.constellation});
 
   final String url;
+
+  /// The constellation directory, or null to use [url] alone.
+  ///
+  /// When set, this client is not one connection but one per mailbox in the
+  /// directory, and every address is kept on the two the placement names rather
+  /// than on a single server. A mailbox going down then costs nothing: the
+  /// other holder still has the mail, and this client only reports itself
+  /// closed when *every* mailbox has gone. See `docs/CONSTELLATION.md`.
+  ///
+  /// The surface is identical either way, so nothing above this file knows
+  /// which mode it is in.
+  final String? constellation;
 
   /// When set, this client opens no socket of its own: it runs as one sealed
   /// session on the device's shared connection to the front at [frontUrl],
@@ -79,6 +92,154 @@ class MailboxClient {
   final String? frontKey;
   FrontChannel? _channel;
   bool get _throughFront => frontUrl != null && frontKey != null;
+
+  // ---- constellation -------------------------------------------------------
+
+  /// One plain client per mailbox in the directory. Empty unless spread.
+  final _peers = <String, MailboxClient>{};
+
+  /// The mailbox URLs in the directory, parsed once.
+  List<String>? _mailboxes;
+
+  /// Where an address lives, remembered so the same answer is not recomputed
+  /// for every deposit under a tag already being polled.
+  final _placed = <String, List<String>>{};
+
+  /// Envelopes already handed upward, so the copy from the second holder is
+  /// dropped. Two mailboxes hold the same bytes, so the string is the identity;
+  /// bounded because a conversation runs for a long time.
+  final _seen = <String>{};
+  final _seenOrder = <String>[];
+
+  /// Deposits still waiting for their first confirmation. Each deposit reaches
+  /// several mailboxes and each confirms, but the caller asked once and is told
+  /// once: the first acknowledgement counts and the rest are dropped.
+  int _awaitingFirstAck = 0;
+
+  List<String> get _spreadOver {
+    final held = _mailboxes;
+    if (held != null) return held;
+    final raw = constellation;
+    if (raw == null) return _mailboxes = const [];
+    try {
+      final doc = jsonDecode(raw) as Map<String, dynamic>;
+      final list = doc['mailboxes'];
+      return _mailboxes = [
+        if (list is List)
+          for (final m in list)
+            if (m is Map && m['url'] is String) m['url'] as String,
+      ];
+    } catch (_) {
+      // A directory this build cannot read is not a reason to have no mailbox.
+      return _mailboxes = const [];
+    }
+  }
+
+  bool get _spread => _spreadOver.length > 1;
+
+  /// The mailboxes that hold this address.
+  ///
+  /// An engine that cannot place answers with nothing, and then every mailbox
+  /// holds it: writing to all of them still contains whatever few the other end
+  /// reads from, so delivery survives a build that cannot compute placement.
+  List<MailboxClient> _holdersOf(String tagHex) {
+    final urls = _placed[tagHex] ??= () {
+      List<String> placed = const [];
+      try {
+        placed = engine.placement(constellation!, tagHex);
+      } catch (_) {
+        placed = const [];
+      }
+      return placed.isEmpty ? _spreadOver : placed;
+    }();
+    return [
+      for (final u in urls)
+        if (_peers[u] != null) _peers[u]!,
+    ];
+  }
+
+  /// The tag an envelope is addressed to: its first thirty two bytes, which is
+  /// where the mailbox reads it from too.
+  String? _tagOf(String envelopeB64) {
+    try {
+      final bytes = base64Decode(envelopeB64);
+      if (bytes.length < 32) return null;
+      final out = StringBuffer();
+      for (var i = 0; i < 32; i++) {
+        out.write(bytes[i].toRadixString(16).padLeft(2, '0'));
+      }
+      return out.toString();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Hand a frame to each mailbox that holds any of these tags, carrying only
+  /// the tags that mailbox is responsible for.
+  void _byTag(List<String> tags, void Function(MailboxClient, List<String>) send) {
+    final grouped = <MailboxClient, List<String>>{};
+    for (final tag in tags) {
+      for (final holder in _holdersOf(tag)) {
+        (grouped[holder] ??= <String>[]).add(tag);
+      }
+    }
+    grouped.forEach(send);
+  }
+
+  Future<void> _connectSpread() async {
+    for (final u in _spreadOver) {
+      if (_peers.containsKey(u)) continue;
+      final peer = MailboxClient(u, frontUrl: frontUrl, frontKey: frontKey);
+      _peers[u] = peer;
+
+      peer.envelopes.listen((e) {
+        // The same envelope arrives from every holder. Only the first is real.
+        if (!_seen.add(e.envelope)) return;
+        _seenOrder.add(e.envelope);
+        if (_seenOrder.length > 4000) _seen.remove(_seenOrder.removeAt(0));
+        if (!_envelopes.isClosed) _envelopes.add(e);
+      });
+      peer.errors.listen((m) {
+        if (!_errors.isClosed) _errors.add(m);
+      });
+      peer.accepted.listen((_) {
+        if (_awaitingFirstAck <= 0) return;
+        _awaitingFirstAck--;
+        if (!_accepted.isClosed) _accepted.add(1);
+      });
+      peer.subscribed.listen((n) {
+        if (!_subscribed.isClosed) _subscribed.add(n);
+      });
+      peer.wakeInterval.listen((n) {
+        if (!_wakeInterval.isClosed) _wakeInterval.add(n);
+      });
+      peer.closes.listen((why) {
+        // One mailbox going quiet is what the constellation exists to absorb,
+        // and reporting it would have the application tear down a conversation
+        // that is still being delivered. Only the last one closing is a close.
+        if (_peers.values.any((p) => p.isOpen)) return;
+        if (!_closes.isClosed) _closes.add(why);
+      });
+    }
+
+    // Opened together, and one refusal is not a failure: the constellation is
+    // usable as long as a single mailbox answered.
+    final results = await Future.wait(
+      _peers.values.map((p) async {
+        try {
+          await p.connect();
+          return true;
+        } catch (_) {
+          return false;
+        }
+      }),
+    );
+    if (!results.contains(true)) {
+      throw const MailboxUnreachable('no mailbox in the constellation answered');
+    }
+  }
+
+  // ---- end constellation ---------------------------------------------------
 
   TextSocket? _socket;
   final _envelopes = StreamController<MailboxEnvelope>.broadcast();
@@ -118,7 +279,9 @@ class MailboxClient {
   Stream<int> get wakeInterval => _wakeInterval.stream;
   final _wakeInterval = StreamController<int>.broadcast();
 
-  bool get isOpen => _throughFront ? (_channel != null) : (_socket?.isOpen ?? false);
+  bool get isOpen => _spread
+      ? _peers.values.any((p) => p.isOpen)
+      : (_throughFront ? (_channel != null) : (_socket?.isOpen ?? false));
 
   /// Open the socket.
   ///
@@ -139,6 +302,7 @@ class MailboxClient {
   /// subscribes on open and therefore never met it. The client that shipped
   /// could not open a mailbox at all.
   Future<void> connect() async {
+    if (_spread) return _connectSpread();
     if (_throughFront) {
       final channel = await FrontConnection.shared(frontUrl!, frontKey!).open();
       _channel = channel;
@@ -326,10 +490,38 @@ class MailboxClient {
   /// nothing.
   void collected(List<String> digests) {
     if (digests.isEmpty) return;
+    if (_spread) {
+      // To every mailbox, because the copy that was read came from one holder
+      // and the other is still keeping its own until it is told. A receipt is
+      // not a capability: a mailbox honours one only for an address that
+      // connection is listening on, so naming it everywhere costs nothing.
+      for (final p in _peers.values) {
+        p.collected(digests);
+      }
+      return;
+    }
     _send({'op': 'collected', 'digests': digests});
   }
 
   void deposit(String envelope) {
+    if (_spread) {
+      // To every mailbox that holds this address, so losing one loses nothing.
+      // The tag is inside the envelope, which is also where the mailbox reads
+      // it from, so there is nothing here to get wrong.
+      final tag = _tagOf(envelope);
+      final holders = tag == null
+          ? _peers.values.toList()
+          : _holdersOf(tag);
+      if (holders.isEmpty) {
+        _errors.add('no mailbox in the constellation is holding that address');
+        return;
+      }
+      _awaitingFirstAck++;
+      for (final h in holders) {
+        h.deposit(envelope);
+      }
+      return;
+    }
     // Kept until the server answers, so a refusal can name the envelope it
     // refused. The server answers deposits in order on one connection, so the
     // front of this queue is what a `stored` or an `overquota` is about.
@@ -356,6 +548,12 @@ class MailboxClient {
   /// The safe behaviour is what happens by default. A caller that does nothing
   /// gets the fewest links.
   void holdToken(String token) {
+    if (_spread) {
+      for (final p in _peers.values) {
+        p.holdToken(token);
+      }
+      return;
+    }
     _token = token.trim().isEmpty ? null : token.trim();
     _presented = false;
   }
@@ -397,6 +595,12 @@ class MailboxClient {
   static const _tagsPerRequest = 64;
 
   void subscribe(List<String> tags) {
+    if (_spread) {
+      // Each mailbox is asked only for the addresses it holds, which is what
+      // keeps a constellation sharded rather than three copies of everything.
+      _byTag(tags, (holder, its) => holder.subscribe(its));
+      return;
+    }
     for (var i = 0; i < tags.length; i += _tagsPerRequest) {
       final end =
           i + _tagsPerRequest < tags.length ? i + _tagsPerRequest : tags.length;
@@ -414,6 +618,14 @@ class MailboxClient {
   /// Chunked for the same reason `subscribe` is: the server refuses an
   /// oversized request outright rather than taking what fits.
   void leaveTickets(Map<String, String> byTag) {
+    if (_spread) {
+      // A ticket goes where its address goes, so the mailbox that receives
+      // something is the one holding the ticket to wake this phone for it.
+      _byTag(byTag.keys.toList(), (holder, its) {
+        holder.leaveTickets({for (final t in its) t: byTag[t]!});
+      });
+      return;
+    }
     final entries = byTag.entries.toList();
     for (var i = 0; i < entries.length; i += _tagsPerRequest) {
       final end = i + _tagsPerRequest < entries.length
@@ -435,7 +647,13 @@ class MailboxClient {
   /// meant for somebody else, and acknowledging any of it takes that envelope
   /// away from the reader it was for. Unsubscribing from the rendezvous tag
   /// once a conversation exists is not tidiness.
-  void unsubscribe(List<String> tags) => _send({'op': 'unsubscribe', 'tags': tags});
+  void unsubscribe(List<String> tags) {
+    if (_spread) {
+      _byTag(tags, (holder, its) => holder.unsubscribe(its));
+      return;
+    }
+    _send({'op': 'unsubscribe', 'tags': tags});
+  }
 
   /// Ask to be woken on the schedule.
   ///
@@ -448,7 +666,9 @@ class MailboxClient {
   /// wakes everybody on a fixed interval, each device collects from its own
   /// tags, and the ones with nothing waiting show nothing. See `push.dart` and
   /// `docs/PUSH.md`.
-  void registerWake(PushGrant grant) => _send({
+  void registerWake(PushGrant grant) => _spread
+      ? _peers.values.forEach((p) => p.registerWake(grant))
+      : _send({
         'op': 'registerWake',
         'token': grant.token,
         'kind': grant.kind,
@@ -465,7 +685,9 @@ class MailboxClient {
   /// Carries the secret and **not** the token. That is one fewer place a device
   /// token travels, and it makes the credential the only thing that can act:
   /// naming somebody else's token achieves nothing. See [PushGrant.secret].
-  void revokeWake(String secret) => _send({'op': 'revokeWake', 'secret': secret});
+  void revokeWake(String secret) => _spread
+      ? _peers.values.forEach((p) => p.revokeWake(secret))
+      : _send({'op': 'revokeWake', 'secret': secret});
 
   void _send(Map<String, Object?> frame) {
     if (_throughFront) {
@@ -486,6 +708,16 @@ class MailboxClient {
   }
 
   Future<void> close() async {
+    if (_spread) {
+      for (final p in _peers.values) {
+        await p.close();
+      }
+      _peers.clear();
+      _placed.clear();
+      _seen.clear();
+      _seenOrder.clear();
+      _awaitingFirstAck = 0;
+    }
     _channel?.close();
     _channel = null;
     await _socket?.close();

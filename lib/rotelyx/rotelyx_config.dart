@@ -42,18 +42,28 @@ class RotelyxConfig {
     this.room,
     this.frontUrl,
     this.frontKey,
+    this.constellation,
   });
 
   /// Ideoa Labs production. The mailbox is store-and-forward for peers that are
   /// not both online; it never learns the sender and never sees plaintext.
   static const production = RotelyxConfig(
-    mailbox: 'wss://m1.telyx.me/mailbox',
+    mailbox: 'wss://orvexa.telyx.me/mailbox',
     relay: 'https://amber.telyx.me',
     // Read from https://amber.telyx.me/room on 12 September 2026. It changes
     // only if the relay's identity file does.
     room:
         'eyJpZCI6IjBkZjQ4ZWU5M2QzZDAwZTFjNGJjMjRlYjA5ZTg4MTY1MjBhMWYwY2ZlOWFhMGNjY2I0M2Y2MTZmZjkyNWZjZGUiLCJhZGRycyI6W3siUmVsYXkiOiJodHRwczovL2FtYmVyLnRlbHl4Lm1lLyJ9XX0',
     lookback: 39,
+    // The constellation: a conversation's mail is kept on two of these three,
+    // chosen per address, so one going down loses nothing and no single
+    // mailbox sees the whole. Compiled in for the same reason the mailbox list
+    // is: a device that asked a server where its mailboxes are would hand that
+    // server the address of every user and the hour they opened the app.
+    constellation: '{"version":1,"replicas":2,"mailboxes":['
+        '{"id":"orvexa","url":"wss://orvexa.telyx.me/mailbox"},'
+        '{"id":"caelix","url":"wss://caelix.telyx.me/mailbox"},'
+        '{"id":"nyxara","url":"wss://nyxara.telyx.me/mailbox"}]}',
     notifierKey:
         'JQEdP4gaOPmrz1e+OgRs+jMc0ukVj5d29kYlxcF1/0kUkzErdLaTjKQwI0BM/unKLRiSymViUNR+bPi5jMSoEUA9z8NMF+Fl8cg5MPOaSmkwXLSS3Ax8uES2waeo8/kDv5mv1vBG22dWXCavxMsJiSOi3cEZeUO+PcMoiCMo20eAPzatSPa98sunWDvNi2UY1Sknz2NPzotiUAEGybA0a5I5C5obXSFtttwaH+ZZ0EyMPIi60BoAo/W6ruF7FgB9cOk7kZIxAekarJBqJYSKrVwc5BUXHkuCecqRduDJplW3p8oUTwo6VXUvFIGsLDcOmXVWUjoFbsSyV3JS1QIhmroORNhDFzc63oMKRZqHoKcj8Samrdhi7aIzl+M9X7V2K5IgZnsfpYMO+buwsOlVpaEa0CYxWJcg3umozEMm7pESWwUJLcN8J3Z4eCquEAVyNSldvZQeCoIn7VpF31vLuZgDK4xT3NhaTokrXJICYoNUE0zP4cOpE4o6//UBYFdSZIPCTnYiI5a0d8sD9jUFjAW4xyyilWQD/gIoR3INtLBhartBGQCfFCgXr+WTDQlBAENjYAs2e7OGYeiilLUD8WNvzFOYc7tDUUYbZoQaU/yQrtwopxeoLuxlXdNd4NeNX8a8GYFYLHdatpShbotKdDoZXuCom3lIlDuDS/AI+vmkcIQ5PYfFWeh+h1Vbj3BJMkyXXqnMHueQstOrfxYHObCPLYJROvNCh4kgt6J2dEO6BtMeqlgTeDrDKGi4OixMnTGfxoSIXwVgxGC6xOE+4HS9TxSRi3N7NQqOtFAE6SO8nmenn7s6TtJpYDFEouQcu4MOhWW8lBNOSwuq6amRuil709KJskYa3qskS4cR1rdDoDtRjLlwJHfKnCmmEuOmYrwwSDJLFTiphvm8iXCPC8RAAABr2IwLrHGPLAlIcgMP8rfJgKiKA8C9nqVwLrHJbrU2PjCD4yd5vxCGcjTMRlKj9ypFo1xuSpVIlvuyy/BUT5JoQ7ALQ6m5SJqj0ku3z3M3tSF7GyM4HtoTEeS3RMOb/iF8+fXFVyaQUvxH9wcN4QgG5TpqCUM6URINFYxkNCdvyWVRxtWfBKk1yfXBnehVNJlUkxyMjwFgZaOLJPoP6OM8C+JheJJSkeEQNrMHRhuZgbowzaXGmticjpvEN7pti7xiv7eJdddTuTyLeMGLDxOCOdg2E9o2rGPLCoqospRNPqOWa/udBfpqfozKSNmbniU/17J1cfA5gkxv2qYTfowpHjpshXt9s+rMEAMb5NxYUuQGo/Vq/vcAQBOrdHp9MwJJmeQ6UcUO1EhUmjeUgBVS0TtAXBtwvCoUuZNUm0l+EFcK/0IAQSzP4Htk3KWUtyEu7UVImIatYHrEBtyfmmlzqEtRdRwZW0JAyyw2qGeHP6OHOOBMDDbAV3RjcaR6k0akHftEGTPJx9NnFDBkYpFtDCMYcHVWzwlhWawIImt2W9A463UGwRmn6jZeTLNVMsyG9qUXK1OZyKyXdSEIw0A7hqdiWlO6fPGcIaupCM2phauHHfRwE7/ODDviPUStHkz2yns37wrBVeTSKAkILlUF21PZpo51xjL/gtO/h2xIc/c0HuQhfUmvoYPMaQ==',
   );
@@ -99,6 +109,25 @@ class RotelyxConfig {
   /// straight to the mailbox. See `docs/FRONT.md`.
   final String? frontUrl;
   final String? frontKey;
+
+  /// The constellation this build talks to, or null for a single mailbox.
+  ///
+  /// The directory as JSON: the mailboxes and how many of them hold each
+  /// address. When set, the device keeps every conversation on the two the
+  /// address places it on rather than on one server, so a mailbox going down
+  /// loses nothing and no single operator sees the whole of a conversation.
+  ///
+  /// Null is the behaviour every build before this had: one mailbox, the one
+  /// named by [mailbox], which is the single-replica case of the same rule.
+  /// [mailbox] is still where an invitation without a constellation points, and
+  /// still the host this build is checked against.
+  ///
+  /// Compiled in rather than fetched, for the reason `mailboxes.dart` gives for
+  /// the mailbox list: a device that asked a server which mailboxes to use
+  /// would be telling that server the address of every user and when they
+  /// opened the application. Changing the set costs a release, which is the
+  /// right price for infrastructure.
+  final String? constellation;
 
   /// The notifier's public key, base64, or null where there is none.
   ///

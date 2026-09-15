@@ -185,6 +185,28 @@ class RotelyxService {
   String get mailboxUrl =>
       _mailboxOverride ?? store.mailboxChoice ?? _config.mailbox;
 
+  /// The constellation, but only for a mailbox that belongs to it.
+  ///
+  /// Somebody who pointed this device at their own mailbox, or who joined
+  /// through an invitation naming another one, is on that mailbox and no other:
+  /// spreading their mail across ours would put copies of it on servers they
+  /// never chose, which is the opposite of the reason to run your own. So the
+  /// constellation applies when the mailbox in use is one of its own, and a
+  /// mailbox from anywhere else is used alone, exactly as every build before.
+  String? get _constellation {
+    final directory = _config.constellation;
+    if (directory == null) return null;
+    final here = mailboxUrl;
+    try {
+      final doc = jsonDecode(directory) as Map<String, dynamic>;
+      final list = doc['mailboxes'];
+      if (list is! List) return null;
+      return list.any((m) => m is Map && m['url'] == here) ? directory : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   WasmSession? _session;
   MailboxClient? _mailbox;
   String? _meetingTag;
@@ -2165,7 +2187,9 @@ class RotelyxService {
     mailboxCanWake = true;
 
     final mailbox = MailboxClient(mailboxUrl,
-        frontUrl: _config.frontUrl, frontKey: _config.frontKey);
+        frontUrl: _config.frontUrl,
+        frontKey: _config.frontKey,
+        constellation: _constellation);
     final previous = _mailbox;
     if (previous != null) _ownership.release(previous);
     _mailbox = mailbox;
@@ -3285,7 +3309,9 @@ class RotelyxService {
     }
 
     final socket = MailboxClient(url,
-        frontUrl: _config.frontUrl, frontKey: _config.frontKey);
+        frontUrl: _config.frontUrl,
+        frontKey: _config.frontKey,
+        constellation: _constellation);
     final token = RotelyxStore.instance.capabilityToken;
     if (token != null) socket.holdToken(token);
     _backgroundSockets[id] = socket;

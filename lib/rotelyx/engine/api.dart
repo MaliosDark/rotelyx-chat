@@ -400,6 +400,21 @@ abstract interface class RotelyxEngine {
   /// eight bytes the phone names this session by. See `docs/FRONT.md`.
   FrontSession openFront(String frontKeyB64, String sessionIdB64);
 
+  /// Which mailboxes of a constellation hold this tag, most preferred first.
+  ///
+  /// `directoryJson` is the constellation's directory: the mailboxes and how
+  /// many of them hold each tag. Both ends of a conversation compute this from
+  /// the same tag and the same directory and get the same answer, which is what
+  /// lets a sender write where a reader looks without either being told where
+  /// the other went.
+  ///
+  /// Returns the mailbox URLs. **An empty list means this build cannot place**,
+  /// not that no mailbox holds the tag. A caller that gets one falls back to
+  /// every mailbox in the directory, which still delivers: the set it writes to
+  /// then contains the set the other end reads from. The web engine answers
+  /// that way today, because placement lives in the native core.
+  List<String> placement(String directoryJson, String tagHex);
+
   /// Seal this device's push token to the notifier.
   ///
   /// One per tag, and never the same string twice: what makes the mailbox

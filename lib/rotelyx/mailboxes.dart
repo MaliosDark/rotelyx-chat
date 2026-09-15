@@ -69,8 +69,29 @@ class Mailbox {
 }
 
 /// The mailboxes shipped with this build.
+///
+/// # Why the constellation is not listed here
+///
+/// This build keeps a conversation's mail on more than one mailbox, so that
+/// losing one loses nothing (`RotelyxConfig.constellation`). None of that
+/// belongs in this list, for two reasons.
+///
+/// It does not scale: this list is drawn as a row per entry for somebody
+/// choosing, and a constellation is expected to grow. A hundred names is not a
+/// setting, it is a directory listing, and nobody opened settings to read one.
+///
+/// And it reads as the opposite of what it is. "Your messages are kept on two
+/// of three mailboxes" is true, and to a person who did not build it, it sounds
+/// like their messages are scattered across strangers' servers. The property
+/// worth telling them is that the messages are sealed and cannot be lost; the
+/// number of machines behind that is an implementation detail, and it lives on
+/// the site and in `docs/CONSTELLATION.md` where somebody looking for it will
+/// find it.
+///
+/// So this stays what it has always been: where a device starts, and the list
+/// of the ones this build knows by name. The spreading happens underneath it.
 const knownMailboxes = <Mailbox>[
-  Mailbox(url: 'wss://m1.telyx.me/mailbox', name: 'slate'),
+  Mailbox(url: 'wss://orvexa.telyx.me/mailbox', name: 'orvexa'),
 ];
 
 /// The one used when nothing else has been chosen.

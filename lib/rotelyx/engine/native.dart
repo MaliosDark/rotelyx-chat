@@ -651,6 +651,19 @@ class _NativeEngine implements RotelyxEngine {
   }
 
   @override
+  List<String> placement(String directoryJson, String tagHex) {
+    final reply = _call({
+      'op': 'directory.placement',
+      'directory': directoryJson,
+      'tag': tagHex,
+    }) as List<dynamic>;
+    return [
+      for (final m in reply)
+        if (m is Map && m['url'] is String) m['url'] as String,
+    ];
+  }
+
+  @override
   String sealWakeTicket(
           String notifierKeyB64, String kind, String token, int hour) =>
       _string(_call({

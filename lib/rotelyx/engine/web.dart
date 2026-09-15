@@ -348,6 +348,13 @@ class _WebEngine implements RotelyxEngine {
           'the web build does not run through a front yet; it connects to the '
           'mailbox directly');
 
+  /// Empty: placement lives in the native core and the browser build has no
+  /// copy of it yet. The caller answers an empty list by using every mailbox in
+  /// the directory, which still delivers, because the set it writes to then
+  /// contains the few the other end reads from. It costs traffic, not delivery.
+  @override
+  List<String> placement(String directoryJson, String tagHex) => const [];
+
   const _WebEngine();
 
   @override
