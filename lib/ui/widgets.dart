@@ -221,11 +221,18 @@ class RxChip extends StatelessWidget {
 
 /// A card that explains something the user should read once.
 class RxNote extends StatelessWidget {
-  const RxNote(this.text, {super.key, this.tone, this.title});
+  const RxNote(this.text, {super.key, this.tone, this.title, this.verified = false});
 
   final String text;
   final String? title;
   final Color? tone;
+
+  /// Draws the mark beside the title, for something this build shipped with.
+  ///
+  /// It means "this application was built naming this", and nothing more. It
+  /// cannot say anything about a copy of the application somebody else changed,
+  /// because the mark and the reason for drawing it are both inside the binary.
+  final bool verified;
 
   @override
   Widget build(BuildContext context) {
@@ -243,7 +250,17 @@ class RxNote extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (title != null) ...[
-            Text(title!, style: Type.label.copyWith(color: c)),
+            Row(
+              children: [
+                Flexible(
+                  child: Text(title!, style: Type.label.copyWith(color: c)),
+                ),
+                if (verified) ...[
+                  const SizedBox(width: 5),
+                  Icon(Icons.verified_rounded, size: 15, color: Tone.accent),
+                ],
+              ],
+            ),
             const SizedBox(height: 5),
           ],
           Text(text, style: Type.small.copyWith(color: t.muted)),

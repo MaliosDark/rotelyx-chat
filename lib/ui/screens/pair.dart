@@ -977,6 +977,7 @@ class _MailboxNotice extends StatelessWidget {
           ? 'Connects through'
           : 'Connects through a mailbox you do not know',
       tone: described.familiar ? null : Tone.warn,
+      verified: described.familiar,
     );
   }
 }

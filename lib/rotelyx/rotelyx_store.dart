@@ -1245,6 +1245,34 @@ class RotelyxStore {
     return _ids ??= (_box.read(_kIndex) as List?)?.cast<String>().toList() ?? [];
   }
 
+  /// The conversations a person actually has: the ids with something behind
+  /// them.
+  ///
+  /// [conversationIds] is the index, and the index gains an id the moment a
+  /// session is sealed. That happens before there is a conversation: during a
+  /// pairing that may never be finished, and for an invitation handed out and
+  /// not yet joined. Each of those leaves an id with a session and no log,
+  /// invisible in the list because there is nothing to draw, and counted
+  /// wherever the index was counted. On a device with five groups that read
+  /// "20 conversations", which tells a person the application is holding on to
+  /// things they deleted. It was not. It was counting attempts.
+  ///
+  /// Nothing is removed here, deliberately. An id with a session and no log is
+  /// exactly the shape of an invitation somebody has not joined yet, and
+  /// sweeping those away would silently break it. So this is what to count and
+  /// what to show; the index stays whole.
+  List<String> get liveConversationIds =>
+      conversationIds.where(_hasConversation).toList();
+
+  /// Whether [id] has a conversation behind it rather than only a session.
+  ///
+  /// Asked of the stored bytes rather than of [load], because a locked chat
+  /// holds a log this device cannot open at the moment, and that is still a
+  /// conversation the person has.
+  bool _hasConversation(String id) => _key == null
+      ? _ephemeral.containsKey(id)
+      : _box.read(_kLog(id)) != null;
+
   /// Which conversations exist, held in memory rather than read back from the
   /// store every time.
   ///

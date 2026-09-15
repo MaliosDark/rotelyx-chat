@@ -5,6 +5,7 @@
 /// can turn its protections off.
 library;
 
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -625,11 +626,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                   _Fold(
                     title: 'This device',
-                    summary: '${store.conversationIds.length} conversations',
+                    summary: '${store.liveConversationIds.length} conversations',
                     children: [
                   _Row('History',
                       store.isUnlocked ? 'Kept, encrypted' : 'Not kept'),
-                  _Row('Conversations', '${store.conversationIds.length}'),
+                  _Row('Conversations', '${store.liveConversationIds.length}'),
                   const SizedBox(height: Metrics.gap),
                   const RxNote(
                     'The server keeps nothing. A message is deleted the '
@@ -657,6 +658,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     title: 'Where your messages wait',
                     summary: 'The mailbox that holds them until you collect',
                     children: [
+                      if (_constellationNames().isNotEmpty) ...[
+                        const RxNote(
+                          'Sealed on this device before they leave it, so '
+                          'whoever holds them cannot read them. They are kept '
+                          'safe until you collect them, and they survive a '
+                          'server going down.',
+                          title: 'Your messages are safe while they wait',
+                        ),
+                        const SizedBox(height: Metrics.gap),
+                      ],
                       _MailboxPicker(onChanged: () => setState(() {})),
                     ],
                   ),
@@ -1088,6 +1099,29 @@ class _WidgetChoice extends StatelessWidget {
   }
 }
 
+/// The names of the mailboxes this build spreads across, or empty when it uses
+/// a single one.
+///
+/// Read from the constellation the build carries rather than from the list of
+/// mailboxes a person may choose between, because those are different
+/// questions: the picker offers where to start, and this is where the messages
+/// actually live.
+List<String> _constellationNames() {
+  final directory = rotelyxConfig.constellation;
+  if (directory == null) return const [];
+  try {
+    final doc = jsonDecode(directory) as Map<String, dynamic>;
+    final list = doc['mailboxes'];
+    if (list is! List) return const [];
+    return [
+      for (final m in list)
+        if (m is Map && m['id'] is String) m['id'] as String,
+    ];
+  } catch (_) {
+    return const [];
+  }
+}
+
 class _Fold extends StatefulWidget {
   const _Fold({required this.title, required this.summary, required this.children});
 
@@ -1270,6 +1304,7 @@ class _MailboxPickerState extends State<_MailboxPicker> {
             child: _MailboxRow(
               title: m.name,
               detail: m.host,
+              familiar: true,
               chosen: !custom && m.url == current,
               onTap: () => _use(m.url == defaultMailbox.url ? null : m.url),
             ),
@@ -1355,6 +1390,7 @@ class _MailboxRow extends StatelessWidget {
     required this.chosen,
     required this.onTap,
     this.onRemove,
+    this.familiar = false,
   });
 
   final String title;
@@ -1362,6 +1398,18 @@ class _MailboxRow extends StatelessWidget {
   final bool chosen;
   final VoidCallback onTap;
   final VoidCallback? onRemove;
+
+  /// Whether this mailbox is one this build ships with, which earns the mark
+  /// beside its name.
+  ///
+  /// It says "this is one of the addresses this application was built with",
+  /// and that is all it says. It is **not** a defence against a modified copy
+  /// of this application: a build somebody else changed can draw this mark
+  /// beside anything, or not draw it at all, because the check and the answer
+  /// are both inside the binary they changed. What tells a person their copy is
+  /// genuine is where they installed it from and the signature on it, not
+  /// anything painted on this screen.
+  final bool familiar;
 
   @override
   Widget build(BuildContext context) {
@@ -1388,7 +1436,20 @@ class _MailboxRow extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: Type.label.copyWith(color: t.text)),
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(title,
+                            style: Type.label.copyWith(color: t.text),
+                            overflow: TextOverflow.ellipsis),
+                      ),
+                      if (familiar) ...[
+                        const SizedBox(width: 5),
+                        Icon(Icons.verified_rounded,
+                            size: 15, color: Tone.accent),
+                      ],
+                    ],
+                  ),
                   const SizedBox(height: 2),
                   Text(detail, style: Type.small.copyWith(color: t.faint)),
                 ],
