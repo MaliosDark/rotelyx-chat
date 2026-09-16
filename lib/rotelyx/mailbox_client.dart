@@ -50,6 +50,16 @@ import 'push.dart';
 import '../platform/socket.dart';
 import 'front_connection.dart';
 import 'rotelyx_wasm.dart' show engine;
+import '../platform/trace.dart';
+
+/// One mailbox of a constellation: where it is, and the front to reach it
+/// through when it has one.
+class _Member {
+  const _Member({required this.url, this.front, this.frontKey});
+  final String url;
+  final String? front;
+  final String? frontKey;
+}
 
 /// A frame the mailbox pushed to us.
 class MailboxEnvelope {
@@ -98,8 +108,9 @@ class MailboxClient {
   /// One plain client per mailbox in the directory. Empty unless spread.
   final _peers = <String, MailboxClient>{};
 
-  /// The mailbox URLs in the directory, parsed once.
-  List<String>? _mailboxes;
+  /// The mailboxes in the directory, parsed once: where each one is, and the
+  /// front to reach it through when it has one.
+  List<_Member>? _mailboxes;
 
   /// Where an address lives, remembered so the same answer is not recomputed
   /// for every deposit under a tag already being polled.
@@ -116,7 +127,7 @@ class MailboxClient {
   /// once: the first acknowledgement counts and the rest are dropped.
   int _awaitingFirstAck = 0;
 
-  List<String> get _spreadOver {
+  List<_Member> get _spreadOver {
     final held = _mailboxes;
     if (held != null) return held;
     final raw = constellation;
@@ -127,7 +138,12 @@ class MailboxClient {
       return _mailboxes = [
         if (list is List)
           for (final m in list)
-            if (m is Map && m['url'] is String) m['url'] as String,
+            if (m is Map && m['url'] is String)
+              _Member(
+                url: m['url'] as String,
+                front: m['front'] is String ? m['front'] as String : null,
+                frontKey: m['frontKey'] is String ? m['frontKey'] as String : null,
+              ),
       ];
     } catch (_) {
       // A directory this build cannot read is not a reason to have no mailbox.
@@ -150,7 +166,9 @@ class MailboxClient {
       } catch (_) {
         placed = const [];
       }
-      return placed.isEmpty ? _spreadOver : placed;
+      return placed.isEmpty
+          ? [for (final m in _spreadOver) m.url]
+          : placed;
     }();
     return [
       for (final u in urls)
@@ -187,9 +205,15 @@ class MailboxClient {
   }
 
   Future<void> _connectSpread() async {
-    for (final u in _spreadOver) {
+    for (final m in _spreadOver) {
+      final u = m.url;
       if (_peers.containsKey(u)) continue;
-      final peer = MailboxClient(u, frontUrl: frontUrl, frontKey: frontKey);
+      // Each member has its own front, because a session is sealed to the key
+      // of the mailbox behind it. One connection per member, shared by every
+      // conversation on the device, is the whole saving: without it a device
+      // holding seven conversations opens three connections for each of them.
+      final peer = MailboxClient(u,
+          frontUrl: m.front ?? frontUrl, frontKey: m.frontKey ?? frontKey);
       _peers[u] = peer;
 
       peer.envelopes.listen((e) {
@@ -304,7 +328,21 @@ class MailboxClient {
   Future<void> connect() async {
     if (_spread) return _connectSpread();
     if (_throughFront) {
-      final channel = await FrontConnection.shared(frontUrl!, frontKey!).open();
+      // A front that cannot be reached is not a reason to have no mailbox.
+      //
+      // The front is an optimisation: it saves connections and stops the
+      // mailbox grouping a device's conversations. Neither of those is worth
+      // failing to deliver a message over, so a front that refuses falls
+      // through to the mailbox itself, which is what every build had before
+      // fronts existed. The saving is lost until it comes back; nothing else
+      // is.
+      final FrontChannel channel;
+      try {
+        channel = await FrontConnection.shared(frontUrl!, frontKey!).open();
+      } on Object catch (e) {
+        trace('front $frontUrl unreachable ($e), using $url directly');
+        return _connectDirect();
+      }
       _channel = channel;
       channel.inner.listen(
         _onFrame,
@@ -321,6 +359,11 @@ class MailboxClient {
       );
       return;
     }
+    return _connectDirect();
+  }
+
+  /// Open a socket straight to the mailbox, with no front in between.
+  Future<void> _connectDirect() async {
     final TextSocket socket;
     try {
       socket = await connectSocket(url);
