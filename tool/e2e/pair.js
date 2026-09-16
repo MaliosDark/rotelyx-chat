@@ -142,7 +142,7 @@ window.__rx = (() => {
         S.meeting = window.rotelyx.rendezvousTag(phrase);
         if (role === 'host') S.session.found();
 
-        S.socket = new WebSocket('wss://m1.telyx.me/mailbox');
+        S.socket = new WebSocket('wss://orvexa.telyx.me/mailbox');
 
         S.socket.onerror = () => { S.err = 'mailbox unreachable'; };
         S.socket.onmessage = (ev) => {

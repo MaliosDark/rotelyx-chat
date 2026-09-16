@@ -133,7 +133,7 @@ The whole live codebase opens exactly two outbound addresses, and they are the
 same service in two environments:
 
 ```
-wss://m1.telyx.me/mailbox     production
+wss://orvexa.telyx.me/mailbox     production
 ws://127.0.0.1:3341/mailbox             local development
 ```
 
@@ -447,7 +447,7 @@ from Google instead. The flag sets `useLocalCanvasKit: true`. The gstatic string
 still appears in the bundle afterwards, as the dead branch of that ternary.
 
 Verified against the compiled output rather than the source: `main.dart.js`
-names `m1.telyx.me` and nothing else reachable.
+names `orvexa.telyx.me` and nothing else reachable.
 
 ### The server must rewrite unknown paths to `index.html`
 
@@ -705,3 +705,18 @@ keep your copyright; the project keeps the ability to ship the same code in a
 store, which AGPL-3.0 alone cannot do.
 
 Rotelyx is a trademark of Ideoa Labs. The licence covers the code, not the name.
+
+## Running the tests
+
+```sh
+tool/dev/test.sh
+```
+
+Not `flutter test` on its own. The suite exercises the real engine rather than
+a stand in, so it needs that engine built as a native library for the machine
+running the tests. Without it every test that crosses the C ABI fails at its
+first call with "Failed to load dynamic library", which looks like fifty broken
+tests and is one missing file. The script builds it and points the loader at it.
+
+It expects the protocol repository beside this one; set `ROTELYX_COMMS` if it
+is somewhere else.

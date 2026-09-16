@@ -19,9 +19,15 @@ import 'package:flutter_test/flutter_test.dart';
 /// Every entry needs a reason, because an allowlist nobody justifies becomes a
 /// list of things somebody once wanted to allow.
 const allowedHosts = <String, String>{
-  'm1.telyx.me':
-      'the blind mailbox: store and forward, never learns the sender, never '
-          'sees plaintext',
+  'orvexa.telyx.me':
+      'a blind mailbox of the constellation: store and forward, never learns '
+          'the sender, never sees plaintext. Formerly named m1',
+  'caelix.telyx.me':
+      'a blind mailbox of the constellation. An address is kept on two of the '
+          'three, so losing one loses nothing and none holds the whole',
+  'nyxara.telyx.me':
+      'a blind mailbox of the constellation, on the same terms as the other '
+          'two',
   '127.0.0.1': 'the mailbox running locally during development',
   'localhost':
       'the same machine by its other name, in the development CSP that '

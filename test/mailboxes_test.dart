@@ -36,7 +36,7 @@ void main() {
   });
 
   test('an unencrypted address is refused, and told why', () {
-    final problem = mailboxProblem('ws://m1.telyx.me/mailbox');
+    final problem = mailboxProblem('ws://orvexa.telyx.me/mailbox');
 
     expect(problem, isNotNull);
     expect(problem, contains('wss://'),
@@ -46,7 +46,7 @@ void main() {
   test('nonsense is refused rather than half accepted', () {
     expect(mailboxProblem(''), isNotNull);
     expect(mailboxProblem('just some words'), isNotNull);
-    expect(mailboxProblem('https://m1.telyx.me/mailbox'), isNotNull,
+    expect(mailboxProblem('https://orvexa.telyx.me/mailbox'), isNotNull,
         reason: 'https is not a websocket scheme, and accepting it would fail '
             'later with a message about the connection rather than the address');
   });
