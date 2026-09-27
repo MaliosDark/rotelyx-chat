@@ -317,6 +317,13 @@ class _WebSession implements RotelyxSession {
   // The bridge supplies the time bucket for all of these. See `api.dart`.
   @override
   String myTag() => inner.myTag();
+
+  @override
+  String myTagAt(int bucket) => throw UnsupportedError(
+      // The browser bridge supplies the hour itself and takes no argument,
+      // and nothing in a browser asks for this: a wake ticket needs a push
+      // token, and a page has none. See `_leaveTicketsFor`.
+      'a browser has no push token, so it leaves no wake tickets');
   @override
   List<String> myPollingTags(int lookback) => _strings(inner.myPollingTags(lookback));
   @override

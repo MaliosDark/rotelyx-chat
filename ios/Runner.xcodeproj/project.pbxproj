@@ -61,6 +61,10 @@
 		E5A1B2C3D4E5F60000000033 /* WatchBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5A1B2C3D4E5F60000000032 /* WatchBridge.swift */; };
 		E5A1B2C3D4E5F60000000091 /* Waiting.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5A1B2C3D4E5F60000000090 /* Waiting.swift */; };
 		E5A1B2C3D4E5F60000000093 /* LastWake.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5A1B2C3D4E5F60000000092 /* LastWake.swift */; };
+		E5A1B2C3D4E5F6000000009F /* Reading.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5A1B2C3D4E5F6000000009E /* Reading.swift */; };
+		E5A1B2C3D4E5F6000000009D /* Socket.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5A1B2C3D4E5F6000000009C /* Socket.swift */; };
+		E5A1B2C3D4E5F6000000009B /* Vault.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5A1B2C3D4E5F6000000009A /* Vault.swift */; };
+		E5A1B2C3D4E5F60000000097 /* Engine.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5A1B2C3D4E5F60000000096 /* Engine.swift */; };
 		E729C131CC29BBF794ADADC5 /* Glance.swift in Sources */ = {isa = PBXBuildFile; fileRef = 638E3ABC18C196EB66C286E0 /* Glance.swift */; };
 /* End PBXBuildFile section */
 
@@ -218,6 +222,10 @@
 		E5A1B2C3D4E5F60000000032 /* WatchBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchBridge.swift; sourceTree = "<group>"; };
 		E5A1B2C3D4E5F60000000090 /* Waiting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Waiting.swift; sourceTree = "<group>"; };
 		E5A1B2C3D4E5F60000000092 /* LastWake.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LastWake.swift; sourceTree = "<group>"; };
+		E5A1B2C3D4E5F6000000009E /* Reading.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Reading.swift; sourceTree = "<group>"; };
+		E5A1B2C3D4E5F6000000009C /* Socket.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Socket.swift; sourceTree = "<group>"; };
+		E5A1B2C3D4E5F6000000009A /* Vault.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vault.swift; sourceTree = "<group>"; };
+		E5A1B2C3D4E5F60000000096 /* Engine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Engine.swift; sourceTree = "<group>"; };
 		EDB2A7BE97D35CAECB0701E5 /* Widgets.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Widgets.swift; sourceTree = "<group>"; };
 		F0C2D411AB9E1F1A0A86C50C /* message.wav */ = {isa = PBXFileReference; includeInIndex = 1; name = message.wav; path = ../../assets/sound/message.wav; sourceTree = "<group>"; };
 		C1A7E5D04B1C40A9B0C5F003 /* chirp.wav */ = {isa = PBXFileReference; includeInIndex = 1; name = chirp.wav; path = ../../assets/sound/chirp.wav; sourceTree = "<group>"; };
@@ -450,6 +458,10 @@
 				E5A1B2C3D4E5F6000000000B /* NotificationService.swift */,
 				E5A1B2C3D4E5F60000000090 /* Waiting.swift */,
 				E5A1B2C3D4E5F60000000092 /* LastWake.swift */,
+				E5A1B2C3D4E5F6000000009E /* Reading.swift */,
+				E5A1B2C3D4E5F6000000009C /* Socket.swift */,
+				E5A1B2C3D4E5F6000000009A /* Vault.swift */,
+				E5A1B2C3D4E5F60000000096 /* Engine.swift */,
 				E5A1B2C3D4E5F6000000000D /* Info.plist */,
 				E5A1B2C3D4E5F6000000000E /* NotificationService.entitlements */,
 			);
@@ -834,6 +846,10 @@
 				E5A1B2C3D4E5F6000000000C /* NotificationService.swift in Sources */,
 				E5A1B2C3D4E5F60000000091 /* Waiting.swift in Sources */,
 				E5A1B2C3D4E5F60000000093 /* LastWake.swift in Sources */,
+				E5A1B2C3D4E5F6000000009F /* Reading.swift in Sources */,
+				E5A1B2C3D4E5F6000000009D /* Socket.swift in Sources */,
+				E5A1B2C3D4E5F6000000009B /* Vault.swift in Sources */,
+				E5A1B2C3D4E5F60000000097 /* Engine.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -958,6 +974,8 @@
 					"$(inherited)",
 					"-framework",
 					SystemConfiguration,
+					"-framework",
+					Network,
 					"-Wl,-u,_rotelyx_abi_version",
 					"-Wl,-u,_rotelyx_call",
 					"-Wl,-u,_rotelyx_call_capture",
@@ -983,6 +1001,8 @@
 					"$(inherited)",
 					"-framework",
 					SystemConfiguration,
+					"-framework",
+					Network,
 					"-Wl,-u,_rotelyx_abi_version",
 					"-Wl,-u,_rotelyx_call",
 					"-Wl,-u,_rotelyx_call_capture",
@@ -1240,6 +1260,8 @@
 					"$(inherited)",
 					"-framework",
 					SystemConfiguration,
+					"-framework",
+					Network,
 					"-Wl,-u,_rotelyx_abi_version",
 					"-Wl,-u,_rotelyx_call",
 					"-Wl,-u,_rotelyx_call_capture",
@@ -1265,6 +1287,8 @@
 					"$(inherited)",
 					"-framework",
 					SystemConfiguration,
+					"-framework",
+					Network,
 					"-Wl,-u,_rotelyx_abi_version",
 					"-Wl,-u,_rotelyx_call",
 					"-Wl,-u,_rotelyx_call_capture",
@@ -1314,6 +1338,8 @@
 					"$(inherited)",
 					"-framework",
 					SystemConfiguration,
+					"-framework",
+					Network,
 					"-Wl,-u,_rotelyx_abi_version",
 					"-Wl,-u,_rotelyx_call",
 					"-Wl,-u,_rotelyx_call_capture",
@@ -1339,6 +1365,8 @@
 					"$(inherited)",
 					"-framework",
 					SystemConfiguration,
+					"-framework",
+					Network,
 					"-Wl,-u,_rotelyx_abi_version",
 					"-Wl,-u,_rotelyx_call",
 					"-Wl,-u,_rotelyx_call_capture",
@@ -1509,6 +1537,46 @@
 				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = NotificationService/Info.plist;
+				// The engine, so a notification can say what the message was.
+				//
+				// Linked rather than force loaded, which is the difference
+				// between this extension and the application. The application
+				// pulls the whole archive in because Dart reaches the symbols
+				// by name at run time and the linker cannot see that. Here
+				// Swift calls three functions and the linker can follow them,
+				// so what arrives is what `rotelyx_call` needs and no more,
+				// which matters: an extension has twenty four megabytes to
+				// live in.
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/Frameworks/RotelyxEngine.xcframework/ios-arm64/Headers",
+				);
+				SWIFT_INCLUDE_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/Frameworks/RotelyxEngine.xcframework/ios-arm64/Headers",
+				);
+				"OTHER_LDFLAGS[sdk=iphoneos*]" = (
+					"$(inherited)",
+					"-framework",
+					SystemConfiguration,
+					"-framework",
+					Network,
+					"-Wl,-u,_rotelyx_abi_version",
+					"-Wl,-u,_rotelyx_call",
+					"-Wl,-u,_rotelyx_string_free",
+					"$(SRCROOT)/Frameworks/RotelyxEngine.xcframework/ios-arm64/librotelyx_mobile.a",
+				);
+				"OTHER_LDFLAGS[sdk=iphonesimulator*]" = (
+					"$(inherited)",
+					"-framework",
+					SystemConfiguration,
+					"-framework",
+					Network,
+					"-Wl,-u,_rotelyx_abi_version",
+					"-Wl,-u,_rotelyx_call",
+					"-Wl,-u,_rotelyx_string_free",
+					"$(SRCROOT)/Frameworks/RotelyxEngine.xcframework/ios-arm64_x86_64-simulator/librotelyx_mobile.a",
+				);
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -1537,6 +1605,46 @@
 				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = NotificationService/Info.plist;
+				// The engine, so a notification can say what the message was.
+				//
+				// Linked rather than force loaded, which is the difference
+				// between this extension and the application. The application
+				// pulls the whole archive in because Dart reaches the symbols
+				// by name at run time and the linker cannot see that. Here
+				// Swift calls three functions and the linker can follow them,
+				// so what arrives is what `rotelyx_call` needs and no more,
+				// which matters: an extension has twenty four megabytes to
+				// live in.
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/Frameworks/RotelyxEngine.xcframework/ios-arm64/Headers",
+				);
+				SWIFT_INCLUDE_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/Frameworks/RotelyxEngine.xcframework/ios-arm64/Headers",
+				);
+				"OTHER_LDFLAGS[sdk=iphoneos*]" = (
+					"$(inherited)",
+					"-framework",
+					SystemConfiguration,
+					"-framework",
+					Network,
+					"-Wl,-u,_rotelyx_abi_version",
+					"-Wl,-u,_rotelyx_call",
+					"-Wl,-u,_rotelyx_string_free",
+					"$(SRCROOT)/Frameworks/RotelyxEngine.xcframework/ios-arm64/librotelyx_mobile.a",
+				);
+				"OTHER_LDFLAGS[sdk=iphonesimulator*]" = (
+					"$(inherited)",
+					"-framework",
+					SystemConfiguration,
+					"-framework",
+					Network,
+					"-Wl,-u,_rotelyx_abi_version",
+					"-Wl,-u,_rotelyx_call",
+					"-Wl,-u,_rotelyx_string_free",
+					"$(SRCROOT)/Frameworks/RotelyxEngine.xcframework/ios-arm64_x86_64-simulator/librotelyx_mobile.a",
+				);
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -1563,6 +1671,46 @@
 				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = NotificationService/Info.plist;
+				// The engine, so a notification can say what the message was.
+				//
+				// Linked rather than force loaded, which is the difference
+				// between this extension and the application. The application
+				// pulls the whole archive in because Dart reaches the symbols
+				// by name at run time and the linker cannot see that. Here
+				// Swift calls three functions and the linker can follow them,
+				// so what arrives is what `rotelyx_call` needs and no more,
+				// which matters: an extension has twenty four megabytes to
+				// live in.
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/Frameworks/RotelyxEngine.xcframework/ios-arm64/Headers",
+				);
+				SWIFT_INCLUDE_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/Frameworks/RotelyxEngine.xcframework/ios-arm64/Headers",
+				);
+				"OTHER_LDFLAGS[sdk=iphoneos*]" = (
+					"$(inherited)",
+					"-framework",
+					SystemConfiguration,
+					"-framework",
+					Network,
+					"-Wl,-u,_rotelyx_abi_version",
+					"-Wl,-u,_rotelyx_call",
+					"-Wl,-u,_rotelyx_string_free",
+					"$(SRCROOT)/Frameworks/RotelyxEngine.xcframework/ios-arm64/librotelyx_mobile.a",
+				);
+				"OTHER_LDFLAGS[sdk=iphonesimulator*]" = (
+					"$(inherited)",
+					"-framework",
+					SystemConfiguration,
+					"-framework",
+					Network,
+					"-Wl,-u,_rotelyx_abi_version",
+					"-Wl,-u,_rotelyx_call",
+					"-Wl,-u,_rotelyx_string_free",
+					"$(SRCROOT)/Frameworks/RotelyxEngine.xcframework/ios-arm64_x86_64-simulator/librotelyx_mobile.a",
+				);
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

@@ -295,6 +295,21 @@ abstract interface class RotelyxSession {
   Received? receive(String messageB64);
 
   String myTag();
+
+  /// The tag others will deposit to in [bucket], which may be in the future.
+  ///
+  /// # Why a future one is worth asking for
+  ///
+  /// A wake ticket is sealed for one hour and left under that hour's tag, so
+  /// a device could only be woken during an hour in which the application had
+  /// been running. Somebody who opened it at ten and was written to at two
+  /// was not woken at all: the message went to the two o'clock tag, where no
+  /// ticket had ever been left, and it sat there until the application was
+  /// opened again. Which is to say that notifications worked only for people
+  /// who did not need them.
+  ///
+  /// Leaving tickets ahead is the fix, and this is what makes it possible.
+  String myTagAt(int bucket);
   List<String> myPollingTags(int lookback);
   List<String> recipientTags();
   List<String> commitRecipientTags();

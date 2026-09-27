@@ -73,12 +73,27 @@ PushTransport pushForThisPlatform() =>
 /// every subscription this application makes. No key, no message, no name.
 /// The file lives in the App Group container, which only this application and
 /// its own extension can open.
-Future<void> publishListeningTags(String mailbox, List<String> tags) async {
+Future<void> publishListeningTags(String mailbox, List<String> tags,
+    {String? directory}) async {
   if (!Platform.isIOS) return;
   final path = await sharedContainerPath();
   if (path == null) return;
-  await File('$path/listening.json')
-      .writeAsString(jsonEncode({'mailbox': mailbox, 'tags': tags}));
+  await File('$path/listening.json').writeAsString(jsonEncode({
+    'mailbox': mailbox,
+    'tags': tags,
+    // The constellation, where there is one.
+    //
+    // A conversation's mail is kept on two mailboxes of three, and which two
+    // is worked out from the tag and the directory. The extension has the
+    // tags and the engine, so all it lacked was the directory: without it,
+    // asking one mailbox finds the message about two times in three and shows
+    // "New message" the rest of the time, for no reason anybody could see.
+    //
+    // It is the same directory compiled into this build. Nothing secret: it
+    // names mailboxes and their public keys, which is what a sender needs in
+    // order to write somewhere a reader will look.
+    if (directory != null) 'directory': directory,
+  }));
 }
 
 /// What the last push wake did, as the extension left it.

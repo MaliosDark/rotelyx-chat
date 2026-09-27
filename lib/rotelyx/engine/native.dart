@@ -505,6 +505,10 @@ class _NativeSession implements RotelyxSession {
   String myTag() => _string(_op('session.myTag', {'timeBucket': _bucket()}));
 
   @override
+  String myTagAt(int bucket) =>
+      _string(_op('session.myTag', {'timeBucket': bucket}));
+
+  @override
   List<String> myPollingTags(int lookback) => _strings(
       _op('session.myPollingTags', {'timeBucket': _bucket(), 'lookback': lookback}));
 

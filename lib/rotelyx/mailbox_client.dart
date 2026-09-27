@@ -674,13 +674,21 @@ class MailboxClient {
       final end = i + _tagsPerRequest < entries.length
           ? i + _tagsPerRequest
           : entries.length;
+      // Quietly.
+      //
+      // A ticket is left every time this device subscribes, and subscribing
+      // happens on every reconnection, so one that misses the window because
+      // the front session is still opening is left again a moment later.
+      // Saying so was a notice on the screen about something nobody asked
+      // for and nothing had lost, and it appeared exactly when the
+      // application was starting up.
       _send({
         'op': 'leaveTickets',
         'tickets': [
           for (final e in entries.sublist(i, end))
             {'tag': e.key, 'ticket': e.value}
         ],
-      });
+      }, quiet: true);
     }
   }
 
@@ -732,22 +740,37 @@ class MailboxClient {
       ? _peers.values.forEach((p) => p.revokeWake(secret))
       : _send({'op': 'revokeWake', 'secret': secret});
 
-  void _send(Map<String, Object?> frame) {
-    if (_throughFront) {
-      final channel = _channel;
-      if (channel == null) {
-        _errors.add('tried to send while the front session was closed');
-        return;
+  /// Whether a frame sent now would reach the mailbox.
+  ///
+  /// The front session and the bare socket are opened after the client
+  /// exists, so there is a window in which this is false and nothing is
+  /// wrong. A caller that must be heard reports it; a caller doing something
+  /// on a best effort basis asks first and comes back later.
+  bool get _ready =>
+      _throughFront ? _channel != null : (_socket?.isOpen ?? false);
+
+  /// Send, and say so when it could not be sent.
+  ///
+  /// [quiet] for anything that will be attempted again on its own. A message
+  /// that does not go out is worth a notice; a wake ticket that does not is
+  /// worth leaving until the next reconnection, and a notice about it is a
+  /// line of alarming prose about something nobody asked for and nothing has
+  /// lost.
+  void _send(Map<String, Object?> frame, {bool quiet = false}) {
+    if (!_ready) {
+      if (!quiet) {
+        _errors.add(_throughFront
+            ? 'tried to send while the front session was closed'
+            : 'tried to send while the mailbox connection was closed');
       }
-      channel.sendInner(jsonEncode(frame));
       return;
     }
-    final socket = _socket;
-    if (socket == null || !socket.isOpen) {
-      _errors.add('tried to send while the mailbox connection was closed');
+
+    if (_throughFront) {
+      _channel!.sendInner(jsonEncode(frame));
       return;
     }
-    socket.send(jsonEncode(frame));
+    _socket!.send(jsonEncode(frame));
   }
 
   Future<void> close() async {

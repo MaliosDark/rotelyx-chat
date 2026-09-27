@@ -71,6 +71,63 @@ class NotificationService: UNNotificationServiceExtension {
   ///
   /// Delivered notifications are shared with the application, so this reaches
   /// them from the extension as readily as from the app itself.
+  /// What a message reads as, with its wrappings off.
+  ///
+  /// A reply is stored wrapped around the message it answers and a burning
+  /// message is stored wrapped in its timer, so what comes out of the engine
+  /// is the text plus its markers. Shown as it stands, a reply reads as a
+  /// header and a quote before it reads as a sentence.
+  ///
+  /// Only the outermost wrappers are taken off here, which is enough for a
+  /// notification: the Dart side does the same job more thoroughly for a
+  /// screen that has room for the detail.
+  static func plain(_ text: String) -> String {
+    var out = text
+
+    // A burning message: the marker, the seconds, an identifier that is there
+    // only sometimes, then the body. The separator is a unit separator, which
+    // is why it cannot appear in anything somebody typed.
+    //
+    // The identifier is recognised by its shape rather than counted, exactly
+    // as `Ephemeral.decode` does, because a message from a build that
+    // predates identifiers has one field fewer and counting would take a
+    // word of it.
+    if out.hasPrefix("rx-burn\u{001F}") {
+      let parts = out.components(separatedBy: "\u{001F}")
+      if parts.count > 2 {
+        let hasId = parts.count > 3 && NotificationService.looksLikeId(parts[2])
+        out = parts.dropFirst(hasId ? 3 : 2).joined(separator: "\u{001F}")
+      }
+    }
+
+    // A reply: the marker, who, the excerpt, the reply itself.
+    if out.hasPrefix("rx-reply\u{001F}") {
+      let parts = out.components(separatedBy: "\u{001F}")
+      if parts.count > 3 { out = parts.dropFirst(3).joined(separator: "\u{001F}") }
+    }
+
+    // An attachment has no text to show and is named by its kind, the same
+    // way the conversation list names one.
+    if out.hasPrefix("rx-file\u{001F}") {
+      let parts = out.components(separatedBy: "\u{001F}")
+      let type = parts.count > 2 ? parts[2].removingPercentEncoding ?? "" : ""
+      if type == "image/gif" { return "GIF" }
+      if type.hasPrefix("image/") { return "Picture" }
+      return parts.count > 1 ? (parts[1].removingPercentEncoding ?? "File") : "File"
+    }
+
+    return out
+  }
+
+  /// Sixteen hexadecimal characters, which is what a burn identifier is.
+  static func looksLikeId(_ field: String) -> Bool {
+    guard field.count == 16 else { return false }
+    // Lower case only, as `_looksLikeId` in `ephemeral.dart` has it. Taking
+    // upper case too would read one more body as an identifier than the other
+    // side ever writes.
+    return field.allSatisfy { ("0"..."9").contains($0) || ("a"..."f").contains($0) }
+  }
+
   /// As close to silence as iOS allows, which is not silence.
   ///
   /// No sound, no wrist tap, no screen waking, no place in a summary, and
@@ -137,10 +194,29 @@ class NotificationService: UNNotificationServiceExtension {
       ?? true
 
     guard sweep else {
-      LastWake.write(decoy: false, waiting: nil, ending: .ticket)
-      content.title = "Rotelyx"
-      content.body = "New message"
-      contentHandler(content)
+      // A message exists. Read it if this build can, and say so if not.
+      //
+      // "New message" is a notification somebody has to open the application
+      // to read, which is the thing they were trying not to do. The engine is
+      // linked in here so that it can be opened; when it cannot be, for any
+      // reason at all, the sentence that was there before is what is shown.
+      Reading.find { found in
+        LastWake.write(decoy: false, waiting: found?.waiting, ending: .ticket)
+
+        guard let found = found else {
+          content.title = "Rotelyx"
+          content.body = "New message"
+          contentHandler(content)
+          return
+        }
+
+        content.title = found.from.isEmpty ? "Rotelyx" : found.from
+        content.body = NotificationService.plain(found.text)
+        if found.waiting > 1 {
+          content.subtitle = "\(found.waiting) new messages"
+        }
+        contentHandler(content)
+      }
       return
     }
 

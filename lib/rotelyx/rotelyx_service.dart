@@ -3649,8 +3649,66 @@ class RotelyxService {
       }
     }
 
+    // And for the hours after this one.
+    //
+    // # The defect this closes
+    //
+    // A ticket is sealed for one hour and left under that hour's tag, and the
+    // notifier opens it against the hour a message actually arrives in. Every
+    // tag above belongs to an hour that has already happened, so a device
+    // could only be woken during an hour in which the application had been
+    // running.
+    //
+    // Somebody who opened the application at ten and was written to at two
+    // was not woken at all. The message went to the two o'clock tag, where no
+    // ticket had ever been left, and it sat there until the application was
+    // opened again, at which point everything arrived at once. Which is to
+    // say that being woken worked for people who did not need it.
+    //
+    // # Why a day, and what it costs
+    //
+    // One row in the mailbox per hour per conversation, and they share no
+    // bytes with each other or with anything else: each is sealed on its own,
+    // which is what stops the mailbox telling that two belong to one device.
+    // A day is the span somebody can leave a phone alone and still be woken,
+    // and the application refreshes the window every time it runs.
+    for (var ahead = 1; ahead <= _ticketHours; ahead++) {
+      final at = hour + ahead;
+      try {
+        final tag = session.myTagAt(at);
+        if (tag.isEmpty || byTag.containsKey(tag)) continue;
+        byTag[tag] = RotelyxWasm.sealWakeTicket(notifier, kind, token, at);
+      } on Object {
+        // An hour that cannot be named or sealed for is one hour woken on the
+        // schedule. Every other hour is still worth leaving.
+      }
+    }
+
+    // The other half of a note to self, which deposits under its own tag.
+    final peer = _selfPeer;
+    if (peer != null) {
+      for (var ahead = 0; ahead <= _ticketHours; ahead++) {
+        final at = hour + ahead;
+        try {
+          final tag = peer.myTagAt(at);
+          if (tag.isEmpty || byTag.containsKey(tag)) continue;
+          byTag[tag] = RotelyxWasm.sealWakeTicket(notifier, kind, token, at);
+        } on Object {
+          // As above.
+        }
+      }
+    }
+
     if (byTag.isNotEmpty) _mailbox?.leaveTickets(byTag);
   }
+
+  /// How far ahead wake tickets are left, in hours.
+  ///
+  /// A day. Long enough that a phone left alone overnight is still woken,
+  /// short enough that the rows a conversation leaves in the mailbox are
+  /// counted in tens rather than hundreds. The window moves forward every
+  /// time the application runs.
+  static const int _ticketHours = 24;
 
   /// Write the tags being listened on where the notification extension can
   /// read them.
@@ -3676,7 +3734,8 @@ class RotelyxService {
   Future<void> _publishTagsForTheExtension() async {
     if (_listening.isEmpty) return;
     try {
-      await publishListeningTags(_config.mailbox, _listening.toList());
+      await publishListeningTags(_config.mailbox, _listening.toList(),
+          directory: _constellation);
     } on Object {
       // A phone whose extension cannot be told is a phone that shows the
       // notification it would have shown before. Worth no interruption.

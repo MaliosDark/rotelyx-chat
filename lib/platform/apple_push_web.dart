@@ -12,7 +12,8 @@ Future<String?> sharedContainerPath() async => null;
 PushTransport pushForThisPlatform() => const NoPush();
 
 /// A browser has no extension to tell, and no container to tell it in.
-Future<void> publishListeningTags(String mailbox, List<String> tags) async {}
+Future<void> publishListeningTags(String mailbox, List<String> tags,
+    {String? directory}) async {}
 
 /// A browser has no extension, so there is nothing it did to report.
 Future<LastWake?> lastWake() async => null;
