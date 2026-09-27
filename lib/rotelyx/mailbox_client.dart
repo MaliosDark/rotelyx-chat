@@ -170,9 +170,22 @@ class MailboxClient {
           ? [for (final m in _spreadOver) m.url]
           : placed;
     }();
+    // Open, not merely present.
+    //
+    // A peer object is made for every mailbox in the constellation and then
+    // they are opened together, and one refusing is not a failure: the
+    // constellation is usable as long as one answered. So an object exists
+    // for a mailbox that never connected, and testing for the object sent
+    // this device's frames into it. Every one of those came back as "tried to
+    // send while the front session was closed", on the screen, for a mailbox
+    // whose absence the constellation exists to absorb.
+    //
+    // A tag whose holders are all shut goes nowhere, which is what was
+    // happening anyway; the difference is that it is no longer announced as a
+    // fault. The next reconnection places it again.
     return [
       for (final u in urls)
-        if (_peers[u] != null) _peers[u]!,
+        if (_peers[u]?.isOpen ?? false) _peers[u]!,
     ];
   }
 
@@ -759,9 +772,16 @@ class MailboxClient {
   void _send(Map<String, Object?> frame, {bool quiet = false}) {
     if (!_ready) {
       if (!quiet) {
+        // Which mailbox, and what was being sent.
+        //
+        // The sentence used to be the same for every operation and every
+        // member of a constellation, which made a report of it impossible to
+        // act on: three mailboxes, seven kinds of frame, and no way to tell
+        // which pair had gone. It reads longer and it says where to look.
+        final what = frame['op'] ?? 'a frame';
         _errors.add(_throughFront
-            ? 'tried to send while the front session was closed'
-            : 'tried to send while the mailbox connection was closed');
+            ? 'could not send $what: the front session for $url is not open'
+            : 'could not send $what: the connection to $url is not open');
       }
       return;
     }

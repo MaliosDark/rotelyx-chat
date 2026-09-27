@@ -59,6 +59,10 @@ void main() {
     expect(said, isNotEmpty,
         reason: 'somebody pressed send and it did not go out, which is the '
             'one case that has to be reported');
-    expect(said.first, contains('closed'));
+    // And it says which mailbox and what was being sent, because the same
+    // sentence for every operation and every member of a constellation is a
+    // report nobody can act on.
+    expect(said.first, contains('deposit'));
+    expect(said.first, contains('example.invalid'));
   });
 }
