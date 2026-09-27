@@ -170,23 +170,32 @@ class MailboxClient {
           ? [for (final m in _spreadOver) m.url]
           : placed;
     }();
-    // Open, not merely present.
+    // The ones that answered, and failing that the ones that should have.
+    //
+    // # Why this is two lists and not one
     //
     // A peer object is made for every mailbox in the constellation and then
     // they are opened together, and one refusing is not a failure: the
-    // constellation is usable as long as one answered. So an object exists
-    // for a mailbox that never connected, and testing for the object sent
-    // this device's frames into it. Every one of those came back as "tried to
-    // send while the front session was closed", on the screen, for a mailbox
-    // whose absence the constellation exists to absorb.
+    // constellation is usable as long as one answered. So an object can exist
+    // for a mailbox that never connected, and handing frames to it produced a
+    // line on the screen for an absence the constellation exists to absorb.
     //
-    // A tag whose holders are all shut goes nowhere, which is what was
-    // happening anyway; the difference is that it is no longer announced as a
-    // fault. The next reconnection places it again.
-    return [
+    // Taking the closed ones out fixed that and broke something worse. This
+    // list is what `deposit` sends to, and an empty one is refused outright
+    // with "no mailbox in the constellation is holding that address", so a
+    // device whose peers had not finished opening could not send at all. One
+    // complaint became a conversation that did not work.
+    //
+    // So: prefer the open ones, and when none are open fall back to the
+    // placed ones rather than to nothing. A frame handed to a shut peer does
+    // not go, and says so once from the one place that knows why, which is
+    // better than a caller here guessing.
+    final placed = [
       for (final u in urls)
-        if (_peers[u]?.isOpen ?? false) _peers[u]!,
+        if (_peers[u] != null) _peers[u]!,
     ];
+    final open = [for (final p in placed) if (p.isOpen) p];
+    return open.isNotEmpty ? open : placed;
   }
 
   /// The tag an envelope is addressed to: its first thirty two bytes, which is
@@ -437,6 +446,20 @@ class MailboxClient {
   /// see what came in.
   @visibleForTesting
   void useSocketForTest(TextSocket socket) => _socket = socket;
+
+  /// How many mailboxes a tag would be sent to.
+  ///
+  /// The number rather than the clients, because what has to hold is that it
+  /// is never zero while the constellation has members: that list is what a
+  /// deposit is sent to, and an empty one is refused with "no mailbox in the
+  /// constellation is holding that address", which is a device that cannot
+  /// send rather than a mailbox that is missing.
+  ///
+  /// Exposed because the property cannot be reached from outside: a deposit
+  /// needs a real envelope to read a tag from, and a subscription that goes
+  /// nowhere is silent by design.
+  @visibleForTesting
+  int holdersForTest(String tagHex) => _holdersOf(tagHex).length;
 
   void _onFrame(String text) {
     final Map<String, dynamic> frame;
