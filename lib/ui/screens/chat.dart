@@ -12,6 +12,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import '../../rotelyx/invite_link.dart';
+import '../../platform/widgets.dart';
 import '../../platform/incoming_link.dart';
 import '../../platform/share.dart';
 import 'package:flutter/services.dart';
@@ -1726,6 +1727,17 @@ class _ChatScreenState extends State<ChatScreen> {
       _burning.remove(message.at);
     });
     store.save(c);
+
+    // The surfaces that were counting it down.
+    //
+    // The home screen, the lock screen and the flame in the Dynamic Island
+    // are all fed from the messages that have a deadline and have not passed
+    // it. This one just stopped being either, and nothing told them: the
+    // countdown went on sitting there for a message that no longer exists,
+    // which is the same fault the clock had when it started, from the other
+    // end.
+    refreshWidgets();
+
     widget.onChanged?.call();
   }
 
