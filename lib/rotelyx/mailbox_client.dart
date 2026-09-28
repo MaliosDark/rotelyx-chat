@@ -101,7 +101,27 @@ class MailboxClient {
   final String? frontUrl;
   final String? frontKey;
   FrontChannel? _channel;
-  bool get _throughFront => frontUrl != null && frontKey != null;
+
+  /// Set once [connect] has fallen back to a socket straight to the mailbox,
+  /// because the front would not open.
+  ///
+  /// This exists because the fallback did not work without it. Whether this
+  /// client speaks through a front was read off the configuration, which never
+  /// changes, so after falling back it still looked for a front channel that
+  /// was never going to be there: [isOpen] answered false with a live socket in
+  /// hand, and every send failed with "the front session is not open" while
+  /// that socket sat unused. Both of those now ask what actually happened.
+  bool _fellBackToDirect = false;
+
+  /// A front is configured for this client. Whether it is being used is
+  /// [_throughFront]; this is what [connect] asks, so a client that fell back
+  /// once still tries the front on its next reconnection. A front that is down
+  /// for a minute must not cost the device its connection saving for the rest
+  /// of the run.
+  bool get _hasFront => frontUrl != null && frontKey != null;
+
+  /// This client is speaking through the front **right now**.
+  bool get _throughFront => _hasFront && !_fellBackToDirect;
 
   // ---- constellation -------------------------------------------------------
 
@@ -349,7 +369,7 @@ class MailboxClient {
   /// could not open a mailbox at all.
   Future<void> connect() async {
     if (_spread) return _connectSpread();
-    if (_throughFront) {
+    if (_hasFront) {
       // A front that cannot be reached is not a reason to have no mailbox.
       //
       // The front is an optimisation: it saves connections and stops the
@@ -363,8 +383,12 @@ class MailboxClient {
         channel = await FrontConnection.shared(frontUrl!, frontKey!).open();
       } on Object catch (e) {
         trace('front $frontUrl unreachable ($e), using $url directly');
+        _fellBackToDirect = true;
         return _connectDirect();
       }
+      // The front answered, so this client is back on it: a reconnection after
+      // a fallback must not go on treating itself as a direct client.
+      _fellBackToDirect = false;
       _channel = channel;
       channel.inner.listen(
         _onFrame,
